@@ -1,0 +1,292 @@
+# =============================================================================
+# Docker Compose — Disa-App + AI-Itinerary Integration
+# =============================================================================
+# 
+# Services:
+#   - sqlserver        : SQL Server 2022 (IAMDb, TaskDb)
+#   - sqlserver-init   : one-shot job — creates TaskDb schema, then exits
+#   - postgres         : PostgreSQL + pgvector (AI-Itinerary database)
+#   - ai-itinerary-migrate : one-shot job — Alembic schema migration, then exits
+#   - ai-itinerary-seed    : one-shot job — loads seed attractions data, then exits
+#   - ai-itinerary     : Python FastAPI AI itinerary generation service
+#   - iam-service      : .NET 8 Identity & Access Management service
+#   - aitour-service   : .NET 8 AITour proxy service (calls ai-itinerary)
+#   - task-service     : .NET 8 mission/gamification service
+#
+# Setup:
+#   cp .env.example .env    # then edit if you need different secrets
+#
+# Usage:
+#   docker compose up --build                    # Start all services
+#   docker compose up ai-itinerary postgres      # Start only AI stack
+#   docker compose logs -f aitour-service        # Follow logs
+#   docker compose down -v                       # Stop + remove volumes
+#
+# Ports (host):
+#   SQL Server   : 1433
+#   PostgreSQL   : 5433
+#   AI-Itinerary : 8000  →  http://localhost:8000/docs
+#   IAMService   : 5195  →  http://localhost:5195/swagger
+#   AITour       : 5289  →  http://localhost:5289/swagger
+#   TaskService  : 5020  →  http://localhost:5020/swagger
+# =============================================================================
+
+version: "3.9"
+
+services:
+
+  # ── SQL Server (IAMDb, TaskDb — isolated from any native SQL Server) ────────
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: disa-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - disa-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── One-shot job: creates TaskDb + tables from GamificatonDBb.sql ──────────
+  # (mssql/server has no docker-entrypoint-initdb.d support like postgres,
+  # so this runs the script explicitly once sqlserver is healthy, then exits.)
+  sqlserver-init:
+    # Reuse the same image as `sqlserver` — it already bundles sqlcmd at the
+    # path used below, so no extra image needs pulling.
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: disa-sqlserver-init
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "${SA_PASSWORD}"
+    volumes:
+      - ./Disa-App/DATABASE:/scripts:ro
+    networks:
+      - disa-network
+    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql"]
+
+  # ── PostgreSQL + pgvector (AI-Itinerary database) ───────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: disa-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_itinerary
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - disa-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_itinerary"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── One-shot job: Alembic migrations for AI-Itinerary's schema ─────────────
+  # postgres's own docker-entrypoint-initdb.d runs once, on first container
+  # creation, before this app's tables exist — seed_data.sql used to be
+  # mounted there and silently failed every time ("relation attractions does
+  # not exist") since nothing had run migrations yet. Schema creation now
+  # happens here explicitly, ai-itinerary itself waits on it below.
+  ai-itinerary-migrate:
+    build:
+      context: ./AI-Itinerary
+      dockerfile: Dockerfile
+    image: disa-ai-itinerary-app
+    container_name: disa-ai-itinerary-migrate
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ai_itinerary
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    entrypoint: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - disa-network
+
+  # ── One-shot job: load seed attractions/places data — must run after the
+  # schema exists, hence its own step instead of postgres's initdb.d. ────────
+  ai-itinerary-seed:
+    image: pgvector/pgvector:pg16
+    container_name: disa-ai-itinerary-seed
+    volumes:
+      - ./AI-Itinerary/tests/seed/seed_data.sql:/seed/seed_data.sql:ro
+    environment:
+      PGPASSWORD: postgres
+    entrypoint: ["psql", "-h", "postgres", "-U", "postgres", "-d", "ai_itinerary", "-f", "/seed/seed_data.sql"]
+    depends_on:
+      ai-itinerary-migrate:
+        condition: service_completed_successfully
+    networks:
+      - disa-network
+
+  # ── AI-Itinerary Service (Python FastAPI) ────────────────────────────────────
+  ai-itinerary:
+    build:
+      context: ./AI-Itinerary
+      dockerfile: Dockerfile
+    image: disa-ai-itinerary-app
+    container_name: disa-ai-itinerary
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # App
+      APP_ENV: development
+      APP_DEBUG: "true"
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8000"
+      # Database (connects to postgres container)
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ai_itinerary
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # JWT — MUST match IAMService settings
+      JWT_SECRET: "${JWT_SECRET_KEY}"
+      JWT_ALGORITHM: HS256
+      JWT_ISSUER: IAMService
+      JWT_AUDIENCE: IAMClient
+      # Internal API Key
+      API_KEY: disa-aitour-internal-key-2026
+      # OpenAI (override from .env if needed)
+      OPENAI_MODEL: gpt-4o-mini
+      OPENAI_FALLBACK_MODEL: gpt-4.1-mini
+      OPENAI_MAX_RETRIES: "2"
+      OPENAI_TIMEOUT: "120"
+      # External services
+      OSRM_URL: http://router.project-osrm.org
+      OVERPASS_URL: https://overpass-api.de/api/interpreter
+      # Rate limiting
+      RATE_LIMIT_PER_MINUTE: "60"
+      # CORS — allow all Disa-App services
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:5195,http://localhost:5289,http://iam-service:5195,http://aitour-service:5289"
+    env_file:
+      # Load OPENAI_API_KEY and other secrets from AI-Itinerary .env
+      # Environment variables above will OVERRIDE .env values
+      - ./AI-Itinerary/.env
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-itinerary-seed:
+        condition: service_completed_successfully
+    networks:
+      - disa-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── IAM Service (.NET 8) ─────────────────────────────────────────────────────
+  iam-service:
+    build:
+      context: ./Disa-App
+      dockerfile: IAMService.Dockerfile
+    container_name: disa-iam-service
+    restart: unless-stopped
+    ports:
+      - "5195:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__IAMDb: "Server=sqlserver,1433;Database=IAMDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;"
+      Jwt__Key: "${JWT_SECRET_KEY}"
+      Jwt__Issuer: IAMService
+      Jwt__Audience: IAMClient
+    volumes:
+      # Event cover images / avatars — survives container restart/rebuild.
+      - ./Disa-App/IAMService/Uploads:/app/Uploads
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - disa-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── AITour Service (.NET 8) ──────────────────────────────────────────────────
+  aitour-service:
+    build:
+      context: ./Disa-App
+      dockerfile: AITour.Dockerfile
+    container_name: disa-aitour-service
+    restart: unless-stopped
+    ports:
+      - "5289:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      Jwt__Key: "${JWT_SECRET_KEY}"
+      Jwt__Issuer: IAMService
+      Jwt__Audience: IAMClient
+      # Point to ai-itinerary container using Docker internal DNS
+      AIItinerary__BaseUrl: http://ai-itinerary:8000
+      AIItinerary__TimeoutSeconds: "120"
+    depends_on:
+      ai-itinerary:
+        condition: service_healthy
+    networks:
+      - disa-network
+
+  # ── Task Service (.NET 8) — mission/gamification submissions ────────────────
+  task-service:
+    build:
+      context: ./Disa-App
+      dockerfile: Task.Presentation.Dockerfile
+    container_name: disa-task-service
+    restart: unless-stopped
+    ports:
+      - "5020:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__TaskDb: "Server=sqlserver,1433;Database=TaskDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;"
+      Jwt__Key: "${JWT_SECRET_KEY}"
+      Jwt__Issuer: IAMService
+      Jwt__Audience: IAMClient
+    volumes:
+      # Mission evidence photos/videos — survives container restart/rebuild.
+      - ./Disa-App/Task.Presentation/Uploads:/app/Uploads
+    depends_on:
+      sqlserver-init:
+        condition: service_completed_successfully
+    networks:
+      - disa-network
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: disa-postgres-data
+  sqlserver_data:
+    name: disa-sqlserver-data
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  disa-network:
+    name: disa-network
+    driver: bridge

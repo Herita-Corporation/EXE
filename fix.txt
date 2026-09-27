@@ -1,0 +1,6 @@
+- tên người dùng để ngang hàng với avatar
+- bỏ email khỏi trang chủ
+- màu khung phần avatar đang là màu trắng, đổi thành màu giống như phần mission
+- bên phải trong khung avatar để huy hiệu
+- đổi font chữ của toàn bộ giao diện
+- phần special offer của trang home không cần để hình ảnh, yêu cầu chỉ hiển thị giống như 

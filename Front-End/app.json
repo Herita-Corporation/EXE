@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "Disa Travel",
+    "slug": "disa-travel-frontend",
+    "scheme": "disatravel",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.disa.travel.frontend"
+    },
+    "android": {
+      "package": "com.disa.travel.frontend",
+      "adaptiveIcon": {
+        "backgroundColor": "#1A4A85"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Disa Travel cần quyền truy cập thư viện ảnh để đính kèm minh chứng nhiệm vụ.",
+          "cameraPermission": "Disa Travel cần quyền camera để chụp ảnh minh chứng nhiệm vụ."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Disa Travel cần vị trí để xác thực bạn đang ở điểm tham quan khi nộp minh chứng nhiệm vụ."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Disa Travel cần quyền camera để chụp ảnh minh chứng nhiệm vụ.",
+          "microphonePermission": "Disa Travel cần quyền micro để quay video minh chứng nhiệm vụ."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/images/disa-logo-white.png",
+          "color": "#1A4A85"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}

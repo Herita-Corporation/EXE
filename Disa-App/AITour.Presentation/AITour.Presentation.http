@@ -1,0 +1,6 @@
+@AITour.Presentation_HostAddress = http://localhost:5289
+
+GET {{AITour.Presentation_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

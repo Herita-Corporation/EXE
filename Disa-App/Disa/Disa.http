@@ -1,0 +1,6 @@
+@Disa_HostAddress = http://localhost:5204
+
+GET {{Disa_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

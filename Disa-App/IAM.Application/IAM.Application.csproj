@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Mappings\**" />
+    <Compile Remove="Requests\**" />
+    <Compile Remove="Responses\**" />
+    <Compile Remove="Validators\**" />
+    <EmbeddedResource Remove="Mappings\**" />
+    <EmbeddedResource Remove="Requests\**" />
+    <EmbeddedResource Remove="Responses\**" />
+    <EmbeddedResource Remove="Validators\**" />
+    <None Remove="Mappings\**" />
+    <None Remove="Requests\**" />
+    <None Remove="Responses\**" />
+    <None Remove="Validators\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.3.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IAM.Domain\IAM.Domain.csproj" />
+    <ProjectReference Include="..\IAM.Infrastructure\IAM.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

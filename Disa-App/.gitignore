@@ -1,0 +1,29 @@
+# Visual Studio
+.vs/
+.vscode/
+
+# Build output
+bin/
+obj/
+
+# User files
+*.user
+*.suo
+
+# Rider
+.idea/
+
+# Logs
+*.log
+
+# NuGet
+packages/
+
+# Uploaded runtime content (event covers, avatars, mission evidence) —
+# mounted as a Docker volume so it persists across container rebuilds, but
+# it's runtime data, not source; a fresh clone gets an empty folder and
+# Docker creates it as needed.
+IAMService/Uploads/*
+!IAMService/Uploads/.gitkeep
+Task.Presentation/Uploads/*
+!Task.Presentation/Uploads/.gitkeep

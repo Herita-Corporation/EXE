@@ -1,0 +1,141 @@
+
+CREATE DATABASE IAMDb;
+GO
+
+USE IAMDb;
+GO
+
+CREATE TABLE Users
+(
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+
+    Username NVARCHAR(100) NOT NULL UNIQUE,
+
+    Email NVARCHAR(255) NOT NULL UNIQUE,
+
+    PasswordHash NVARCHAR(MAX) NOT NULL,
+
+    IsActive BIT NOT NULL DEFAULT 1,
+
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETDATE(),
+
+    UpdatedAt DATETIME2 NULL
+);
+GO
+
+CREATE TABLE Roles
+(
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+
+    Name NVARCHAR(50) NOT NULL UNIQUE,
+
+    Description NVARCHAR(255) NULL
+);
+GO
+
+CREATE TABLE UserRoles
+(
+    UserId UNIQUEIDENTIFIER NOT NULL,
+
+    RoleId UNIQUEIDENTIFIER NOT NULL,
+
+    CONSTRAINT PK_UserRoles
+        PRIMARY KEY (UserId, RoleId),
+
+    CONSTRAINT FK_UserRoles_Users
+        FOREIGN KEY (UserId)
+        REFERENCES Users(Id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT FK_UserRoles_Roles
+        FOREIGN KEY (RoleId)
+        REFERENCES Roles(Id)
+        ON DELETE CASCADE
+);
+GO
+
+
+CREATE TABLE RefreshTokens
+(
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+
+    UserId UNIQUEIDENTIFIER NOT NULL,
+
+    Token NVARCHAR(MAX) NOT NULL,
+
+    ExpiresAt DATETIME2 NOT NULL,
+
+    RevokedAt DATETIME2 NULL,
+
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETDATE(),
+
+    CONSTRAINT FK_RefreshTokens_Users
+        FOREIGN KEY (UserId)
+        REFERENCES Users(Id)
+        ON DELETE CASCADE
+);
+GO
+
+CREATE INDEX IX_Users_Email
+ON Users(Email);
+
+CREATE INDEX IX_Users_Username
+ON Users(Username);
+
+CREATE INDEX IX_RefreshTokens_UserId
+ON RefreshTokens(UserId);
+GO
+
+INSERT INTO Roles (Name, Description)
+VALUES
+('Admin', 'System Administrator'),
+('Manager', 'Business Manager'),
+('Customer', 'Customer User');
+GO
+
+
+SELECT * FROM Roles;
+GO
+SELECT * FROM Users
+CREATE TABLE Permissions
+(
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
+    Code NVARCHAR(100) NOT NULL UNIQUE,
+    Description NVARCHAR(255) NULL
+);
+CREATE TABLE RolePermissions
+(
+    RoleId UNIQUEIDENTIFIER NOT NULL,
+    PermissionId UNIQUEIDENTIFIER NOT NULL,
+
+    CONSTRAINT PK_RolePermissions PRIMARY KEY (RoleId, PermissionId),
+
+    CONSTRAINT FK_RolePermissions_Roles
+        FOREIGN KEY (RoleId) REFERENCES Roles(Id) ON DELETE CASCADE,
+
+    CONSTRAINT FK_RolePermissions_Permissions
+        FOREIGN KEY (PermissionId) REFERENCES Permissions(Id) ON DELETE CASCADE
+);
+CREATE TABLE RoleDeniedPermissions
+(
+    RoleId UNIQUEIDENTIFIER NOT NULL,
+    PermissionId UNIQUEIDENTIFIER NOT NULL,
+
+    PRIMARY KEY (RoleId, PermissionId),
+    FOREIGN KEY (RoleId) REFERENCES Roles(Id),
+    FOREIGN KEY (PermissionId) REFERENCES Permissions(Id)
+);
+CREATE TABLE PasswordResetTokens
+(
+    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+
+    UserId UNIQUEIDENTIFIER NOT NULL,
+
+    Token NVARCHAR(200) NOT NULL,
+
+    ExpiresAt DATETIME2 NOT NULL,
+
+    IsUsed BIT NOT NULL DEFAULT 0
+)
+SELECT * FROM Roles;
+SELECT * FROM Users;

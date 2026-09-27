@@ -1,0 +1,11 @@
+với bản test hiện tại, trong database chỉ có 3 thành phố là 
+Da Nang, Hoi An, và Ho Chi Minh
+khi chạy sản phẩm, craw thêm data bằng 3 lệnh:
+1. docker compose exec ai-itinerary python -m app.data.crawlers.attraction_crawler
+2. docker compose exec ai-itinerary python -m app.data.crawlers.restaurant_crawler
+3. docker compose exec ai-itinerary python -m app.data.crawlers.hotel_crawler
+
+tắt: docker compose down
+bật: docker compose up -d
+
+test: http://localhost:8000/docs

@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Data\" />
+    <Folder Include="ExternalServices\GooglePlaces\" />
+    <Folder Include="ExternalServices\Mapbox\" />
+    <Folder Include="ExternalServices\OpenAI\Prompts\" />
+    <Folder Include="ExternalServices\Weather\" />
+    <Folder Include="Configurations\" />
+    <Folder Include="DependencyInjection\" />
+    <Folder Include="Cache\" />
+    <Folder Include="Repositories\" />
+  </ItemGroup>
+
+</Project>

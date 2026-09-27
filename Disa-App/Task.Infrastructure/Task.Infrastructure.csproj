@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Cache\**" />
+    <Compile Remove="Configurations\**" />
+    <Compile Remove="Data\**" />
+    <Compile Remove="DependencyInjection\**" />
+    <Compile Remove="ExternalServices\**" />
+    <EmbeddedResource Remove="Cache\**" />
+    <EmbeddedResource Remove="Configurations\**" />
+    <EmbeddedResource Remove="Data\**" />
+    <EmbeddedResource Remove="DependencyInjection\**" />
+    <EmbeddedResource Remove="ExternalServices\**" />
+    <None Remove="Cache\**" />
+    <None Remove="Configurations\**" />
+    <None Remove="Data\**" />
+    <None Remove="DependencyInjection\**" />
+    <None Remove="ExternalServices\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Task.Application\Task.Application.csproj" />
+    <ProjectReference Include="..\Task.Domain\Task.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

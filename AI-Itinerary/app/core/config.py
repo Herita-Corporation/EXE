@@ -31,13 +31,20 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "ai_itinerary"
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
+    # "disable" for the local Docker postgres container (default, unchanged
+    # behavior); set to "require" for managed Postgres (Azure Flexible
+    # Server, Neon, Supabase, ...) which reject plain unencrypted connections.
+    POSTGRES_SSL_MODE: str = "disable"
 
     @property
     def DATABASE_URL(self) -> str:
-        return (
+        url = (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
+        if self.POSTGRES_SSL_MODE != "disable":
+            url += f"?ssl={self.POSTGRES_SSL_MODE}"
+        return url
 
     @property
     def DATABASE_URL_SYNC(self) -> str:

@@ -1,0 +1,279 @@
+# =============================================================================
+# Production deploy — AWS EC2 (single instance, t3.medium) + self-hosted DBs.
+# =============================================================================
+#
+# Unlike a managed-cloud-DB setup, this file runs sqlserver/postgres as
+# containers on the SAME VM as the app services — mirrors docker-compose.yml
+# (local dev) almost exactly, just hardened for a public-facing production
+# host: no ports published except Caddy's 80/443, ASPNETCORE_ENVIRONMENT /
+# APP_ENV set to Production, and SQL Server's memory capped so it doesn't
+# starve the other 6 containers on a 4GB VM.
+#
+# One-time setup before first `up`:
+#   1. Add a 2GB swap file on the VM (Ubuntu on EC2 has none by default) —
+#      safety margin for the 4GB t3.medium running 7 containers at once.
+#   2. Nothing else — sqlserver-init auto-creates TaskDb's schema,
+#      ai-itinerary-migrate auto-runs Alembic for Postgres, IAMDb
+#      auto-creates via EnsureCreated() on IAMService's first boot. No
+#      manual SQL step needed (unlike a managed-DB deploy).
+#
+# Usage:
+#   cp .env.production.example .env   # then fill in real values
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml logs -f caddy
+# =============================================================================
+
+services:
+
+  # ── SQL Server (IAMDb, TaskDb) ───────────────────────────────────────────────
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: disa-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
+      MSSQL_PID: "Developer"
+      # Cap SQL Server's memory so it leaves headroom for the other 6
+      # containers on a 4GB VM (t3.medium).
+      MSSQL_MEMORY_LIMIT_MB: "1536"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - disa-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── One-shot job: creates TaskDb + tables from GamificatonDBb.sql ──────────
+  sqlserver-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: disa-sqlserver-init
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "${SA_PASSWORD}"
+    volumes:
+      - ./Disa-App/DATABASE:/scripts:ro
+    networks:
+      - disa-network
+    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql"]
+
+  # ── PostgreSQL + pgvector (AI-Itinerary database) ───────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: disa-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_itinerary
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - disa-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_itinerary"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── One-shot job: Alembic migrations for AI-Itinerary's schema ─────────────
+  ai-itinerary-migrate:
+    build:
+      context: ./AI-Itinerary
+      dockerfile: Dockerfile
+    image: disa-ai-itinerary-app
+    container_name: disa-ai-itinerary-migrate
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ai_itinerary
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    entrypoint: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - disa-network
+
+  # ── One-shot job: load seed attractions/places data ─────────────────────────
+  ai-itinerary-seed:
+    image: pgvector/pgvector:pg16
+    container_name: disa-ai-itinerary-seed
+    volumes:
+      - ./AI-Itinerary/tests/seed/seed_data.sql:/seed/seed_data.sql:ro
+    environment:
+      PGPASSWORD: "${POSTGRES_PASSWORD}"
+    entrypoint: ["psql", "-h", "postgres", "-U", "postgres", "-d", "ai_itinerary", "-f", "/seed/seed_data.sql"]
+    depends_on:
+      ai-itinerary-migrate:
+        condition: service_completed_successfully
+    networks:
+      - disa-network
+
+  # ── AI-Itinerary Service (Python FastAPI) ────────────────────────────────────
+  ai-itinerary:
+    build:
+      context: ./AI-Itinerary
+      dockerfile: Dockerfile
+    image: disa-ai-itinerary-app
+    container_name: disa-ai-itinerary
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8000"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ai_itinerary
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      JWT_SECRET: "${JWT_SECRET_KEY}"
+      JWT_ALGORITHM: HS256
+      JWT_ISSUER: IAMService
+      JWT_AUDIENCE: IAMClient
+      API_KEY: "${AI_ITINERARY_API_KEY}"
+      OPENAI_MODEL: gpt-4o-mini
+      OPENAI_FALLBACK_MODEL: gpt-4.1-mini
+      OPENAI_MAX_RETRIES: "2"
+      OPENAI_TIMEOUT: "120"
+      OSRM_URL: http://router.project-osrm.org
+      OVERPASS_URL: https://overpass-api.de/api/interpreter
+      RATE_LIMIT_PER_MINUTE: "60"
+      CORS_ORIGINS: "https://iam.${DOMAIN},https://aitour.${DOMAIN},https://task.${DOMAIN}"
+    env_file:
+      # OPENAI_API_KEY lives here, same convention as local dev.
+      - ./AI-Itinerary/.env
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-itinerary-seed:
+        condition: service_completed_successfully
+    networks:
+      - disa-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── IAM Service (.NET 8) ─────────────────────────────────────────────────────
+  iam-service:
+    build:
+      context: ./Disa-App
+      dockerfile: IAMService.Dockerfile
+    container_name: disa-iam-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__IAMDb: "Server=sqlserver,1433;Database=IAMDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;"
+      Jwt__Key: "${JWT_SECRET_KEY}"
+      Jwt__Issuer: IAMService
+      Jwt__Audience: IAMClient
+    volumes:
+      - iam_uploads:/app/Uploads
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - disa-network
+
+  # ── AITour Service (.NET 8) ──────────────────────────────────────────────────
+  aitour-service:
+    build:
+      context: ./Disa-App
+      dockerfile: AITour.Dockerfile
+    container_name: disa-aitour-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      Jwt__Key: "${JWT_SECRET_KEY}"
+      Jwt__Issuer: IAMService
+      Jwt__Audience: IAMClient
+      AIItinerary__BaseUrl: http://ai-itinerary:8000
+      AIItinerary__TimeoutSeconds: "120"
+    depends_on:
+      ai-itinerary:
+        condition: service_healthy
+    networks:
+      - disa-network
+
+  # ── Task Service (.NET 8) — mission/gamification submissions ────────────────
+  task-service:
+    build:
+      context: ./Disa-App
+      dockerfile: Task.Presentation.Dockerfile
+    container_name: disa-task-service
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__TaskDb: "Server=sqlserver,1433;Database=TaskDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;"
+      Jwt__Key: "${JWT_SECRET_KEY}"
+      Jwt__Issuer: IAMService
+      Jwt__Audience: IAMClient
+    volumes:
+      - task_uploads:/app/Uploads
+    depends_on:
+      sqlserver-init:
+        condition: service_completed_successfully
+    networks:
+      - disa-network
+
+  # ── Caddy — reverse proxy + automatic HTTPS (Let's Encrypt) ─────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: disa-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: "${DOMAIN}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./static-pages:/srv/static-pages:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - iam-service
+      - aitour-service
+      - task-service
+    networks:
+      - disa-network
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  sqlserver_data:
+    name: disa-sqlserver-data
+  postgres_data:
+    name: disa-postgres-data
+  iam_uploads:
+    name: disa-iam-uploads
+  task_uploads:
+    name: disa-task-uploads
+  caddy_data:
+    name: disa-caddy-data
+  caddy_config:
+    name: disa-caddy-config
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  disa-network:
+    name: disa-network-prod
+    driver: bridge

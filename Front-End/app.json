@@ -6,6 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "icon": "./src/assets/images/icon.png",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -16,6 +17,7 @@
     "android": {
       "package": "com.disa.travel.frontend",
       "adaptiveIcon": {
+        "foregroundImage": "./src/assets/images/adaptive-icon.png",
         "backgroundColor": "#1A4A85"
       }
     },
@@ -50,6 +52,15 @@
         {
           "icon": "./src/assets/images/disa-logo-white.png",
           "color": "#1A4A85"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./src/assets/images/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#1A4A85"
         }
       ]
     ],

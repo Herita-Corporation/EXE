@@ -1,0 +1,23 @@
+# Reverse proxy + automatic HTTPS (Let's Encrypt) for the 3 backend services,
+# plus static Privacy Policy / Terms pages at the bare domain (required by
+# Google Play Console's Store Listing).
+#
+# {$DOMAIN} is substituted from the DOMAIN env var (see docker-compose.prod.yml).
+
+iam.{$DOMAIN} {
+	reverse_proxy iam-service:8080
+}
+
+aitour.{$DOMAIN} {
+	reverse_proxy aitour-service:8080
+}
+
+task.{$DOMAIN} {
+	reverse_proxy task-service:8080
+}
+
+{$DOMAIN} {
+	root * /srv/static-pages
+	try_files {path} {path}.html {path}/index.html
+	file_server
+}

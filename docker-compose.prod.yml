@@ -207,6 +207,10 @@ services:
       Jwt__Audience: IAMClient
       AIItinerary__BaseUrl: http://ai-itinerary:8000
       AIItinerary__TimeoutSeconds: "120"
+      # Bahnar → Vietnamese translator (optional). Unreachable/unset → only /api/v1/translate/* return 503.
+      Translator__BaseUrl: "${TRANSLATOR_BASE_URL:-http://bahnar-translator:8080}"
+      Translator__ApiKey: "${TRANSLATOR_API_KEY:-}"
+      Translator__TimeoutSeconds: "90"
     depends_on:
       ai-itinerary:
         condition: service_healthy
@@ -234,6 +238,38 @@ services:
         condition: service_completed_successfully
     networks:
       - disa-network
+
+  # ── Bahnar-Translator (Ba Na → Việt) — OPTIONAL, NOT started by default ──────
+  # Needs ~5 GB RAM on its own → does NOT fit next to the 7 containers on the 4 GB t3.medium.
+  # Choose one:
+  #   A) Run it on another machine (docker compose -f Bahnar-Translator/... or uvicorn, see
+  #      Bahnar-Translator/README.md) and set TRANSLATOR_BASE_URL=https://<that host> in .env.
+  #   B) Upgrade this VM to >= 16 GB RAM (e.g. t3.xlarge) and start it here:
+  #        docker compose -f docker-compose.prod.yml --profile translator up -d --build
+  # Never published through Caddy: only aitour-service calls it, with X-API-Key.
+  bahnar-translator:
+    profiles: ["translator"]
+    build:
+      context: ./Bahnar-Translator
+      dockerfile: Dockerfile
+    image: disa-bahnar-translator
+    container_name: disa-bahnar-translator
+    restart: unless-stopped
+    environment:
+      PIPELINE_CONFIG: pipeline_prod.yaml
+      # Set TRANSLATOR_API_KEY in .env before enabling this profile (`:-` keeps the default deploy
+      # working when the translator is not used — compose interpolates every service, even inactive ones).
+      TRANSLATOR_API_KEY: "${TRANSLATOR_API_KEY:-}"
+    volumes:
+      - ./Bahnar-Translator/models:/app/models:ro
+    networks:
+      - disa-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # ── Caddy — reverse proxy + automatic HTTPS (Let's Encrypt) ─────────────────
   caddy:

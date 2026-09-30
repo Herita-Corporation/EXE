@@ -104,8 +104,12 @@ public class Program
         // ── AI-Itinerary HTTP Client ───────────────────────────────────────────
         builder.Services.AddAIItineraryClient(builder.Configuration);
 
+        // ── Bahnar-Translator HTTP Client (optional: empty BaseUrl → translate endpoints return 503) ──
+        builder.Services.AddBahnarTranslatorClient(builder.Configuration);
+
         // ── Application Services ──────────────────────────────────────────────
         builder.Services.AddScoped<IAIItineraryService, AITourService>();
+        builder.Services.AddScoped<ITranslationService, TranslationService>();
 
         // ── Build app ─────────────────────────────────────────────────────────
         var app = builder.Build();

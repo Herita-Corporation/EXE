@@ -48,6 +48,12 @@
         }
       ],
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Disa Travel cần quyền micro để ghi âm tiếng Ba Na và dịch sang tiếng Việt."
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./src/assets/images/disa-logo-white.png",

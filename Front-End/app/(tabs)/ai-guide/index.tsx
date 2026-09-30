@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Button } from "@/components/Button";
 import { MINORITY_LANGUAGES } from "@/data/minorityLanguages";
+import { BAHNAR_LANGUAGE_CODE } from "@/api/endpoints/translate";
 import { useLocale } from "@/i18n/LocaleContext";
 import { colors, radius, spacing } from "@/theme/colors";
 
@@ -46,7 +47,9 @@ export default function AiGuideSetupScreen() {
 
       <View style={styles.noticeCard}>
         <Ionicons name="information-circle-outline" size={16} color={colors.gold} />
-        <Text style={styles.noticeText}>{t("aiGuide.backendPendingNotice")}</Text>
+        <Text style={styles.noticeText}>
+          {selected === BAHNAR_LANGUAGE_CODE ? t("aiGuide.bahnarReadyNotice") : t("aiGuide.backendPendingNotice")}
+        </Text>
       </View>
 
       <Button
@@ -54,10 +57,13 @@ export default function AiGuideSetupScreen() {
         icon="arrow-forward"
         iconPosition="right"
         onPress={() =>
-          router.push({
-            pathname: "/(tabs)/ai-guide/chat",
-            params: { languageCode: selected },
-          })
+          // Ba Na has a real backend (Ba Na → Vietnamese): its own screen with voice input.
+          selected === BAHNAR_LANGUAGE_CODE
+            ? router.push("/(tabs)/ai-guide/bahnar")
+            : router.push({
+                pathname: "/(tabs)/ai-guide/chat",
+                params: { languageCode: selected },
+              })
         }
       />
     </ScreenContainer>

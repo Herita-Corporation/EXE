@@ -1,0 +1,9 @@
+# Model weights (~4 GB) — download with scripts/models_hub.py, never commit (GitHub limit 100 MB/file)
+models/*
+!models/README.md
+# Secrets & runtime data
+.env
+outputs/
+__pycache__/
+*.py[cod]
+.pytest_cache/

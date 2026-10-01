@@ -4,18 +4,11 @@ export interface MinorityLanguage {
   region: string;
 }
 
-// Vietnam's largest ethnic-minority language communities by population —
-// static list for now; the eventual translation backend will drive which
-// ones are actually supported.
+// Only languages that have usable (licence-cleared) parallel data with Vietnamese:
+// Ba Na is live; Gia Rai and Khmer have data and models in training (shown as "coming soon").
+// Removed 01/10/2026 — no usable dataset: Tày, Thái, Mường, H'Mông, Ê Đê (CC BY-NC only), Cơ Ho, Chăm.
 export const MINORITY_LANGUAGES: MinorityLanguage[] = [
-  { code: "tay", name: "Tày", region: "Đông Bắc Bộ" },
-  { code: "thai", name: "Thái", region: "Tây Bắc Bộ" },
-  { code: "muong", name: "Mường", region: "Hòa Bình, Thanh Hóa" },
-  { code: "hmong", name: "H'Mông", region: "Tây Bắc Bộ" },
-  { code: "khmer", name: "Khmer", region: "Đồng bằng sông Cửu Long" },
-  { code: "ede", name: "Ê Đê", region: "Tây Nguyên" },
-  { code: "jarai", name: "Gia Rai", region: "Tây Nguyên" },
   { code: "bana", name: "Ba Na", region: "Tây Nguyên" },
-  { code: "koho", name: "Cơ Ho", region: "Lâm Đồng" },
-  { code: "cham", name: "Chăm", region: "Nam Trung Bộ" },
+  { code: "jarai", name: "Gia Rai", region: "Tây Nguyên" },
+  { code: "khmer", name: "Khmer", region: "Đồng bằng sông Cửu Long" },
 ];

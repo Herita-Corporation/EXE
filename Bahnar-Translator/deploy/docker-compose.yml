@@ -1,0 +1,59 @@
+# =============================================================================
+# Bahnar-Translator on its OWN server (e.g. an EC2 in a second AWS account).
+# The main stack (docker-compose.prod.yml) then calls it over HTTPS:
+#   main .env:  TRANSLATOR_BASE_URL=https://translator.<your-domain>
+#               TRANSLATOR_API_KEY=<same value as here>
+#
+# On the translator server:
+#   git clone … && cd EXE/Bahnar-Translator
+#   python3 scripts/models_hub.py download --repo <org>/bahnar-translator-models   # → ../models
+#   cp deploy/.env.example deploy/.env   # fill TRANSLATOR_DOMAIN, TRANSLATOR_API_KEY
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+#   docker compose -f deploy/docker-compose.yml logs -f
+# DNS first: A-record translator.<your-domain> → this server's Elastic IP.
+# =============================================================================
+
+services:
+  translator:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: disa-bahnar-translator
+    container_name: bahnar-translator
+    restart: unless-stopped
+    environment:
+      PIPELINE_CONFIG: pipeline_prod.yaml
+      # REQUIRED here: this server is reachable from the internet.
+      TRANSLATOR_API_KEY: "${TRANSLATOR_API_KEY:?Set TRANSLATOR_API_KEY in deploy/.env}"
+    volumes:
+      - ../models:/app/models:ro
+    networks: [translator-net]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: bahnar-translator-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"     # Let's Encrypt HTTP challenge + redirect to HTTPS
+      - "443:443"
+    environment:
+      TRANSLATOR_DOMAIN: "${TRANSLATOR_DOMAIN:?Set TRANSLATOR_DOMAIN in deploy/.env}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [translator]
+    networks: [translator-net]
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  translator-net:

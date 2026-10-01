@@ -6,6 +6,7 @@ huggingface_hub==1.17.0      # scripts/models_hub.py download
 safetensors>=0.4
 sentencepiece>=0.2
 numpy>=1.26,<2.4
+pandas>=2.1                  # src/asr/dataset.py (imported by src/asr/decode.py at module level)
 scipy>=1.11,<1.16
 soundfile>=0.12
 librosa>=0.10                # m4a/mp3/webm decoding via ffmpeg

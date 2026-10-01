@@ -1,0 +1,19 @@
+# HTTPS (Let's Encrypt, automatic) in front of the translator.
+# Only aitour-service (main stack) should call this, with header X-API-Key.
+{$TRANSLATOR_DOMAIN} {
+	# Don't publish the interactive API docs on the internet.
+	@docs path /docs* /redoc* /openapi.json
+	respond @docs 404
+
+	# Audio uploads: translator accepts <= 10 MB.
+	request_body {
+		max_size 12MB
+	}
+
+	reverse_proxy translator:8080 {
+		# Speech recognition on CPU can take a while.
+		transport http {
+			read_timeout 120s
+		}
+	}
+}

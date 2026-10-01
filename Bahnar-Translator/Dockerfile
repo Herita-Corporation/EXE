@@ -19,6 +19,8 @@ RUN pip install --no-cache-dir "torch>=2.6,<2.12" --index-url https://download.p
         || echo "WARNING: kenlm build failed -> ASR decodes greedily (WER ~1-2 points higher)")
 
 COPY . /app/
+# Fail the BUILD (not the first user request) if any runtime module/dependency is missing.
+RUN python -c "import src.serve.app, src.pipeline.s2st, src.asr.decode, src.mt.translate, src.mt.modeling, src.serve.runtime, src.pipeline.vad, src.tts.base; print('runtime imports OK')"
 
 ENV PIPELINE_CONFIG=pipeline_prod.yaml PYTHONUNBUFFERED=1 OMP_NUM_THREADS=4
 EXPOSE 8080

@@ -19,6 +19,7 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from "expo-audio";
+import * as Speech from "expo-speech";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -36,6 +37,12 @@ import { colors, radius, spacing, TAB_BAR_CLEARANCE } from "@/theme/colors";
 // Ba Na → Vietnamese (the direction the model was trained for). Speech is recorded on-device with
 // expo-audio (.m4a), uploaded to AITourService (/api/v1/translate/speech, JWT) which forwards it to the
 // Bahnar-Translator service. Other languages keep using the stub flow in ./chat.tsx.
+//
+// The Vietnamese translation is read aloud with the phone's own text-to-speech (expo-speech, vi-VN):
+// automatically after a voice translation, and on demand via "Listen" — so people who can't read
+// still understand it. No server TTS needed; works with poor connectivity.
+
+const VI_SPEECH: Speech.SpeechOptions = { language: "vi-VN", rate: 0.9 };
 
 type Result =
   | { kind: "speech"; data: SpeechTranslationResult }
@@ -58,6 +65,42 @@ export default function BahnarTranslateScreen() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [firstRunHint, setFirstRunHint] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [missingViVoice, setMissingViVoice] = useState(false);
+
+  // Warn only when the phone reports voices but none is Vietnamese (an empty list just means the
+  // engine hasn't initialised yet — common on Android — so don't raise a false alarm).
+  useEffect(() => {
+    Speech.getAvailableVoicesAsync()
+      .then((voices) => {
+        if (voices.length > 0) {
+          setMissingViVoice(!voices.some((v) => v.language?.toLowerCase().startsWith("vi")));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      Speech.stop().catch(() => {});
+    };
+  }, []);
+
+  async function speakVietnamese(textVi: string) {
+    if (!textVi.trim()) return;
+    await Speech.stop().catch(() => {});
+    // Loudspeaker (not the earpiece used while recording) and audible even with the iOS silent switch on.
+    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }).catch(() => {});
+    Speech.speak(textVi, {
+      ...VI_SPEECH,
+      onStart: () => setSpeaking(true),
+      onDone: () => setSpeaking(false),
+      onStopped: () => setSpeaking(false),
+      onError: () => setSpeaking(false),
+    });
+  }
+
+  function stopSpeaking() {
+    Speech.stop().catch(() => {});
+    setSpeaking(false);
+  }
 
   // Tell the user up-front if the server hasn't loaded the models yet, or the feature is off.
   useEffect(() => {
@@ -91,6 +134,7 @@ export default function BahnarTranslateScreen() {
 
   async function startRecording() {
     if (busy) return;
+    stopSpeaking();
     setError(null);
     setResult(null);
     try {
@@ -130,6 +174,8 @@ export default function BahnarTranslateScreen() {
       const data = await translateBahnarSpeech({ uri, ...audioFileInfo(uri) });
       setResult({ kind: "speech", data });
       setFirstRunHint(false);
+      // Voice in → voice out: read the translation aloud right away for listeners who can't read.
+      if (!data.rejected) void speakVietnamese(data.translation_vi);
     } catch (err) {
       setError(toMessage(err));
     } finally {
@@ -140,6 +186,7 @@ export default function BahnarTranslateScreen() {
   async function onTranslateText() {
     const value = text.trim();
     if (!value || busy || isRecording) return;
+    stopSpeaking();
     setBusy("text");
     setError(null);
     setResult(null);
@@ -247,6 +294,13 @@ export default function BahnarTranslateScreen() {
               <>
                 <Text style={styles.label}>{t("aiGuide.translationVi")}</Text>
                 <Text style={styles.translation}>{translation}</Text>
+                <Button
+                  title={speaking ? t("aiGuide.stopListening") : t("aiGuide.listenTranslation")}
+                  icon={speaking ? "stop-circle-outline" : "volume-high"}
+                  variant={speaking ? "secondary" : "primary"}
+                  onPress={speaking ? stopSpeaking : () => void speakVietnamese(translation)}
+                />
+                {missingViVoice ? <Text style={styles.voiceHint}>{t("aiGuide.noVietnameseVoice")}</Text> : null}
               </>
             )}
 
@@ -319,5 +373,6 @@ const styles = StyleSheet.create({
   rejectRow: { flexDirection: "row", alignItems: "center", gap: spacing(0.75) },
   rejectText: { flex: 1, fontSize: 14, color: colors.text },
   disclaimer: { fontSize: 11, color: colors.textMuted, marginTop: spacing(0.5) },
+  voiceHint: { fontSize: 11, color: colors.warning },
   credit: { fontSize: 10, color: colors.textMuted, textAlign: "center", marginTop: spacing(1) },
 });

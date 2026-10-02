@@ -10,7 +10,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing } from "@/theme/colors";
 
-type Variant = "primary" | "secondary" | "danger" | "ghost" | "outline";
+// "amber" = the brand's call-to-action accent — at most one per screen.
+type Variant = "primary" | "secondary" | "danger" | "ghost" | "outline" | "amber";
 type Size = "sm" | "md" | "lg";
 type Shape = "rounded" | "pill";
 
@@ -44,9 +45,11 @@ export function Button({
 }: Props) {
   const isDisabled = disabled || loading;
   const textColor =
-    variant === "ghost" || variant === "outline" || variant === "secondary"
-      ? colors.navy
-      : colors.primaryText;
+    variant === "amber"
+      ? colors.onAmber
+      : variant === "ghost" || variant === "outline" || variant === "secondary"
+        ? colors.navy
+        : colors.primaryText;
 
   return (
     <Pressable
@@ -101,11 +104,11 @@ const styles = StyleSheet.create({
   },
   pill: { borderRadius: radius.pill },
   rounded: { borderRadius: radius.md },
-  text: { fontWeight: "600" },
+  text: { fontWeight: "700" },
   iconLeft: { marginRight: spacing(1) },
   iconRight: { marginLeft: spacing(1) },
   disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.85 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });
 
 const sizeStyles: Record<Size, ViewStyle> = {
@@ -124,8 +127,9 @@ const sizeIconSize: Record<Size, number> = { sm: 16, md: 18, lg: 20 };
 
 const variantStyles: Record<Variant, ViewStyle> = {
   primary: { backgroundColor: colors.primary },
-  secondary: { backgroundColor: colors.surfaceAlt },
+  secondary: { backgroundColor: colors.blueSoft },
   danger: { backgroundColor: colors.danger },
+  amber: { backgroundColor: colors.gold },
   ghost: { backgroundColor: "transparent" },
   outline: {
     backgroundColor: colors.surface,

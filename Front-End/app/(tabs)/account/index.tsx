@@ -4,6 +4,7 @@ import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { Avatar } from "@/components/Avatar";
 import { Badge } from "@/components/Badge";
 import { Card } from "@/components/Card";
@@ -17,7 +18,7 @@ import { ApiError } from "@/api/http";
 import { getItineraryHistory } from "@/utils/itineraryHistory";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, spacing } from "@/theme/colors";
+import { colors, radius, shadow, spacing } from "@/theme/colors";
 
 export default function AccountScreen() {
   const { user, logout, refreshMe } = useAuth();
@@ -102,12 +103,11 @@ export default function AccountScreen() {
   }
 
   return (
-    <ScreenContainer avoidTabBar backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>{t("account.myAccount")}</Text>
-      </View>
+    <ScreenContainer avoidTabBar>
+      <ScreenHeader title={t("account.myAccount")} />
 
-      <View style={styles.avatarSection}>
+      <View style={styles.profileCard}>
+        <View style={styles.avatarSection}>
         <View>
           <Avatar source={user?.avatarUrl} name={displayName} size={90} />
           <Pressable style={styles.avatarEditBadge} onPress={onChangeAvatar} disabled={uploadingAvatar}>
@@ -121,7 +121,7 @@ export default function AccountScreen() {
         <Text style={styles.name}>{displayName}</Text>
         {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
         <Badge label={t("account.premiumMember")} tone="gold" />
-      </View>
+        </View>
 
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
@@ -136,6 +136,7 @@ export default function AccountScreen() {
           <Text style={styles.statValue}>{gamification.level}</Text>
           <Text style={styles.statLabel}>{t("account.level")}</Text>
         </View>
+      </View>
       </View>
 
       <Text style={styles.sectionLabel}>{t("account.personalInfo")}</Text>
@@ -223,9 +224,14 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 20, fontWeight: "700", color: colors.navy },
-  avatarSection: { alignItems: "center", gap: spacing(0.5), marginTop: spacing(1) },
+  profileCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing(2.5),
+    gap: spacing(2),
+    ...shadow,
+  },
+  avatarSection: { alignItems: "center", gap: spacing(0.5) },
   avatarEditBadge: {
     position: "absolute",
     bottom: -2,
@@ -233,7 +239,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
@@ -245,11 +251,9 @@ const styles = StyleSheet.create({
   statBox: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: spacing(1.25),
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: spacing(1.5),
+    borderRadius: radius.md,
+    backgroundColor: colors.blueSoft,
   },
   statValue: { fontSize: 18, fontWeight: "800", color: colors.navy },
   statLabel: { fontSize: 11, color: colors.textMuted },
@@ -260,7 +264,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: spacing(1),
   },
-  sectionCard: { gap: 0 },
+  sectionCard: { gap: 0, paddingVertical: spacing(0.5) },
   rowDivider: { height: 1, backgroundColor: colors.border },
   passwordForm: { gap: spacing(1), paddingBottom: spacing(1) },
 });

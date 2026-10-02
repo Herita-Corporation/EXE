@@ -39,13 +39,13 @@ export function MissionThumb({
   }
   return (
     <View style={[styles.thumb, styles.placeholderThumb, { width: size, height: size }]}>
-      <Ionicons name="image-outline" size={Math.round(size * 0.4)} color={colors.textMuted} />
+      <Ionicons name="flag" size={Math.round(size * 0.4)} color={colors.blue} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  thumb: { borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  videoThumb: { backgroundColor: colors.navy },
-  placeholderThumb: { backgroundColor: colors.surfaceAlt },
+  thumb: { borderRadius: 14, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  videoThumb: { backgroundColor: colors.navyCard },
+  placeholderThumb: { backgroundColor: colors.blueSoft },
 });

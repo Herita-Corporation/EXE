@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stepperButtonActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  stepperButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   stepperValue: { fontSize: 16, fontWeight: "700", color: colors.text, minWidth: 24, textAlign: "center" },
   divider: { height: 1, backgroundColor: colors.border },
   budgetHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing(1) },

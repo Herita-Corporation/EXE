@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 2,
   },
-  checkboxChecked: { backgroundColor: colors.navy, borderColor: colors.navy },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
   tosText: { flex: 1, color: colors.textMuted, fontSize: 12, lineHeight: 17 },
   tosLink: { color: colors.navy, fontWeight: "600" },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing(0.5) },

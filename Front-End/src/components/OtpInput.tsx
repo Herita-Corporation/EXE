@@ -63,5 +63,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
   },
-  boxFilled: { borderColor: colors.gold, backgroundColor: colors.surface },
+  boxFilled: { borderColor: colors.blue, backgroundColor: colors.surface },
 });

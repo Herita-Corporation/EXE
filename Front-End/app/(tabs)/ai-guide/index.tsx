@@ -3,11 +3,12 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { Button } from "@/components/Button";
 import { MINORITY_LANGUAGES } from "@/data/minorityLanguages";
 import { BAHNAR_LANGUAGE_CODE } from "@/api/endpoints/translate";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, radius, spacing } from "@/theme/colors";
+import { colors, radius, shadow, spacing } from "@/theme/colors";
 
 // AI Guide's UI has pivoted from a voice-chat assistant to a Vietnamese <->
 // ethnic-minority-language translation tool (per product direction). This
@@ -26,9 +27,8 @@ export default function AiGuideSetupScreen() {
   const [selected, setSelected] = useState(LANGUAGES[0].code);
 
   return (
-    <ScreenContainer avoidTabBar backgroundColor={colors.surface}>
-      <Text style={styles.title}>{t("aiGuide.setupTitle")}</Text>
-      <Text style={styles.subtitle}>{t("aiGuide.setupSubtitle")}</Text>
+    <ScreenContainer avoidTabBar>
+      <ScreenHeader title={t("aiGuide.setupTitle")} subtitle={t("aiGuide.setupSubtitle")} />
 
       <Text style={styles.sectionLabel}>{t("aiGuide.selectLanguage")}</Text>
       <View style={styles.languageGrid}>
@@ -96,8 +96,6 @@ export default function AiGuideSetupScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 20, fontWeight: "700", color: colors.navy, marginTop: spacing(1) },
-  subtitle: { color: colors.textMuted, fontSize: 13 },
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
@@ -110,13 +108,34 @@ const styles = StyleSheet.create({
     flexBasis: "47%",
     alignItems: "center",
     gap: spacing(0.5),
-    paddingVertical: spacing(2),
+    paddingVertical: spacing(2.25),
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  languageCardSelected: { backgroundColor: colors.navy, borderColor: colors.navy },
+  languageCardSelected: { backgroundColor: colors.primary, borderColor: colors.primary, ...shadow },
+  langIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.blueSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing(0.5),
+  },
+  langIconSelected: { backgroundColor: "rgba(255,255,255,0.14)" },
+  checkBadge: {
+    position: "absolute",
+    top: spacing(1),
+    right: spacing(1),
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   languageLabel: { fontSize: 14, fontWeight: "700", color: colors.text },
   languageLabelSelected: { color: colors.primaryText },
   languageRegion: { fontSize: 11, color: colors.textMuted },
@@ -156,9 +175,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing(0.75),
-    backgroundColor: colors.goldMuted,
+    backgroundColor: colors.blueSoft,
     borderRadius: radius.md,
-    padding: spacing(1.25),
+    padding: spacing(1.5),
   },
-  noticeText: { flex: 1, fontSize: 11, color: colors.navyDeep },
+  noticeText: { flex: 1, fontSize: 12, lineHeight: 17, color: colors.navy },
 });

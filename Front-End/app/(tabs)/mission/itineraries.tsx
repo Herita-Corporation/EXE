@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   currentImage: {
     height: 120,
     borderRadius: 12,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.navyCard,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   currentTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
   currentDates: { color: colors.textMuted, fontSize: 12 },
   pastCard: { marginBottom: spacing(1) },
-  pastDates: { color: colors.gold, fontSize: 12, fontWeight: "700" },
+  pastDates: { color: colors.link, fontSize: 12, fontWeight: "700" },
   pastTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
   newTripRow: {
     flexDirection: "row",

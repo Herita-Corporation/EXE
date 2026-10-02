@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.navyCard,
     alignItems: "center",
     justifyContent: "center",
   },

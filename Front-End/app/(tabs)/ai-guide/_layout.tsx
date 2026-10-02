@@ -12,6 +12,7 @@ export default function AiGuideLayout() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="chat" />
+      <Stack.Screen name="bahnar" />
     </Stack>
   );
 }

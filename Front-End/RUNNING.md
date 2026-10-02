@@ -49,6 +49,7 @@ Chạy song song, mỗi service một terminal riêng:
 | `IAMService` | `dotnet run` | Cần connection string SQL Server trong `appsettings.json` |
 | `AITourService` (`AITour.Presentation`) | `dotnet run` | Cần `AIItinerary:BaseUrl` trỏ đúng tới nơi AI-Itinerary đang chạy (IP LAN nếu test qua điện thoại) |
 | `Task.Presentation` | `dotnet run` | Cần connection string SQL Server |
+| `Bahnar-Translator` (tùy chọn — dịch Ba Na → Việt) | xem `../Bahnar-Translator/README.md` | Cần ~8 GB RAM + model tải từ Hugging Face. AITour cần `Translator:BaseUrl` (+ `Translator:ApiKey`) trỏ tới nó. Không chạy thì chỉ màn hình dịch Ba Na báo "chưa khả dụng" |
 
 ## 4. Chạy app
 

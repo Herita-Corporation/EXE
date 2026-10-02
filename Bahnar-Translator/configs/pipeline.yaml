@@ -1,0 +1,44 @@
+# Phase 5 — Pipeline Speech(Ba Na) → Text(Việt) → Speech(Việt)
+asr:
+  backend: torch                  # torch | onnx
+  model_dir: outputs/asr_w2vbert/best
+  onnx_path: outputs/serve/asr_int8.onnx
+  lm_path: data/processed/lm/LM_mix_l10.bin   # LM đã chọn sau tune (null = greedy)
+  unigrams: data/processed/lm/unigrams.txt
+  alpha: 0.5                      # lấy từ logits_cache/best_decode.json
+  beta: 1.0
+  beam_width: 64
+  hotwords_file: data/processed/lm/hotwords.txt
+  hotword_weight: 8.0
+
+mt:
+  backend: torch                  # torch | ct2
+  model_dir: outputs/mt_bartpho/M6/stage2/best
+  ct2_dir: outputs/serve/mt_ct2_int8
+  glossary: data/processed/mt/glossary.tsv
+  num_beams: 5
+  dialect_tag: "<ud>"
+  domain_tag: "<conv>"            # luôn <conv> lúc inference
+
+tts:
+  type: vieneu
+  sdk_version: "3.7.1"
+  precision: int8
+  voice: null                     # giọng mặc định; người dùng đổi được qua request
+  # service riêng (Docker VieNeu, API tương thích OpenAI) thay vì nạp trong tiến trình:
+  remote_url: null                # vd http://vieneu:8000/v1/audio/speech
+
+vad:
+  enabled: true
+  threshold: 0.5
+  min_speech_ms: 250
+  pad_ms: 200
+
+limits:
+  max_audio_sec: 30
+
+confidence:                       # tune trên val bằng: python -m src.pipeline.confidence
+  tau_asr: 0.60
+  tau_mt: 0.0                     # 0 = không chặn theo MT
+  retry_message: "Xin nói lại chậm hơn."
+  disclaimer: "Bản dịch máy — có thể chưa chính xác."

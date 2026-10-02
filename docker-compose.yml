@@ -12,6 +12,7 @@
 #   - iam-service      : .NET 8 Identity & Access Management service
 #   - aitour-service   : .NET 8 AITour proxy service (calls ai-itinerary)
 #   - task-service     : .NET 8 mission/gamification service
+#   - bahnar-translator: Python FastAPI Ba Na → Việt (OPTIONAL, --profile translator)
 #
 # Setup:
 #   cp .env.example .env    # then edit if you need different secrets
@@ -29,6 +30,7 @@
 #   IAMService   : 5195  →  http://localhost:5195/swagger
 #   AITour       : 5289  →  http://localhost:5289/swagger
 #   TaskService  : 5020  →  http://localhost:5020/swagger
+#   Translator   : 8090  →  http://localhost:8090/docs   (only with --profile translator)
 # =============================================================================
 
 version: "3.9"
@@ -247,6 +249,10 @@ services:
       # Point to ai-itinerary container using Docker internal DNS
       AIItinerary__BaseUrl: http://ai-itinerary:8000
       AIItinerary__TimeoutSeconds: "120"
+      # Bahnar → Vietnamese translator (optional). Not running → only /api/v1/translate/* return 503.
+      Translator__BaseUrl: "${TRANSLATOR_BASE_URL:-http://bahnar-translator:8080}"
+      Translator__ApiKey: "${TRANSLATOR_API_KEY:-}"
+      Translator__TimeoutSeconds: "90"
     depends_on:
       ai-itinerary:
         condition: service_healthy
@@ -277,6 +283,35 @@ services:
         condition: service_completed_successfully
     networks:
       - disa-network
+
+  # ── Bahnar-Translator (Python FastAPI) — Ba Na → Việt, OPTIONAL ─────────────
+  # Heavy (~5 GB RAM, models ~4 GB) so it only starts when asked:
+  #   docker compose --profile translator up --build
+  # Models first (1 time): see Bahnar-Translator/README.md (scripts/models_hub.py download).
+  # The app never calls it directly: App → aitour-service (JWT) → bahnar-translator (X-API-Key).
+  bahnar-translator:
+    profiles: ["translator"]
+    build:
+      context: ./Bahnar-Translator
+      dockerfile: Dockerfile
+    image: disa-bahnar-translator
+    container_name: disa-bahnar-translator
+    restart: unless-stopped
+    ports:
+      - "8090:8080"   # dev only: http://localhost:8090/docs
+    environment:
+      PIPELINE_CONFIG: pipeline_prod.yaml
+      TRANSLATOR_API_KEY: "${TRANSLATOR_API_KEY:-}"
+    volumes:
+      - ./Bahnar-Translator/models:/app/models:ro
+    networks:
+      - disa-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 # ── Volumes ───────────────────────────────────────────────────────────────────
 volumes:

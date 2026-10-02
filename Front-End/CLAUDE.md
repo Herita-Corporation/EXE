@@ -16,6 +16,15 @@ backend services that are actually implemented today (see
 | **AITourService** | `../Disa-App/AITour.Presentation` | `5289` (http) | Proxy that forwards itinerary requests (with the caller's JWT) to AI-Itinerary |
 | **Task.Presentation** | `../Disa-App/Task.Presentation` | `5020` (http) | Mission templates, assigning missions, submitting photo/location evidence |
 
+**Translation (Ba Na → Việt)** also goes through `AITourService`:
+`/api/v1/translate/{status,text,speech}` (`TranslationController.cs`, JWT required) → the Python
+**Bahnar-Translator** service (`../Bahnar-Translator`, service key, never called by the app).
+App side: `src/api/endpoints/translate.ts`, `src/types/translate.ts` (snake_case, like itinerary),
+screen `app/(tabs)/ai-guide/bahnar.tsx` (voice via `expo-audio` + text). Only Ba Na has a backend;
+other languages in the AI Guide still use the `translateText` stub (`chat.tsx`). The translator is
+optional server-side — when it's off, those endpoints return 503 with a Vietnamese message, which
+the screen shows as-is.
+
 `AITourService` itself calls the Python **AI-Itinerary** service
 (`../AI-Itinerary`, default port `8000`) — the app never talks to AI-Itinerary
 directly, only through AITourService, matching the real architecture

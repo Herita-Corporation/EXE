@@ -1,0 +1,49 @@
+# Pipeline cho SERVER THẬT (máy chủ / Docker). Model lấy từ Hugging Face bằng:
+#   python scripts/models_hub.py download --repo <org>/bahnar-translator-models
+# → bahnar_translator/models/{asr,mt,lm}/. Chạy:
+#   PIPELINE_CONFIG=pipeline_prod.yaml TRANSLATOR_API_KEY=<bí mật> uvicorn src.serve.app:app --host 0.0.0.0 --port 8080
+# Kết quả model (30/09/2026): ASR CER test_source 11.7% / test_radio 16.7%; MT BLEU eaai24_test 69.4 — docs/results.md
+asr:
+  backend: torch                  # torch | onnx
+  model_dir: models/asr
+  onnx_path: outputs/serve/asr_int8.onnx
+  # Không có file hoặc chưa cài thư viện python `kenlm` → tự dùng greedy (WER cao hơn ~1–2 điểm)
+  lm_path: models/lm/LM_cuong.bin
+  unigrams: models/lm/unigrams.txt
+  alpha: 0.3                      # tune trên cuong06_val (best_decode.json)
+  beta: 0.5
+  beam_width: 64
+  hotwords_file: data/processed/lm/hotwords.txt
+  hotword_weight: 8.0
+
+mt:
+  backend: torch                  # torch | ct2
+  model_dir: models/mt            # BARTpho M4 (cuong06 + EAAI24, có tag)
+  ct2_dir: outputs/serve/mt_ct2_int8
+  glossary: data/processed/mt/glossary.tsv
+  num_beams: 5
+  dialect_tag: "<ud>"
+  domain_tag: "<conv>"
+
+tts:
+  enabled: true                   # false = chỉ trả chữ (nhẹ hơn). Chưa cài vieneu → tự tắt, không lỗi
+  type: vieneu
+  sdk_version: "3.7.1"
+  precision: int8
+  voice: null
+  remote_url: null                # hoặc service VieNeu riêng, vd http://vieneu:8000/v1/audio/speech
+
+vad:
+  enabled: true
+  threshold: 0.5
+  min_speech_ms: 250
+  pad_ms: 200
+
+limits:
+  max_audio_sec: 30
+
+confidence:
+  tau_asr: 0.60
+  tau_mt: 0.0
+  retry_message: "Xin nói lại chậm hơn."
+  disclaimer: "Bản dịch máy — có thể chưa chính xác."

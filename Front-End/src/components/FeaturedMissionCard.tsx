@@ -37,7 +37,7 @@ export function FeaturedMissionCard({
         style,
       ]}
     >
-      <Image source={{ uri: mission.image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+      <Image source={mission.image} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
       <LinearGradient
         colors={["rgba(8,29,64,0)", "rgba(8,29,64,0.35)", "rgba(8,29,64,0.92)"]}
         locations={[0.25, 0.55, 1]}
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   title: { color: "#FFFFFF", fontSize: 16, fontWeight: "800", lineHeight: 20 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   place: { color: "rgba(255,255,255,0.85)", fontSize: 12, flexShrink: 1 },
-  rewardRow: { flexDirection: "row", gap: spacing(0.75), marginTop: spacing(0.5) },
+  rewardRow: { flexDirection: "row", alignItems: "center", gap: spacing(0.75), marginTop: spacing(0.5) },
   rewardPill: {
     flexDirection: "row",
     alignItems: "center",

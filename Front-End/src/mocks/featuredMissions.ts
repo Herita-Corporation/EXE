@@ -3,8 +3,11 @@
 // exist once an itinerary is generated and its missions are assigned
 // (mission/itinerary/[id].tsx → assignMission), so these cards route the user
 // into that flow instead of pretending to be assignable on their own.
-// Images are placeholder photography (picsum.photos), same as destinations.ts.
+// Photos are real shots of each landmark, bundled from Wikimedia Commons
+// (src/assets/images/missions/). Most are CC BY-SA, which requires credit —
+// `credit` records the attribution (not shown on the card).
 
+import type { ImageSourcePropType } from "react-native";
 import type { Ionicons } from "@expo/vector-icons";
 
 export type FeaturedMissionKind = "photo" | "video" | "checkin";
@@ -17,7 +20,9 @@ export interface FeaturedMission {
   rewardXP: number;
   rewardCoins: number;
   difficulty: 1 | 2 | 3;
-  image: string;
+  image: ImageSourcePropType;
+  /** Photo attribution: "Author · License". */
+  credit: string;
 }
 
 export const FEATURED_MISSION_KIND: Record<
@@ -38,7 +43,8 @@ export const FEATURED_MISSIONS: FeaturedMission[] = [
     rewardXP: 120,
     rewardCoins: 30,
     difficulty: 1,
-    image: "https://picsum.photos/seed/disa-hoguom/600/400",
+    image: require("@/assets/images/missions/ho-guom.jpg"),
+    credit: "Cyril Doussin · CC BY-SA 2.0",
   },
   {
     id: "fm-2",
@@ -48,7 +54,8 @@ export const FEATURED_MISSIONS: FeaturedMission[] = [
     rewardXP: 200,
     rewardCoins: 50,
     difficulty: 2,
-    image: "https://picsum.photos/seed/disa-hoian-lantern/600/400",
+    image: require("@/assets/images/missions/hoi-an-den-hoa-dang.jpg"),
+    credit: "Alexkom000 · CC BY 4.0",
   },
   {
     id: "fm-3",
@@ -58,7 +65,8 @@ export const FEATURED_MISSIONS: FeaturedMission[] = [
     rewardXP: 150,
     rewardCoins: 40,
     difficulty: 1,
-    image: "https://picsum.photos/seed/disa-cauvang/600/400",
+    image: require("@/assets/images/missions/cau-vang.jpg"),
+    credit: "DvTor8303 · CC0",
   },
   {
     id: "fm-4",
@@ -68,7 +76,8 @@ export const FEATURED_MISSIONS: FeaturedMission[] = [
     rewardXP: 250,
     rewardCoins: 60,
     difficulty: 3,
-    image: "https://picsum.photos/seed/disa-cairang/600/400",
+    image: require("@/assets/images/missions/cho-noi-cai-rang.jpg"),
+    credit: "Jean-Marc Astesana · CC BY-SA 2.0",
   },
   {
     id: "fm-5",
@@ -78,6 +87,7 @@ export const FEATURED_MISSIONS: FeaturedMission[] = [
     rewardXP: 400,
     rewardCoins: 100,
     difficulty: 3,
-    image: "https://picsum.photos/seed/disa-fansipan/600/400",
+    image: require("@/assets/images/missions/fansipan.jpg"),
+    credit: "Isderion · CC BY-SA 3.0 DE",
   },
 ];

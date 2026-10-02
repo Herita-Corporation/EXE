@@ -2,6 +2,7 @@
   "expo": {
     "name": "Disa Travel",
     "slug": "disa-travel-frontend",
+    "owner": "disa-travel",
     "scheme": "disatravel",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,7 +20,13 @@
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/adaptive-icon.png",
         "backgroundColor": "#1A4A85"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -67,6 +74,9 @@
     "extra": {
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "dceb64b3-b47b-4c32-ac03-9c37ff2578ab"
       }
     }
   }

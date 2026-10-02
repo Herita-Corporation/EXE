@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -9,25 +10,39 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { SectionHeader } from "@/components/SectionHeader";
 import { Card } from "@/components/Card";
-import { Badge } from "@/components/Badge";
+import { IconButton } from "@/components/IconButton";
 import { ProgressBar } from "@/components/ProgressBar";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { EmptyState } from "@/components/EmptyState";
 import { MissionThumb } from "@/components/MissionThumb";
+import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
+import { GradientHero } from "@/components/GradientHero";
 import { listUserMissions } from "@/api/endpoints/missions";
 import { ApiError } from "@/api/http";
 import { useAuth } from "@/context/AuthContext";
-import { UserMission } from "@/types/missions";
+import { MISSION_STATUS_LABEL, MISSION_TYPE_LABEL, UserMission } from "@/types/missions";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, spacing } from "@/theme/colors";
+import { FEATURED_MISSIONS } from "@/mocks/featuredMissions";
+import { colors, radius, shadow, spacing } from "@/theme/colors";
 
 // Active = not yet Completed/Rejected/Expired (see MISSION_STATUS_LABEL).
 const ACTIVE_STATUSES = new Set([0, 1]);
 const COMPLETED_STATUS = 2;
 
 type MissionTab = "active" | "completed";
+
+// Status → pill colors (Assigned / PendingReview / Completed / Rejected / Expired).
+const STATUS_TONE: Record<number, { bg: string; fg: string }> = {
+  0: { bg: colors.blueSoft, fg: colors.link },
+  1: { bg: colors.goldMuted, fg: colors.goldText },
+  2: { bg: colors.successSoft, fg: colors.success },
+  3: { bg: colors.dangerSoft, fg: colors.danger },
+  4: { bg: colors.surfaceAlt, fg: colors.textMuted },
+};
 
 export default function MissionHomeScreen() {
   const { user } = useAuth();
@@ -70,144 +85,242 @@ export default function MissionHomeScreen() {
 
   const progress = gamification.points / (gamification.points + gamification.pointsToNextTier);
 
+  function openSample() {
+    Alert.alert(t("mission.sampleTitle"), t("mission.sampleMessage"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("mission.createToUnlock"), onPress: () => router.push("/(tabs)/mission/create") },
+    ]);
+  }
+
   return (
-    <ScreenContainer avoidTabBar backgroundColor={colors.surface}>
-      <Card style={styles.pointsCard}>
+    <ScreenContainer avoidTabBar>
+      <ScreenHeader
+        title={t("tabs.mission")}
+        subtitle={t("mission.headerSub")}
+        right={
+          <IconButton
+            icon="add"
+            variant="solid"
+            size={22}
+            onPress={() => router.push("/(tabs)/mission/create")}
+          />
+        }
+      />
+
+      {/* Points hero */}
+      <GradientHero style={styles.pointsCard} markPosition="top-right" markStyle={{ width: 160, opacity: 0.1 }}>
         <View style={styles.pointsHeaderRow}>
           <Text style={styles.pointsLabel}>{t("mission.totalExplorationPoints")}</Text>
-          <View style={styles.levelBadge}>
-            <Ionicons name="ribbon-outline" size={16} color={colors.gold} />
+          <View style={styles.levelChip}>
+            <Ionicons name="ribbon" size={13} color={colors.onAmber} />
+            <Text style={styles.levelChipText}>
+              {t("mission.level")} {gamification.level}
+            </Text>
           </View>
         </View>
         <Text style={styles.pointsValue}>
           {gamification.points.toLocaleString()} <Text style={styles.pointsUnit}>{t("mission.pts")}</Text>
         </Text>
-        <View style={styles.progressRow}>
-          <ProgressBar progress={progress} style={{ flex: 1 }} />
-          <Text style={styles.levelText}>{t("mission.level")} {gamification.level}</Text>
-        </View>
+        <ProgressBar progress={progress} color={colors.gold} trackColor="rgba(255,255,255,0.15)" />
         <Text style={styles.tierText}>
           {gamification.pointsToNextTier.toLocaleString()} {t("mission.pointsUntil")}{" "}
-          {gamification.nextTierName}
+          <Text style={styles.tierName}>{gamification.nextTierName}</Text>
         </Text>
-      </Card>
 
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{activeMissions.length}</Text>
+            <Text style={styles.statLabel}>{t("mission.activeMissions")}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{completedMissions.length}</Text>
+            <Text style={styles.statLabel}>{t("mission.completedMissions")}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{totalCompletedPoints.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>{t("completed.pointsEarned")}</Text>
+          </View>
+        </View>
+      </GradientHero>
+
+      {/* Segmented control */}
       <View style={styles.tabRow}>
-        <Pressable
-          style={[styles.tabButton, tab === "active" && styles.tabButtonActive]}
-          onPress={() => setTab("active")}
-        >
-          <Text style={[styles.tabButtonText, tab === "active" && styles.tabButtonTextActive]}>
-            {t("mission.activeMissions")} ({activeMissions.length})
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.tabButton, tab === "completed" && styles.tabButtonActive]}
-          onPress={() => setTab("completed")}
-        >
-          <Text style={[styles.tabButtonText, tab === "completed" && styles.tabButtonTextActive]}>
-            {t("mission.completedMissions")} ({completedMissions.length})
-          </Text>
-        </Pressable>
+        {(["active", "completed"] as const).map((key) => {
+          const selected = tab === key;
+          const count = key === "active" ? activeMissions.length : completedMissions.length;
+          return (
+            <Pressable
+              key={key}
+              style={[styles.tabButton, selected && styles.tabButtonActive]}
+              onPress={() => setTab(key)}
+            >
+              <Text style={[styles.tabButtonText, selected && styles.tabButtonTextActive]}>
+                {key === "active" ? t("mission.activeMissions") : t("mission.completedMissions")}
+              </Text>
+              <View style={[styles.countBubble, selected && styles.countBubbleActive]}>
+                <Text style={[styles.countText, selected && styles.countTextActive]}>{count}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
 
       <ErrorBanner message={error} />
 
       {loading ? (
-        <ActivityIndicator color={colors.navy} />
+        <ActivityIndicator color={colors.blue} style={{ marginTop: spacing(2) }} />
       ) : tab === "active" ? (
-        <>
-          {activeMissions.length === 0 ? (
+        activeMissions.length === 0 ? (
+          <>
             <EmptyState
+              icon="flag-outline"
               title={t("mission.emptyActiveTitle")}
               description={t("mission.emptyActiveDescription")}
             />
-          ) : (
-            activeMissions.map((m) => (
-              <Pressable key={m.id} onPress={() => router.push(`/(tabs)/mission/${m.id}`)}>
-                <Card style={styles.missionCard}>
-                  <MissionThumb evidenceUrl={m.evidenceUrl} evidenceType={m.evidenceType} size={56} />
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Badge label={t("mission.mission")} tone="outline" />
-                    <Text style={styles.missionTitle}>{m.title}</Text>
-                    <View style={styles.starsRow}>
-                      {[0, 1].map((i) => (
-                        <Ionicons key={i} name="star" size={12} color={colors.gold} />
-                      ))}
-                    </View>
-                  </View>
-                </Card>
-              </Pressable>
-            ))
-          )}
-        </>
+            <SectionHeader title={t("mission.suggested")} />
+            {FEATURED_MISSIONS.map((m) => (
+              <FeaturedMissionCard key={m.id} mission={m} variant="wide" onPress={openSample} />
+            ))}
+          </>
+        ) : (
+          activeMissions.map((m) => <MissionRow key={m.id} mission={m} />)
+        )
       ) : completedMissions.length === 0 ? (
-        <EmptyState title={t("mission.emptyCompletedTitle")} />
+        <EmptyState icon="trophy-outline" title={t("mission.emptyCompletedTitle")} />
       ) : (
-        <>
-          <View style={styles.statsRow}>
-            <Badge label={`${totalCompletedPoints.toLocaleString()} ${t("completed.pointsEarned")}`} tone="primary" />
-            <Badge label={`${completedMissions.length} ${t("completed.missions")}`} tone="gold" />
-          </View>
-          {completedMissions.map((m) => (
-            <Pressable key={m.id} onPress={() => router.push(`/(tabs)/mission/${m.id}`)}>
-              <Card style={styles.missionCard}>
-                <MissionThumb evidenceUrl={m.evidenceUrl} evidenceType={m.evidenceType} size={44} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.missionTitle}>{m.title}</Text>
-                  <Text style={styles.completedDate}>
-                    {t("completed.completedPrefix")}{" "}
-                    {m.completedAt ? new Date(m.completedAt).toLocaleDateString("vi-VN") : "—"}
-                  </Text>
-                </View>
-                <Badge label={`+${m.rewardXP + m.rewardCoins} ${t("completed.pts")}`} tone="success" />
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </Card>
-            </Pressable>
-          ))}
-        </>
+        completedMissions.map((m) => <MissionRow key={m.id} mission={m} completed />)
       )}
     </ScreenContainer>
   );
 }
 
+function MissionRow({ mission: m, completed = false }: { mission: UserMission; completed?: boolean }) {
+  const { t } = useLocale();
+  const tone = STATUS_TONE[m.status] ?? STATUS_TONE[4];
+
+  return (
+    <Pressable
+      onPress={() => router.push(`/(tabs)/mission/${m.id}`)}
+      style={({ pressed }) => pressed && { opacity: 0.85 }}
+    >
+      <Card variant="elevated" style={styles.missionCard}>
+        <MissionThumb evidenceUrl={m.evidenceUrl} evidenceType={m.evidenceType} size={64} />
+        <View style={{ flex: 1, gap: 6 }}>
+          <View style={styles.missionTopRow}>
+            <View style={[styles.statusPill, { backgroundColor: tone.bg }]}>
+              <Text style={[styles.statusText, { color: tone.fg }]}>
+                {MISSION_STATUS_LABEL[m.status] ?? "—"}
+              </Text>
+            </View>
+            {MISSION_TYPE_LABEL[m.type] ? (
+              <Text style={styles.typeText}>{MISSION_TYPE_LABEL[m.type]}</Text>
+            ) : null}
+          </View>
+          <Text style={styles.missionTitle} numberOfLines={2}>{m.title}</Text>
+          {completed ? (
+            <Text style={styles.completedDate}>
+              {t("completed.completedPrefix")}{" "}
+              {m.completedAt ? new Date(m.completedAt).toLocaleDateString("vi-VN") : "—"}
+            </Text>
+          ) : null}
+          <View style={styles.rewardRow}>
+            <View style={styles.rewardPill}>
+              <Ionicons name="flash" size={11} color={colors.primary} />
+              <Text style={styles.rewardText}>+{m.rewardXP} XP</Text>
+            </View>
+            <View style={[styles.rewardPill, { backgroundColor: colors.goldMuted }]}>
+              <Ionicons name="star" size={11} color={colors.gold} />
+              <Text style={[styles.rewardText, { color: colors.goldText }]}>+{m.rewardCoins}</Text>
+            </View>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Card>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  pointsCard: { backgroundColor: colors.navy, borderWidth: 0, gap: spacing(1) },
+  pointsCard: { gap: spacing(1.25) },
   pointsHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  pointsLabel: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: "600" },
-  levelBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
+  pointsLabel: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "600" },
+  levelChip: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 4,
+    backgroundColor: colors.gold,
+    borderRadius: radius.pill,
+    paddingVertical: 4,
+    paddingHorizontal: spacing(1.25),
   },
-  pointsValue: { color: "#FFFFFF", fontSize: 32, fontWeight: "800" },
+  levelChipText: { color: colors.onAmber, fontSize: 12, fontWeight: "800" },
+  pointsValue: { color: "#FFFFFF", fontSize: 34, fontWeight: "800", letterSpacing: -0.5 },
   pointsUnit: { fontSize: 16, fontWeight: "600", color: "rgba(255,255,255,0.7)" },
-  progressRow: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
-  levelText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
-  tierText: { color: "rgba(255,255,255,0.7)", fontSize: 12 },
+  tierText: { color: "rgba(255,255,255,0.75)", fontSize: 12 },
+  tierName: { color: "#FFFFFF", fontWeight: "700" },
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing(1),
+    paddingTop: spacing(1.5),
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.12)",
+  },
+  statItem: { flex: 1, alignItems: "center", gap: 2 },
+  statValue: { color: "#FFFFFF", fontSize: 17, fontWeight: "800" },
+  statLabel: { color: "rgba(255,255,255,0.65)", fontSize: 10.5, textAlign: "center" },
+  statDivider: { width: 1, height: 28, backgroundColor: "rgba(255,255,255,0.12)" },
+
   tabRow: {
     flexDirection: "row",
-    gap: spacing(1),
-    marginTop: spacing(1),
+    gap: 4,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     padding: 4,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: spacing(1),
-    borderRadius: 999,
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
+    gap: 6,
+    paddingVertical: spacing(1.1),
+    borderRadius: radius.pill,
   },
-  tabButtonActive: { backgroundColor: colors.navy },
-  tabButtonText: { fontSize: 12, fontWeight: "700", color: colors.textMuted },
-  tabButtonTextActive: { color: "#FFFFFF" },
-  statsRow: { flexDirection: "row", gap: spacing(1) },
-  completedDate: { fontSize: 11, color: colors.textMuted },
+  tabButtonActive: { backgroundColor: colors.surface, ...shadow, shadowOpacity: 0.1 },
+  tabButtonText: { fontSize: 12.5, fontWeight: "700", color: colors.textMuted },
+  tabButtonTextActive: { color: colors.navy },
+  countBubble: {
+    minWidth: 20,
+    paddingHorizontal: 6,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countBubbleActive: { backgroundColor: colors.primary },
+  countText: { fontSize: 11, fontWeight: "800", color: colors.textMuted },
+  countTextActive: { color: "#FFFFFF" },
+
   missionCard: { flexDirection: "row", alignItems: "center", gap: spacing(1.5) },
-  missionTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-  starsRow: { flexDirection: "row", gap: 2 },
+  missionTopRow: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
+  statusPill: { borderRadius: radius.pill, paddingVertical: 2, paddingHorizontal: spacing(1) },
+  statusText: { fontSize: 11, fontWeight: "800" },
+  typeText: { fontSize: 11, color: colors.textMuted, fontWeight: "600" },
+  missionTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
+  completedDate: { fontSize: 11.5, color: colors.textMuted },
+  rewardRow: { flexDirection: "row", gap: spacing(0.75) },
+  rewardPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: colors.blueSoft,
+    borderRadius: radius.pill,
+    paddingVertical: 2,
+    paddingHorizontal: spacing(1),
+  },
+  rewardText: { fontSize: 11, fontWeight: "800", color: colors.link },
 });

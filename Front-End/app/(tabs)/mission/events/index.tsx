@@ -115,13 +115,13 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { fontSize: 18, fontWeight: "700", color: colors.navy },
-  eyebrow: { fontSize: 11, fontWeight: "700", color: colors.gold, letterSpacing: 0.5 },
+  eyebrow: { fontSize: 11, fontWeight: "700", color: colors.link, letterSpacing: 0.5 },
   subtitle: { color: colors.textMuted, fontSize: 13 },
   emptyText: { color: colors.textMuted, fontSize: 13, textAlign: "center", marginTop: spacing(3) },
   eventTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
   eventCity: { fontSize: 12, color: colors.navy, fontWeight: "600" },
   eventDescription: { fontSize: 12, color: colors.textMuted },
-  notifyCard: { backgroundColor: colors.navy, borderWidth: 0, alignItems: "center", gap: spacing(1) },
+  notifyCard: { backgroundColor: colors.navyCard, borderWidth: 0, alignItems: "center", gap: spacing(1) },
   notifyIcon: {
     width: 44,
     height: 44,

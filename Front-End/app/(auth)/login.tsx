@@ -11,7 +11,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, radius, spacing } from "@/theme/colors";
+import { colors, isDark, spacing } from "@/theme/colors";
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -42,9 +42,15 @@ export default function LoginScreen() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <View style={styles.logoBadge}>
-          <Image source={require("@/assets/images/disa-logo-white.png")} style={styles.logoImage} contentFit="contain" />
-        </View>
+        <Image
+          source={
+            isDark
+              ? require("@/assets/images/brand/logo-horizontal-white.png")
+              : require("@/assets/images/brand/logo-horizontal.png")
+          }
+          style={styles.logoImage}
+          contentFit="contain"
+        />
         <Text style={styles.title}>{t("auth.welcomeBack")}</Text>
         <Text style={styles.subtitle}>
           {t("auth.welcomeBackSubtitle")}
@@ -91,6 +97,7 @@ export default function LoginScreen() {
           title={t("auth.login")}
           onPress={onSubmit}
           loading={loading}
+          size="lg"
           icon="arrow-forward"
           iconPosition="right"
         />
@@ -105,14 +112,12 @@ export default function LoginScreen() {
       </View>
 
       <View style={styles.footer}>
-        <View style={styles.footerLinks}>
-          <Text style={styles.footerLink}>{t("common.privacyPolicy")}</Text>
-          <Text style={styles.footerLink}>{t("common.termsOfService")}</Text>
-          <Text style={styles.footerLink}>{t("auth.support")}</Text>
-        </View>
+        <Text style={styles.footerLinks}>
+          {t("common.privacyPolicy")}  ·  {t("common.termsOfService")}  ·  {t("auth.support")}
+        </Text>
         <Text style={styles.copyright}>{t("auth.copyright")}</Text>
         <Link href="/settings" style={styles.devLink}>
-          ⚙ Cấu hình địa chỉ API (dùng cho Expo Go)
+          <Ionicons name="settings-outline" size={12} color={colors.textMuted} /> Cấu hình API
         </Link>
       </View>
     </ScreenContainer>
@@ -120,41 +125,33 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { alignItems: "center", gap: spacing(1), marginTop: spacing(2) },
-  logoBadge: {
-    backgroundColor: colors.navy,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing(2),
-    paddingVertical: spacing(1.25),
-    marginBottom: spacing(0.5),
-  },
-  // Matches the logo asset's real aspect ratio (740×403), same as Home's header.
-  logoImage: { height: 32, aspectRatio: 740 / 403 },
-  title: { fontSize: 24, fontWeight: "700", color: colors.navy },
+  header: { alignItems: "center", gap: spacing(1), marginTop: spacing(4) },
+  // Matches brand/logo-horizontal.png's real aspect ratio (1200×180).
+  logoImage: { height: 34, aspectRatio: 1200 / 180, marginBottom: spacing(3) },
+  title: { fontSize: 26, fontWeight: "800", color: colors.navy, letterSpacing: -0.3 },
   subtitle: {
     color: colors.textMuted,
     fontSize: 13,
     textAlign: "center",
     paddingHorizontal: spacing(2),
   },
-  card: { marginTop: spacing(2), gap: spacing(1.5) },
+  card: { marginTop: spacing(2), gap: spacing(2), padding: spacing(2.5) },
   registerRow: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 4,
     marginTop: spacing(1),
   },
-  registerLink: { color: colors.navy, fontWeight: "700" },
+  registerLink: { color: colors.link, fontWeight: "700" },
   forgotPasswordLink: {
-    color: colors.navy,
+    color: colors.link,
     fontWeight: "600",
     fontSize: 13,
     textAlign: "right",
     marginTop: -spacing(0.5),
   },
-  footer: { marginTop: spacing(3), gap: spacing(0.5) },
-  footerLinks: { flexDirection: "row", justifyContent: "center", gap: spacing(2) },
-  footerLink: { color: colors.textMuted, fontSize: 12 },
+  footer: { marginTop: "auto", paddingTop: spacing(4), gap: spacing(0.5) },
+  footerLinks: { color: colors.textMuted, fontSize: 12, textAlign: "center" },
   copyright: { color: colors.textMuted, fontSize: 11, textAlign: "center" },
   devLink: {
     color: colors.textMuted,

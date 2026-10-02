@@ -21,7 +21,7 @@ const SECTIONS_EN = [
   },
   {
     title: "4. Storage",
-    body: "Photos/videos you submit as mission evidence and event/avatar images are stored on Disa Travel's own servers, not shared with third parties beyond what's needed to operate the app.",
+    body: "Photos/videos you submit as mission evidence and event/avatar images are stored on DISA Travel's own servers, not shared with third parties beyond what's needed to operate the app.",
   },
   {
     title: "5. Your Choices",
@@ -48,7 +48,7 @@ const SECTIONS_VI = [
   },
   {
     title: "4. Lưu trữ",
-    body: "Ảnh/video minh chứng nhiệm vụ và ảnh sự kiện/đại diện được lưu trên máy chủ riêng của Disa Travel, không chia sẻ cho bên thứ ba ngoài phạm vi cần thiết để vận hành ứng dụng.",
+    body: "Ảnh/video minh chứng nhiệm vụ và ảnh sự kiện/đại diện được lưu trên máy chủ riêng của DISA Travel, không chia sẻ cho bên thứ ba ngoài phạm vi cần thiết để vận hành ứng dụng.",
   },
   {
     title: "5. Lựa chọn của bạn",

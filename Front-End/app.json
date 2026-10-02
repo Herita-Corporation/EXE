@@ -1,66 +1,70 @@
 {
   "expo": {
-    "name": "Disa Travel",
+    "name": "DISA Travel",
     "slug": "disa-travel-frontend",
     "scheme": "disatravel",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
-    "icon": "./src/assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "icon": "./src/assets/images/app-icon.png",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.disa.travel.frontend"
+      "bundleIdentifier": "com.disa.travel.frontend",
+      "infoPlist": {
+        "CFBundleDisplayName": "DISA Travel"
+      }
     },
     "android": {
       "package": "com.disa.travel.frontend",
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/images/adaptive-icon.png",
-        "backgroundColor": "#1A4A85"
+        "foregroundImage": "./src/assets/images/app-adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       }
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "static",
+      "favicon": "./src/assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-image-picker",
         {
-          "photosPermission": "Disa Travel cần quyền truy cập thư viện ảnh để đính kèm minh chứng nhiệm vụ.",
-          "cameraPermission": "Disa Travel cần quyền camera để chụp ảnh minh chứng nhiệm vụ."
+          "photosPermission": "DISA Travel cần quyền truy cập thư viện ảnh để đính kèm minh chứng nhiệm vụ.",
+          "cameraPermission": "DISA Travel cần quyền camera để chụp ảnh minh chứng nhiệm vụ."
         }
       ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Disa Travel cần vị trí để xác thực bạn đang ở điểm tham quan khi nộp minh chứng nhiệm vụ."
+          "locationAlwaysAndWhenInUsePermission": "DISA Travel cần vị trí để xác thực bạn đang ở điểm tham quan khi nộp minh chứng nhiệm vụ."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Disa Travel cần quyền camera để chụp ảnh minh chứng nhiệm vụ.",
-          "microphonePermission": "Disa Travel cần quyền micro để quay video minh chứng nhiệm vụ."
+          "cameraPermission": "DISA Travel cần quyền camera để chụp ảnh minh chứng nhiệm vụ.",
+          "microphonePermission": "DISA Travel cần quyền micro để quay video minh chứng nhiệm vụ."
         }
       ],
       [
         "expo-notifications",
         {
-          "icon": "./src/assets/images/disa-logo-white.png",
-          "color": "#1A4A85"
+          "icon": "./src/assets/images/notification-icon.png",
+          "color": "#0D2D5E"
         }
       ],
       [
         "expo-splash-screen",
         {
-          "image": "./src/assets/images/splash-icon.png",
-          "imageWidth": 220,
+          "image": "./src/assets/images/app-splash.png",
+          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#1A4A85"
+          "backgroundColor": "#FFFFFF"
         }
       ]
     ],

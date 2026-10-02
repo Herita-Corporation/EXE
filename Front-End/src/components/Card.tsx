@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, View, ViewStyle } from "react-native";
 import { Image, ImageSource } from "expo-image";
-import { colors, radius, spacing } from "@/theme/colors";
+import { colors, radius, shadow, spacing } from "@/theme/colors";
 
 type Variant = "flat" | "elevated" | "media";
 
@@ -57,14 +57,6 @@ export function Card({
     </View>
   );
 }
-
-const shadow: ViewStyle = {
-  shadowColor: "#000",
-  shadowOpacity: 0.08,
-  shadowRadius: 12,
-  shadowOffset: { width: 0, height: 4 },
-  elevation: 3,
-};
 
 const styles = StyleSheet.create({
   card: {

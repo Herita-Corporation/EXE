@@ -64,21 +64,21 @@ export function Input({
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing(0.5) },
-  label: { color: colors.textMuted, fontSize: 13, fontWeight: "500" },
+  label: { color: colors.text, fontSize: 13, fontWeight: "600" },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: colors.surfaceAlt,
     borderRadius: radius.md,
     paddingHorizontal: spacing(1.75),
   },
-  inputRowFocused: { borderColor: colors.gold },
+  inputRowFocused: { borderColor: colors.blue, backgroundColor: colors.surface },
   icon: { marginRight: spacing(1) },
   input: {
     flex: 1,
-    paddingVertical: spacing(1.25),
+    paddingVertical: spacing(1.5),
     color: colors.text,
     fontSize: 15,
   },

@@ -23,7 +23,12 @@
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/app-adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -55,7 +60,9 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Disa Travel cần quyền micro để ghi âm tiếng Ba Na và dịch sang tiếng Việt."
+          "microphonePermission": "DISA Travel cần quyền micro để ghi âm tiếng dân tộc và dịch sang tiếng Việt.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
         }
       ],
       [

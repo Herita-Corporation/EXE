@@ -20,4 +20,9 @@ public class AssignMissionRequest
     /// when assigning a generic capture template to a specific place. Falls back to
     /// the template's own name when not provided.</summary>
     public string? Title { get; set; }
+
+    /// <summary>GPS of the mission's place — submissions taken too far from it are rejected.</summary>
+    public double? TargetLatitude { get; set; }
+
+    public double? TargetLongitude { get; set; }
 }

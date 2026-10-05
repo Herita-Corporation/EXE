@@ -31,6 +31,25 @@ const GENERIC_INSTRUCTIONS = [
 
 const COMPLETED_STATUS = 2;
 
+// Must match MissionSubmissionService.MaxDistanceMeters — the server is the
+// real check; this just avoids uploading a photo/video that will be rejected.
+const MAX_DISTANCE_METERS = 1000;
+
+function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function formatDistance(m: number) {
+  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
+}
+
 export default function MissionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -125,16 +144,35 @@ export default function MissionDetailScreen() {
     }
   }
 
-  async function useCurrentLocation() {
+  const target =
+    mission?.targetLatitude != null && mission?.targetLongitude != null
+      ? { lat: mission.targetLatitude, lng: mission.targetLongitude }
+      : null;
+  const distance = coords && target ? distanceMeters(coords, target) : null;
+
+  async function getCurrentCoords() {
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (!perm.granted) {
+      showToast("Thiếu quyền — cần quyền vị trí để xác minh nhiệm vụ.", "error");
+      return null;
+    }
+    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    const next = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+    setCoords(next);
+    return next;
+  }
+
+  async function checkLocation() {
     setLocating(true);
     try {
-      const perm = await Location.requestForegroundPermissionsAsync();
-      if (!perm.granted) {
-        showToast("Thiếu quyền — cần quyền vị trí để check-in.", "error");
-        return;
+      const here = await getCurrentCoords();
+      if (!here || !target) return;
+      const d = distanceMeters(here, target);
+      if (d <= MAX_DISTANCE_METERS) {
+        showToast("Vị trí hợp lệ — bạn đang ở địa điểm nhiệm vụ.", "success");
+      } else {
+        showToast(`Vị trí không hợp lệ — bạn đang cách địa điểm ${formatDistance(d)}.`, "error");
       }
-      const loc = await Location.getCurrentPositionAsync({});
-      setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
     } catch {
       showToast("Không lấy được vị trí hiện tại.", "error");
     } finally {
@@ -146,12 +184,31 @@ export default function MissionDetailScreen() {
     if (!mission) return;
     setSubmitting(true);
     try {
+      // Always a fresh fix — a position checked earlier may be stale.
+      let here: { lat: number; lng: number } | null = null;
+      try {
+        here = await getCurrentCoords();
+      } catch {}
+      if (target) {
+        if (!here) {
+          showToast("Cần vị trí hiện tại để xác minh nhiệm vụ.", "error");
+          return;
+        }
+        const d = distanceMeters(here, target);
+        if (d > MAX_DISTANCE_METERS) {
+          showToast(
+            `Vị trí không hợp lệ — bạn đang cách địa điểm ${formatDistance(d)}. Nhiệm vụ chưa hoàn thành.`,
+            "error"
+          );
+          return;
+        }
+      }
       await submitMission({
         userMissionId: id,
         photoUri,
         videoUri,
-        latitude: coords?.lat,
-        longitude: coords?.lng,
+        latitude: here?.lat,
+        longitude: here?.lng,
         takenAt: new Date().toISOString(),
       });
       showToast(`Hoàn thành nhiệm vụ! +${mission.rewardXP} XP · +${mission.rewardCoins} Coin`, "success");
@@ -269,11 +326,25 @@ export default function MissionDetailScreen() {
             </View>
 
             <Button
-              title={coords ? `Vị trí: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : "Lấy vị trí hiện tại"}
+              title={
+                distance != null
+                  ? distance <= MAX_DISTANCE_METERS
+                    ? `Vị trí hợp lệ · cách ${formatDistance(distance)}`
+                    : `Vị trí không hợp lệ · cách ${formatDistance(distance)}`
+                  : coords
+                    ? `Vị trí: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`
+                    : "Kiểm tra vị trí"
+              }
               variant="ghost"
-              icon="location-outline"
+              icon={
+                distance != null && distance > MAX_DISTANCE_METERS
+                  ? "close-circle-outline"
+                  : distance != null
+                    ? "checkmark-circle-outline"
+                    : "location-outline"
+              }
               loading={locating}
-              onPress={useCurrentLocation}
+              onPress={checkLocation}
             />
 
             <Button

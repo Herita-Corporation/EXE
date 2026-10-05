@@ -155,6 +155,13 @@ export const en = {
     highlightPickerSubtitle:
       "Pick a specific area to focus the itinerary on, or skip to let AI plan the whole province/city.",
     noAreaSelection: "No selection (entire province/city)",
+    featuredAreasLabel: "Featured areas",
+    seeAllAreas: "See all",
+    areaListTitle: "Areas in {province}",
+    featuredSection: "Featured",
+    otherAreasSection: "Other areas",
+    featuredBadge: "Featured",
+    wholeProvinceSubtitle: "Let AI plan the whole province/city",
   },
   itineraries: {
     title: "My Itineraries",
@@ -558,6 +565,13 @@ export const vi: Translations = {
     highlightPickerSubtitle:
       "Chọn một khu vực cụ thể để lịch trình tập trung vào đó, hoặc bỏ qua để AI lên kế hoạch cho cả tỉnh/thành.",
     noAreaSelection: "Không chọn (cả tỉnh/thành)",
+    featuredAreasLabel: "Khu vực nổi bật",
+    seeAllAreas: "Xem tất cả",
+    areaListTitle: "Khu vực ở {province}",
+    featuredSection: "Nổi bật",
+    otherAreasSection: "Khu vực khác",
+    featuredBadge: "Nổi bật",
+    wholeProvinceSubtitle: "Để AI lên kế hoạch cho cả tỉnh/thành",
   },
   itineraries: {
     title: "Lịch trình của tôi",

@@ -48,6 +48,23 @@ public class MissionSubmissionService : IMissionSubmissionService
         if (mission.Status != MissionStatus.Assigned)
             throw new Exception("Mission cannot be submitted.");
 
+        // Vị trí phải khớp địa điểm nhiệm vụ — kiểm tra TRƯỚC khi lưu gì,
+        // để nộp sai chỗ không tạo submission và nhiệm vụ vẫn ở Assigned
+        // (người dùng có thể đến đúng chỗ rồi nộp lại).
+        if (mission.TargetLatitude.HasValue && mission.TargetLongitude.HasValue)
+        {
+            if (!request.Latitude.HasValue || !request.Longitude.HasValue)
+                throw new InvalidOperationException("Cần vị trí hiện tại để xác minh nhiệm vụ.");
+
+            var distance = DistanceMeters(
+                request.Latitude.Value, request.Longitude.Value,
+                mission.TargetLatitude.Value, mission.TargetLongitude.Value);
+
+            if (distance > MaxDistanceMeters)
+                throw new InvalidOperationException(
+                    $"Vị trí không hợp lệ — bạn đang cách địa điểm nhiệm vụ khoảng {FormatDistance(distance)}.");
+        }
+
         // Tạo Submission — tự động duyệt ngay khi nộp (chưa có màn hình
         // admin duyệt thủ công nào tồn tại).
         var submission = new MissionSubmission
@@ -106,4 +123,23 @@ public class MissionSubmissionService : IMissionSubmissionService
 
         return submission.Id;
     }
+
+    // Place GPS comes from free-text geocoding of the place name, so it can
+    // be off by a block or two — keep the radius forgiving.
+    private const double MaxDistanceMeters = 1000;
+
+    private static double DistanceMeters(double lat1, double lng1, double lat2, double lng2)
+    {
+        const double R = 6371000;
+        static double ToRad(double d) => d * Math.PI / 180;
+        var dLat = ToRad(lat2 - lat1);
+        var dLng = ToRad(lng2 - lng1);
+        var h = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(ToRad(lat1)) * Math.Cos(ToRad(lat2)) *
+                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+        return 2 * R * Math.Asin(Math.Sqrt(h));
+    }
+
+    private static string FormatDistance(double meters) =>
+        meters >= 1000 ? $"{meters / 1000:0.#} km" : $"{Math.Round(meters)} m";
 }

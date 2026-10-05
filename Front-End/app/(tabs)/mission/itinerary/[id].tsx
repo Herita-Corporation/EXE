@@ -1,13 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  FlatList,
+  Linking,
+  Modal,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Image } from "expo-image";
 import * as Location from "expo-location";
 import { useFocusEffect, useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
-import { Card } from "@/components/Card";
-import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import {
@@ -30,17 +40,15 @@ import { useToast } from "@/context/ToastContext";
 import { getRegionImage } from "@/data/regionImages";
 import type { Activity, ActivityAlternative, ItineraryResponse } from "@/types/itinerary";
 import { MISSION_TYPE_PHOTO, MISSION_TYPE_VIDEO, MissionTemplate } from "@/types/missions";
-import { colors, radius, spacing } from "@/theme/colors";
+import { colors, radius, shadow, spacing } from "@/theme/colors";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// Editing a "how to get there" leg doesn't map to "pick a similar place" —
-// only real place-bound activities are swappable.
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 function isEditablePlace(activity: Activity) {
   return activity.type !== "transportation";
 }
 
-// AI-Itinerary sends `type` as a raw English enum value (see ActivityType in
-// app/schemas/itinerary.py) — translate it for display instead of showing
-// the wire value as-is.
 const ACTIVITY_TYPE_LABEL: Record<string, string> = {
   transportation: "Di chuyển",
   breakfast: "Bữa sáng",
@@ -54,16 +62,15 @@ const ACTIVITY_TYPE_LABEL: Record<string, string> = {
   coffee: "Cà phê",
 };
 
-function activityTypeLabel(type: string): string {
+function activityTypeLabel(type: string) {
   return ACTIVITY_TYPE_LABEL[type] ?? type;
 }
 
 function formatVnd(n: number) {
+  if (n === 0) return "0 VND";
   return `${Math.round(n).toLocaleString("vi-VN")} VND`;
 }
 
-// Meters between two GPS points (haversine) — used to detect "arrived" at
-// the current navigation waypoint.
 function distanceMeters(
   a: { lat: number; lng: number },
   b: { lat: number; lng: number }
@@ -82,41 +89,531 @@ function distanceMeters(
 
 const ARRIVAL_RADIUS_METERS = 150;
 
-function openMapsFor(activity: Activity) {
-  if (!activity.coordinates) return;
-  const { lat, lng } = activity.coordinates;
-  Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+function openMapsFor(activity: Activity, city?: string) {
+  // Prefer server-geocoded GPS; otherwise let Google Maps search by name +
+  // area (meals/coffee are never geocoded, hotel names often miss).
+  const destination = activity.coordinates
+    ? `${activity.coordinates.lat},${activity.coordinates.lng}`
+    : encodeURIComponent([activity.name, activity.location ?? city].filter(Boolean).join(", "));
+  Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${destination}`);
 }
 
-function MissionChip({
-  icon,
-  label,
-  doneLabel,
-  done,
-  loading,
-  onPress,
+// GPS the mission's submission is checked against. Server-geocoded coords
+// when the itinerary has them; otherwise the device geocoder (Google on
+// Android, Apple on iOS) on name + area. Null if the place can't be found.
+async function resolvePlaceCoords(
+  activity: Activity,
+  city?: string
+): Promise<{ lat: number; lng: number } | null> {
+  if (activity.coordinates) return activity.coordinates;
+  try {
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (!perm.granted) return null;
+    const query = [activity.name, activity.location ?? city].filter(Boolean).join(", ");
+    const [hit] = await Location.geocodeAsync(query);
+    return hit ? { lat: hit.latitude, lng: hit.longitude } : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Inline Swipe Button Component (Rendered directly on cards) ───────────────
+
+function SwipeButton({
+  onSwipeSuccess,
+  text,
+  icon = "camera-outline",
+  disabled = false,
+  loading = false,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  doneLabel: string;
-  done: boolean;
-  loading: boolean;
-  onPress: () => void;
+  onSwipeSuccess: () => void;
+  text: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  disabled?: boolean;
+  loading?: boolean;
 }) {
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [done, setDone] = useState(false);
+  const pan = useRef(new Animated.Value(0)).current;
+  const press = useRef(new Animated.Value(0)).current;
+  const isCompleted = useRef(false);
+
+  const thumbSize = 38;
+  const padding = 3;
+  const maxTranslate = Math.max(0, containerWidth - thumbSize - padding * 2);
+
+  // PanResponder is created once, so read live values through refs to avoid
+  // stale closures (width is 0 on the first render).
+  const maxRef = useRef(0);
+  maxRef.current = maxTranslate;
+  const blockedRef = useRef(false);
+  blockedRef.current = disabled || loading;
+  const successRef = useRef(onSwipeSuccess);
+  successRef.current = onSwipeSuccess;
+
+  // If the request finished but the button is still mounted (e.g. error), reset it.
+  useEffect(() => {
+    if (loading || !isCompleted.current) return;
+    const t = setTimeout(() => {
+      isCompleted.current = false;
+      setDone(false);
+      Animated.spring(pan, { toValue: 0, friction: 7, useNativeDriver: false }).start();
+    }, 600);
+    return () => clearTimeout(t);
+  }, [loading, pan]);
+
+  const releasePress = () =>
+    Animated.spring(press, { toValue: 0, friction: 5, useNativeDriver: false }).start();
+  const springBack = () =>
+    Animated.spring(pan, { toValue: 0, friction: 6, tension: 60, useNativeDriver: false }).start();
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !blockedRef.current && !isCompleted.current,
+      onMoveShouldSetPanResponder: (_, g) =>
+        !blockedRef.current && !isCompleted.current && Math.abs(g.dx) > Math.abs(g.dy),
+      // Keep the parent ScrollView from stealing the gesture mid-swipe.
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+      onPanResponderGrant: () => {
+        Animated.spring(press, { toValue: 1, friction: 5, useNativeDriver: false }).start();
+      },
+      onPanResponderMove: (_, g) => {
+        if (isCompleted.current) return;
+        pan.setValue(Math.max(0, Math.min(g.dx, maxRef.current)));
+      },
+      onPanResponderRelease: (_, g) => {
+        releasePress();
+        if (isCompleted.current) return;
+        const max = maxRef.current;
+        if (max > 0 && (g.dx >= max * 0.75 || (g.vx > 1.2 && g.dx > max * 0.4))) {
+          isCompleted.current = true;
+          Animated.timing(pan, { toValue: max, duration: 140, useNativeDriver: false }).start(() => {
+            setDone(true);
+            successRef.current();
+          });
+        } else {
+          springBack();
+        }
+      },
+      onPanResponderTerminate: () => {
+        releasePress();
+        if (!isCompleted.current) springBack();
+      },
+    })
+  ).current;
+
+  const range = maxTranslate || 1;
+  const progress = pan.interpolate({
+    inputRange: [0, range],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
+
   return (
-    <Pressable disabled={done || loading} onPress={onPress} style={[styles.missionChip, done && styles.missionChipDone]}>
-      <Ionicons name={done ? "checkmark-circle" : icon} size={14} color={done ? colors.success : colors.navy} />
-      <Text style={[styles.missionChipText, done && styles.missionChipTextDone]}>
-        {done ? doneLabel : label}
-      </Text>
-    </Pressable>
+    <View
+      style={[swipeStyles.container, disabled && { opacity: 0.5 }]}
+      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+    >
+      {/* Filled trail behind the thumb */}
+      <Animated.View
+        style={[
+          swipeStyles.fill,
+          {
+            width: pan.interpolate({
+              inputRange: [0, range],
+              outputRange: [thumbSize + padding * 2, containerWidth],
+              extrapolate: "clamp",
+            }),
+            opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }),
+          },
+        ]}
+      />
+
+      {/* Label fades and drifts right as the user drags */}
+      <Animated.Text
+        numberOfLines={1}
+        style={[
+          swipeStyles.text,
+          {
+            opacity: progress.interpolate({
+              inputRange: [0, 0.5],
+              outputRange: [1, 0],
+              extrapolate: "clamp",
+            }),
+            transform: [
+              { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }) },
+            ],
+          },
+        ]}
+      >
+        {text}
+      </Animated.Text>
+
+      {/* Static ››› hint at the end of the track, hidden once the user drags */}
+      {!done && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            swipeStyles.chevrons,
+            {
+              opacity: progress.interpolate({
+                inputRange: [0, 0.3],
+                outputRange: [1, 0],
+                extrapolate: "clamp",
+              }),
+            },
+          ]}
+        >
+          <Ionicons name="chevron-forward" size={14} color="#0284C7" style={{ opacity: 0.3 }} />
+          <Ionicons name="chevron-forward" size={14} color="#0284C7" style={{ marginLeft: -8, opacity: 0.6 }} />
+          <Ionicons name="chevron-forward" size={14} color="#0284C7" style={{ marginLeft: -8 }} />
+        </Animated.View>
+      )}
+
+      {/* Prompt revealed on the filled trail near the end */}
+      <Animated.Text
+        pointerEvents="none"
+        style={[
+          swipeStyles.releaseText,
+          {
+            opacity: progress.interpolate({
+              inputRange: [0.55, 1],
+              outputRange: [0, 1],
+              extrapolate: "clamp",
+            }),
+          },
+        ]}
+      >
+        {loading || done ? "Đang nhận nhiệm vụ..." : "Thả tay để nhận"}
+      </Animated.Text>
+
+      <Animated.View
+        {...panResponder.panHandlers}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={[
+          swipeStyles.thumb,
+          {
+            transform: [
+              { translateX: pan },
+              { scale: press.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) },
+              { rotate: progress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) },
+            ],
+          },
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : done ? (
+          <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+        ) : (
+          <Ionicons name={icon} size={18} color="#FFFFFF" />
+        )}
+      </Animated.View>
+    </View>
   );
 }
+
+const swipeStyles = StyleSheet.create({
+  container: {
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    justifyContent: "center",
+    overflow: "hidden",
+    position: "relative",
+    marginVertical: 3,
+  },
+  fill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "#0284C7",
+    borderRadius: 22,
+  },
+  text: {
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
+    paddingHorizontal: 44,
+  },
+  chevrons: {
+    position: "absolute",
+    right: 14,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  releaseText: {
+    position: "absolute",
+    left: 0,
+    right: 44,
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  thumb: {
+    position: "absolute",
+    left: 3,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#0284C7",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0284C7",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+});
+
+// ── Activity Row Card (With Inline Swipe Buttons directly on the card) ───────
+
+function ActivityCard({
+  activity,
+  photoAssigned,
+  videoAssigned,
+  assigningPhoto,
+  assigningVideo,
+  onAssignPhoto,
+  onAssignVideo,
+  onEdit,
+  onDirections,
+}: {
+  activity: Activity;
+  photoAssigned: boolean;
+  videoAssigned: boolean;
+  assigningPhoto: boolean;
+  assigningVideo: boolean;
+  onAssignPhoto: () => void;
+  onAssignVideo: () => void;
+  onEdit: () => void;
+  onDirections: () => void;
+}) {
+  const isTransport = activity.type === "transportation";
+
+  return (
+    <View style={cardStyles.card}>
+      {/* Header line: Time & Cost */}
+      <View style={cardStyles.headerRow}>
+        <Text style={cardStyles.timeText}>
+          {activity.start_time} - {activity.end_time}
+        </Text>
+        <Text style={cardStyles.costText}>{formatVnd(activity.cost)}</Text>
+      </View>
+
+      {/* Title line: Name & Edit button */}
+      <View style={cardStyles.titleRow}>
+        <Text style={cardStyles.nameText} numberOfLines={2}>
+          {activity.name}
+        </Text>
+        {isEditablePlace(activity) && (
+          <Pressable style={cardStyles.editBtn} onPress={onEdit} hitSlop={8}>
+            <Ionicons name="create-outline" size={15} color="#0284c7" />
+            <Text style={cardStyles.editText}>Sửa</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Description */}
+      {activity.activity ? (
+        <Text style={cardStyles.descText}>{activity.activity}</Text>
+      ) : null}
+
+      {/* Tag pills */}
+      <View style={cardStyles.tagRow}>
+        <View style={cardStyles.chip}>
+          <Text style={cardStyles.chipText}>{activityTypeLabel(activity.type)}</Text>
+        </View>
+        {activity.location ? (
+          <View style={cardStyles.chip}>
+            <Text style={cardStyles.chipText} numberOfLines={1}>
+              {activity.location}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Directions to this place (transport rows are movements, not places) */}
+      {!isTransport && (
+        <Pressable
+          style={({ pressed }) => [cardStyles.directionsBtn, pressed && { opacity: 0.7 }]}
+          onPress={onDirections}
+        >
+          <Ionicons name="navigate" size={16} color="#FFFFFF" />
+          <Text style={cardStyles.directionsText}>Chỉ đường</Text>
+        </Pressable>
+      )}
+
+      {/* Inline Swipe Buttons directly on the card (no modal popups) */}
+      {!isTransport && (
+        <View style={cardStyles.missionContainer}>
+          {/* Photo mission slider / status */}
+          {photoAssigned ? (
+            <View style={cardStyles.assignedBadge}>
+              <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+              <Text style={cardStyles.assignedText}>Đã nhận nhiệm vụ Chụp ảnh (+50 XP)</Text>
+            </View>
+          ) : (
+            <SwipeButton
+              icon="camera-outline"
+              text="Trượt để nhận nhiệm vụ chụp ảnh"
+              onSwipeSuccess={onAssignPhoto}
+              loading={assigningPhoto}
+            />
+          )}
+
+          {/* Video mission slider / status */}
+          {videoAssigned ? (
+            <View style={cardStyles.assignedBadge}>
+              <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+              <Text style={cardStyles.assignedText}>Đã nhận nhiệm vụ Quay video (+50 XP)</Text>
+            </View>
+          ) : (
+            <SwipeButton
+              icon="videocam-outline"
+              text="Trượt để nhận nhiệm vụ quay video"
+              onSwipeSuccess={onAssignVideo}
+              loading={assigningVideo}
+            />
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+const cardStyles = StyleSheet.create({
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: spacing(2),
+    marginBottom: spacing(1.5),
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+    gap: spacing(0.75),
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  timeText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  costText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: spacing(1),
+  },
+  nameText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+    lineHeight: 22,
+  },
+  editBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingTop: 2,
+  },
+  editText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0284c7",
+  },
+  descText: {
+    fontSize: 13,
+    color: "#64748B",
+    lineHeight: 18,
+  },
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing(0.75),
+    marginTop: 2,
+  },
+  chip: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: spacing(1.25),
+    paddingVertical: spacing(0.5),
+    borderRadius: radius.md,
+    maxWidth: "90%",
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  directionsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#0284C7",
+    borderRadius: 14,
+    paddingVertical: spacing(1),
+    marginTop: spacing(0.75),
+  },
+  directionsText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  missionContainer: {
+    marginTop: spacing(0.75),
+    gap: 4,
+  },
+  assignedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 14,
+    paddingHorizontal: spacing(1.5),
+    paddingVertical: spacing(0.75),
+    marginVertical: 2,
+  },
+  assignedText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+});
+
+// ── Main Itinerary Detail Screen ─────────────────────────────────────────────
 
 export default function ItineraryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const insets = useSafeAreaInsets();
+
   const [data, setData] = useState<ItineraryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -133,16 +630,10 @@ export default function ItineraryDetailScreen() {
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
   const [waypointIndex, setWaypointIndex] = useState(0);
+
   const waypointIndexRef = useRef(0);
   const watchSubRef = useRef<Location.LocationSubscription | null>(null);
 
-  // Flattened, in-order list of geocoded activities (fixed anchors only —
-  // see AI-Itinerary's itinerary_orchestrator.py) across every day — the
-  // sequence GPS navigation walks through. Transportation legs are excluded
-  // even if they carry coordinates (e.g. from an itinerary cached before the
-  // backend stopped geocoding them) — a transportation activity's name is a
-  // movement description, not a place, so its coordinates point nowhere
-  // reliable and it's not something you "arrive at".
   const waypoints = useMemo(
     () =>
       data?.days
@@ -157,10 +648,6 @@ export default function ItineraryDetailScreen() {
       .catch(() => {});
   }, []);
 
-  // Matched by exact name, not just type — other custom templates of the
-  // same type may exist (e.g. admin-created ones), and only these two
-  // reusable "capture memory" templates (seeded in GamificatonDBb.sql) are
-  // meant to be auto-suggested per itinerary activity.
   const photoTemplate = templates.find(
     (t) => t.type === MISSION_TYPE_PHOTO && t.name === "Chụp ảnh kỷ niệm"
   );
@@ -187,9 +674,6 @@ export default function ItineraryDetailScreen() {
     }, [id])
   );
 
-  // Lộ trình được backend lưu ngay khi generate, nhưng chỉ xuất hiện trong
-  // "Lộ trình của tôi" sau khi user bấm xác nhận — kiểm tra xem đã xác nhận
-  // (đã có trong lịch sử local) từ trước hay chưa mỗi khi màn hình mở lại.
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
@@ -209,6 +693,35 @@ export default function ItineraryDetailScreen() {
     }, [user, id])
   );
 
+  async function handleAssignMission(
+    activity: Activity,
+    template: MissionTemplate,
+    label: string
+  ) {
+    if (!user || !data) return;
+    const key = `${activity.activity_id}:${template.type}`;
+
+    setAssigningKey(key);
+    try {
+      const target = await resolvePlaceCoords(activity, data.trip_summary.cities[0]);
+      await assignMission({
+        userId: user.id,
+        tripId: data.itinerary_id,
+        placeId: activity.activity_id,
+        templateId: template.id,
+        title: `${label} tại ${activity.name}`,
+        targetLatitude: target?.lat ?? null,
+        targetLongitude: target?.lng ?? null,
+      });
+      setAssignedKeys((prev) => new Set(prev).add(key));
+      showToast(`Đã nhận nhiệm vụ: ${label} tại ${activity.name} 🎯`, "success");
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Không thể giao nhiệm vụ.", "error");
+    } finally {
+      setAssigningKey(null);
+    }
+  }
+
   function onDelete() {
     Alert.alert("Xóa lịch trình", "Bạn chắc chắn muốn xóa lịch trình này?", [
       { text: "Hủy", style: "cancel" },
@@ -220,10 +733,6 @@ export default function ItineraryDetailScreen() {
           try {
             await deleteItinerary(id);
             try {
-              // Best-effort — the itinerary is already gone either way; a
-              // stray active mission left behind isn't worth blocking on.
-              // Completed missions are kept server-side (see
-              // DeleteByTripIdExceptCompletedAsync).
               await deleteMissionsForTrip(id);
             } catch {}
             if (user) await removeItineraryFromHistory(user.id, id);
@@ -236,30 +745,6 @@ export default function ItineraryDetailScreen() {
         },
       },
     ]);
-  }
-
-  async function onAssignMission(
-    activity: Activity,
-    template: MissionTemplate,
-    label: string
-  ) {
-    if (!user || !data) return;
-    const key = `${activity.activity_id}:${template.type}`;
-    setAssigningKey(key);
-    try {
-      await assignMission({
-        userId: user.id,
-        tripId: data.itinerary_id,
-        placeId: activity.activity_id,
-        templateId: template.id,
-        title: `${label} tại ${activity.name}`,
-      });
-      setAssignedKeys((prev) => new Set(prev).add(key));
-    } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Không thể giao nhiệm vụ.", "error");
-    } finally {
-      setAssigningKey(null);
-    }
   }
 
   async function onEditActivity(activity: Activity) {
@@ -292,10 +777,6 @@ export default function ItineraryDetailScreen() {
     }
   }
 
-  // Backend đã lưu lộ trình ngay lúc generate (không có khái niệm "nháp") —
-  // bước "xác nhận" ở đây quyết định việc lộ trình có xuất hiện trong "Lộ
-  // trình của tôi" hay không, KHÔNG phải thanh toán. Số tiền hiển thị ở thẻ
-  // tóm tắt bên trên chỉ là ước tính.
   async function onConfirmItinerary() {
     if (!user || !data) return;
     setConfirming(true);
@@ -313,29 +794,18 @@ export default function ItineraryDetailScreen() {
     }
   }
 
-  // Shared by both the immediate check (right after pressing "Start") and
-  // every subsequent watchPositionAsync update — checks the device's
-  // current distance to whatever waypoint is current (by ref, so it always
-  // sees the latest index even from a stale watcher closure), and if within
-  // ARRIVAL_RADIUS_METERS marks that waypoint done and opens Maps for the
-  // next one.
   function checkArrival(pos: { latitude: number; longitude: number }) {
     const current = waypoints[waypointIndexRef.current];
     if (!current?.coordinates) return;
-    const dist = distanceMeters(
-      { lat: pos.latitude, lng: pos.longitude },
-      current.coordinates
-    );
+    const dist = distanceMeters({ lat: pos.latitude, lng: pos.longitude }, current.coordinates);
     if (dist > ARRIVAL_RADIUS_METERS) return;
-
     const nextIndex = waypointIndexRef.current + 1;
     waypointIndexRef.current = nextIndex;
     setWaypointIndex(nextIndex);
     if (user) setItineraryWaypointIndex(user.id, id, nextIndex).catch(() => {});
-
     const next = waypoints[nextIndex];
     if (next) {
-      showToast(`Đã đến ${current.name} — đang chuyển hướng tới điểm tiếp theo.`, "success");
+      showToast(`Đã đến ${current.name} — chuyển hướng tới điểm tiếp theo.`, "success");
       openMapsFor(next);
     } else {
       showToast("Đã hoàn thành toàn bộ lộ trình!", "success");
@@ -344,11 +814,6 @@ export default function ItineraryDetailScreen() {
     }
   }
 
-  // Opens the phone's map app for the current waypoint and (re)starts GPS
-  // watching — called both the first time the user starts the itinerary and
-  // every time they tap the button again afterwards (resume after closing
-  // Maps, app restart, etc.). Only watches while this screen is focused —
-  // not a true background service (would need extra OS permissions/setup).
   async function startNavigation() {
     if (waypoints.length === 0) {
       showToast("Lịch trình này không có điểm GPS để chỉ đường.", "info");
@@ -359,37 +824,19 @@ export default function ItineraryDetailScreen() {
       showToast("Cần quyền vị trí để tự động chuyển điểm.", "error");
       return;
     }
-
     const target = waypoints[waypointIndexRef.current];
     if (target) openMapsFor(target);
-
-    // Check immediately with the device's last-known/current fix instead of
-    // waiting for watchPositionAsync's next update — if the user is already
-    // standing at the first waypoint when they press "Start", this catches
-    // it right away rather than only on the next 20m/10s movement tick.
     try {
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       checkArrival(pos.coords);
     } catch {}
-
-    if (watchSubRef.current) return; // already watching
+    if (watchSubRef.current) return;
     watchSubRef.current = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 15 },
       (pos) => checkArrival(pos.coords)
     );
   }
 
-  useEffect(() => {
-    return () => {
-      watchSubRef.current?.remove();
-      watchSubRef.current = null;
-    };
-  }, []);
-
-  // Trước đây lộ trình tự động được coi là "đang diễn ra" chỉ dựa vào ngày
-  // tháng. Giờ chỉ chuyển sang "đang diễn ra" khi user bấm nút này — nếu
-  // không bấm, lộ trình vẫn chỉ nằm trong "Lộ trình của tôi" ở trạng thái
-  // đã lưu (xem cách "Lộ trình của tôi" chọn currentJourney trong itineraries.tsx).
   async function onStartItinerary() {
     if (!user) return;
     setStarting(true);
@@ -405,158 +852,147 @@ export default function ItineraryDetailScreen() {
     }
   }
 
+  useEffect(() => {
+    return () => {
+      watchSubRef.current?.remove();
+      watchSubRef.current = null;
+    };
+  }, []);
+
   if (loading) {
     return (
-      <ScreenContainer backgroundColor={colors.surface}>
-        <IconButton icon="arrow-back" onPress={() => router.back()} />
-        <ActivityIndicator color={colors.navy} />
-      </ScreenContainer>
+      <View style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={colors.navy} size="large" />
+      </View>
     );
   }
 
   if (error || !data) {
     return (
-      <ScreenContainer backgroundColor={colors.surface}>
-        <IconButton icon="arrow-back" onPress={() => router.back()} />
+      <ScreenContainer backgroundColor="#F8FAFC">
         <ErrorBanner message={error ?? "Không tìm thấy lịch trình."} />
       </ScreenContainer>
     );
   }
 
+  const city = data.trip_summary.cities[0] ?? "";
+  const heroImage = getRegionImage(city);
+
   return (
-    <ScreenContainer backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={() => router.back()} />
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {data.trip_summary.cities.join(" & ")}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
-      <Text style={styles.headerSubtitle}>
-        Hành trình {data.trip_summary.trip_duration_days} ngày do DISA AI lên kế hoạch riêng cho bạn.
-      </Text>
+    <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingTop: insets.top + spacing(1),
+          paddingBottom: insets.bottom + spacing(4),
+          paddingHorizontal: spacing(2),
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Top Header Row (Back arrow, Title) ── */}
+        <View style={screenStyles.headerRow}>
+          <Pressable style={screenStyles.backBtn} onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          </Pressable>
+          <Text style={screenStyles.headerTitle} numberOfLines={1}>
+            {data.trip_summary.cities.join(", ")}
+          </Text>
+          {/* Spacer keeps the title centered opposite the back button */}
+          <View style={screenStyles.headerSpacer} />
+        </View>
 
-      {data.days.map((day, dayIdx) => (
-        <View key={`${day.date}-${dayIdx}`} style={styles.daySection}>
-          <Image source={getRegionImage(day.city)} style={styles.dayImage} contentFit="cover" />
-          <View style={styles.dayHeaderRow}>
-            <View style={styles.dayDot} />
-            <Text style={styles.dayTitle}>
-              Ngày {dayIdx + 1} · {day.city}
-            </Text>
+        {/* ── Subheader ── */}
+        <Text style={screenStyles.subtitleText}>
+          Hành trình {data.trip_summary.trip_duration_days} ngày do DISA AI lên kế hoạch riêng cho bạn.
+        </Text>
+
+        {/* ── Hero Image Banner ── */}
+        <View style={screenStyles.bannerContainer}>
+          <Image source={heroImage} style={screenStyles.bannerImage} contentFit="cover" />
+        </View>
+
+        {/* ── Days & Activities ── */}
+        {data.days.map((day, dayIdx) => (
+          <View key={`${day.date}-${dayIdx}`} style={screenStyles.daySection}>
+            {/* Day Header */}
+            <View style={screenStyles.dayHeaderRow}>
+              <View style={screenStyles.dayDot} />
+              <Text style={screenStyles.dayTitle}>
+                Ngày {dayIdx + 1} · {day.city}
+              </Text>
+            </View>
+
+            {/* Activity Cards */}
+            {day.activities.map((activity, idx) => {
+              const photoKey = `${activity.activity_id}:${MISSION_TYPE_PHOTO}`;
+              const videoKey = `${activity.activity_id}:${MISSION_TYPE_VIDEO}`;
+              return (
+                <ActivityCard
+                  key={`${activity.activity_id}-${idx}`}
+                  activity={activity}
+                  photoAssigned={assignedKeys.has(photoKey)}
+                  videoAssigned={assignedKeys.has(videoKey)}
+                  assigningPhoto={assigningKey === photoKey}
+                  assigningVideo={assigningKey === videoKey}
+                  onAssignPhoto={() =>
+                    photoTemplate
+                      ? handleAssignMission(activity, photoTemplate, "Chụp ảnh")
+                      : undefined
+                  }
+                  onAssignVideo={() =>
+                    videoTemplate
+                      ? handleAssignMission(activity, videoTemplate, "Quay video")
+                      : undefined
+                  }
+                  onEdit={() => onEditActivity(activity)}
+                  onDirections={() => openMapsFor(activity, day.city)}
+                />
+              );
+            })}
           </View>
-          {day.activities.map((activity, idx) => (
-            <Card key={idx} variant="elevated" style={styles.activityCard}>
-              <View style={styles.activityHeaderRow}>
-                <Text style={styles.activityTime}>
-                  {activity.start_time} - {activity.end_time}
-                </Text>
-                <Text style={styles.activityCost}>{formatVnd(activity.cost)}</Text>
-              </View>
-              <View style={styles.activityNameRow}>
-                <Text style={styles.activityName}>{activity.name}</Text>
-                {isEditablePlace(activity) ? (
-                  <Pressable
-                    onPress={() => onEditActivity(activity)}
-                    hitSlop={8}
-                    style={styles.editButton}
-                  >
-                    <Ionicons name="create-outline" size={16} color={colors.navy} />
-                    <Text style={styles.editButtonText}>Sửa</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-              {activity.activity ? (
-                <Text style={styles.activityDescription}>{activity.activity}</Text>
-              ) : null}
-              <View style={styles.tagRow}>
-                <Badge label={activityTypeLabel(activity.type)} tone="outline" />
-                {activity.location ? <Badge label={activity.location} tone="neutral" /> : null}
-              </View>
-              {activity.type !== "transportation" && (photoTemplate || videoTemplate) ? (
-                <View style={styles.missionSuggestRow}>
-                  {photoTemplate ? (
-                    <MissionChip
-                      icon="camera-outline"
-                      label="Chụp ảnh"
-                      doneLabel="Đã nhận nhiệm vụ ảnh"
-                      done={assignedKeys.has(`${activity.activity_id}:${MISSION_TYPE_PHOTO}`)}
-                      loading={assigningKey === `${activity.activity_id}:${MISSION_TYPE_PHOTO}`}
-                      onPress={() => onAssignMission(activity, photoTemplate, "Chụp ảnh")}
-                    />
-                  ) : null}
-                  {videoTemplate ? (
-                    <MissionChip
-                      icon="videocam-outline"
-                      label="Quay video"
-                      doneLabel="Đã nhận nhiệm vụ video"
-                      done={assignedKeys.has(`${activity.activity_id}:${MISSION_TYPE_VIDEO}`)}
-                      loading={assigningKey === `${activity.activity_id}:${MISSION_TYPE_VIDEO}`}
-                      onPress={() => onAssignMission(activity, videoTemplate, "Quay video")}
-                    />
-                  ) : null}
-                </View>
-              ) : null}
-            </Card>
-          ))}
-        </View>
-      ))}
+        ))}
 
-      <Card style={styles.insightCard}>
-        <View style={styles.insightHeaderRow}>
-          <Ionicons name="sparkles" size={18} color={colors.gold} />
-          <Text style={styles.insightTitle}>GỢI Ý TỪ AI GUIDE</Text>
+        {/* ── Actions Row (Save / Start) ── */}
+        <View style={screenStyles.actionSection}>
+          {!confirmed ? (
+            <Button
+              title="Lưu lịch trình này"
+              icon="bookmark-outline"
+              onPress={onConfirmItinerary}
+              loading={confirming}
+            />
+          ) : (
+            <Button
+              title="Đã lưu vào lộ trình"
+              icon="checkmark-circle"
+              variant="secondary"
+              onPress={() => {}}
+              disabled
+            />
+          )}
+          {confirmed && (
+            <Button
+              title={started ? "Mở chỉ đường" : "Bắt đầu lộ trình"}
+              icon={started ? "navigate" : "play"}
+              variant={started ? "secondary" : "primary"}
+              onPress={onStartItinerary}
+              loading={starting}
+            />
+          )}
+          <Button
+            title="Xóa lịch trình"
+            variant="danger"
+            icon="trash-outline"
+            onPress={onDelete}
+            loading={deleting}
+          />
         </View>
-        <Text style={styles.insightText}>
-          Gợi ý cho thời gian rảnh ở {data.trip_summary.cities[0]}: thử một quán ăn đặc sản địa
-          phương và một quán trà truyền thống gần đó — hỏi AI Guide chat để biết thêm chi tiết.
-        </Text>
-      </Card>
+      </ScrollView>
 
-      <Card style={styles.summaryCard}>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Tổng thời gian</Text>
-          <Text style={styles.summaryValue}>{data.trip_summary.trip_duration_days} ngày</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Ngân sách</Text>
-          <Text style={styles.summaryValue}>
-            {formatVnd(data.trip_summary.planning_budget)}
-          </Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Chi phí ước tính</Text>
-          <Text style={[styles.summaryValue, { color: colors.navy }]}>
-            {formatVnd(data.total_cost)}
-          </Text>
-        </View>
-        <Text style={styles.summaryNote}>
-          Số tiền trên chỉ là ước tính, chưa phải thanh toán thật.
-        </Text>
-      </Card>
-
-      <Button
-        title={confirmed ? "Đã lưu vào Lộ trình của tôi" : "Xác nhận tạo lộ trình"}
-        icon={confirmed ? "checkmark-circle" : undefined}
-        onPress={onConfirmItinerary}
-        loading={confirming}
-        disabled={confirmed}
-      />
-      {confirmed ? (
-        <Button
-          title={started ? "Mở chỉ đường" : "Bắt đầu lộ trình"}
-          variant={started ? "secondary" : "primary"}
-          icon={started ? "navigate" : "play"}
-          onPress={onStartItinerary}
-          loading={starting}
-        />
-      ) : null}
-      <Button title="Xóa lịch trình" variant="danger" onPress={onDelete} loading={deleting} />
-
+      {/* ── Replace Activity Modal ── */}
       <Modal visible={!!editingActivity} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>
+        <View style={screenStyles.modalBackdrop}>
+          <View style={screenStyles.editModalSheet}>
+            <Text style={screenStyles.modalTitle}>
               Chọn địa điểm thay thế cho "{editingActivity?.name}"
             </Text>
             {loadingAlternatives ? (
@@ -567,23 +1003,16 @@ export default function ItineraryDetailScreen() {
                 keyExtractor={(item, i) => `${item.name}-${i}`}
                 renderItem={({ item }) => (
                   <Pressable
-                    style={styles.altRow}
+                    style={screenStyles.altRow}
                     disabled={!!replacingActivityId}
                     onPress={() => onSelectAlternative(item)}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.altName}>{item.name}</Text>
-                      {item.activity ? <Text style={styles.altActivity}>{item.activity}</Text> : null}
-                      {item.notes ? <Text style={styles.altNotes}>{item.notes}</Text> : null}
-                      <View style={styles.altMetaRow}>
-                        <Text style={styles.altCost}>{formatVnd(item.cost)}</Text>
-                        {item.rating != null ? (
-                          <View style={styles.altRatingRow}>
-                            <Ionicons name="star" size={12} color={colors.gold} />
-                            <Text style={styles.altRating}>{item.rating.toFixed(1)}</Text>
-                          </View>
-                        ) : null}
-                      </View>
+                      <Text style={screenStyles.altName}>{item.name}</Text>
+                      {item.activity ? (
+                        <Text style={screenStyles.altActivity}>{item.activity}</Text>
+                      ) : null}
+                      <Text style={screenStyles.altCost}>{formatVnd(item.cost)}</Text>
                     </View>
                     {replacingActivityId ? (
                       <ActivityIndicator color={colors.navy} />
@@ -593,7 +1022,7 @@ export default function ItineraryDetailScreen() {
                   </Pressable>
                 )}
                 ListEmptyComponent={
-                  <Text style={styles.altEmptyText}>Không có gợi ý nào phù hợp.</Text>
+                  <Text style={screenStyles.altEmptyText}>Không có gợi ý nào phù hợp.</Text>
                 }
               />
             )}
@@ -601,76 +1030,114 @@ export default function ItineraryDetailScreen() {
           </View>
         </View>
       </Modal>
-    </ScreenContainer>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  headerTitle: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "700", color: colors.navy },
-  headerSubtitle: { color: colors.textMuted, fontSize: 13 },
-  daySection: { gap: spacing(1) },
-  dayImage: { width: "100%", height: 120, borderRadius: radius.lg },
-  dayHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
-  dayDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
-  dayTitle: { fontSize: 16, fontWeight: "700", color: colors.navy },
-  activityCard: { gap: spacing(0.5) },
-  activityHeaderRow: { flexDirection: "row", justifyContent: "space-between" },
-  activityTime: { fontSize: 12, fontWeight: "700", color: colors.textMuted },
-  activityCost: { fontSize: 12, fontWeight: "700", color: colors.navy },
-  activityName: { fontSize: 15, fontWeight: "700", color: colors.text },
-  activityNameRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing(1) },
-  editButton: { flexDirection: "row", alignItems: "center", gap: 2 },
-  editButtonText: { fontSize: 12, fontWeight: "700", color: colors.navy },
-  activityDescription: { fontSize: 12, color: colors.textMuted },
-  tagRow: { flexDirection: "row", gap: spacing(0.75), flexWrap: "wrap" },
-  missionSuggestRow: { flexDirection: "row", gap: spacing(0.75), marginTop: spacing(0.25) },
-  missionChip: {
+const screenStyles = StyleSheet.create({
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: spacing(1),
-    paddingVertical: spacing(0.5),
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.navy,
+    justifyContent: "space-between",
+    marginBottom: spacing(1),
   },
-  missionChipDone: { borderColor: colors.success },
-  missionChipText: { fontSize: 11, fontWeight: "700", color: colors.navy },
-  missionChipTextDone: { color: colors.success },
-  insightCard: { backgroundColor: colors.navyCard, borderWidth: 0, gap: spacing(1) },
-  insightHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing(0.75) },
-  insightTitle: { color: "#FFFFFF", fontSize: 12, fontWeight: "700", letterSpacing: 0.5 },
-  insightText: { color: "rgba(255,255,255,0.85)", fontSize: 12, lineHeight: 18 },
-  summaryCard: { gap: spacing(0.75) },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between" },
-  summaryLabel: { color: colors.textMuted, fontSize: 13 },
-  summaryValue: { color: colors.text, fontSize: 13, fontWeight: "700" },
-  summaryNote: { color: colors.textMuted, fontSize: 11, fontStyle: "italic", marginTop: spacing(0.25) },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+  backBtn: {
+    padding: spacing(0.5),
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    flex: 1,
+    textAlign: "center",
+    paddingHorizontal: spacing(1),
+  },
+  headerSpacer: {
+    width: 32,
+  },
+  subtitleText: {
+    fontSize: 14,
+    color: "#64748B",
+    marginBottom: spacing(2),
+  },
+  bannerContainer: {
+    height: 150,
+    borderRadius: 20,
+    overflow: "hidden",
+    marginBottom: spacing(2.5),
+  },
+  bannerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  daySection: {
+    marginBottom: spacing(2),
+  },
+  dayHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(1),
+    marginBottom: spacing(1.5),
+  },
+  dayDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#0B2D5B",
+  },
+  dayTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0B2D5B",
+  },
+  actionSection: {
+    gap: spacing(1.25),
+    marginTop: spacing(1),
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  editModalSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     padding: spacing(2.5),
     maxHeight: "75%",
     gap: spacing(1),
   },
-  modalTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
   altRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing(1),
     paddingVertical: spacing(1.25),
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: "#E2E8F0",
   },
-  altName: { fontSize: 14, fontWeight: "700", color: colors.text },
-  altActivity: { fontSize: 12, color: colors.textMuted },
-  altNotes: { fontSize: 11, color: colors.textMuted, fontStyle: "italic", marginTop: 2 },
-  altMetaRow: { flexDirection: "row", alignItems: "center", gap: spacing(1), marginTop: spacing(0.5) },
-  altCost: { fontSize: 12, fontWeight: "700", color: colors.navy },
-  altRatingRow: { flexDirection: "row", alignItems: "center", gap: 2 },
-  altRating: { fontSize: 12, color: colors.textMuted },
-  altEmptyText: { color: colors.textMuted, fontSize: 13, textAlign: "center", paddingVertical: spacing(3) },
+  altName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  altActivity: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  altCost: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0284C7",
+    marginTop: 2,
+  },
+  altEmptyText: {
+    color: "#64748B",
+    fontSize: 13,
+    textAlign: "center",
+    paddingVertical: spacing(3),
+  },
 });

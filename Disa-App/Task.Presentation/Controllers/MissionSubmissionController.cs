@@ -20,8 +20,16 @@ public class MissionSubmissionController : ControllerBase
         Guid userMissionId,
         [FromForm] SubmitMissionRequest request)
     {
-        var submissionId =
-            await _service.SubmitMissionAsync(userMissionId, request);
+        Guid submissionId;
+        try
+        {
+            submissionId = await _service.SubmitMissionAsync(userMissionId, request);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Location check failed — mission stays Assigned, no reward.
+            return BadRequest(new { Message = ex.Message });
+        }
 
         return Ok(new
         {

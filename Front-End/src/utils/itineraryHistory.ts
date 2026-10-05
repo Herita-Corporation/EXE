@@ -73,6 +73,27 @@ export async function setItineraryWaypointIndex(
   await AsyncStorage.setItem(storageKey(userId), JSON.stringify(next));
 }
 
+// The most recently generated itinerary, saved or not — its missions must
+// survive pruning while the user is still reviewing it before saving.
+function lastGeneratedKey(userId: string) {
+  return `disa.lastGeneratedItinerary.v1.${userId}`;
+}
+
+export async function setLastGeneratedItinerary(userId: string, id: string): Promise<void> {
+  await AsyncStorage.setItem(lastGeneratedKey(userId), id);
+}
+
+/** Itinerary ids whose missions should be kept: saved ones + the latest generated one. */
+export async function getLiveItineraryIds(userId: string): Promise<string[]> {
+  const history = await getItineraryHistory(userId);
+  const ids = history.map((h) => h.id);
+  try {
+    const last = await AsyncStorage.getItem(lastGeneratedKey(userId));
+    if (last && !ids.includes(last)) ids.push(last);
+  } catch {}
+  return ids;
+}
+
 export async function removeItineraryFromHistory(
   userId: string,
   id: string

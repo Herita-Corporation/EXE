@@ -55,6 +55,21 @@ public class UserMissionRepository : IUserMissionRepository
         await _context.SaveChangesAsync();
     }
 
+    public async System.Threading.Tasks.Task DeleteForUserExceptTripsAsync(Guid userId, IReadOnlyCollection<Guid> keepTripIds)
+    {
+        // Non-Completed missions never have submissions (submitting completes
+        // the mission; a rejected location saves nothing), so a plain
+        // RemoveRange is safe here — same as DeleteByTripIdExceptCompletedAsync.
+        var missions = await _context.UserMissions
+            .Where(x => x.UserId == userId
+                && x.Status != Domain.Enums.MissionStatus.Completed
+                && !keepTripIds.Contains(x.TripId))
+            .ToListAsync();
+
+        _context.UserMissions.RemoveRange(missions);
+        await _context.SaveChangesAsync();
+    }
+
     public async System.Threading.Tasks.Task DeleteAllByUserIdAsync(Guid userId)
     {
         // Raw SQL, not EF navigation + RemoveRange: MissionSubmissions/
@@ -85,6 +100,28 @@ public class UserMissionRepository : IUserMissionRepository
 
         await _context.Database.ExecuteSqlInterpolatedAsync($@"
             DELETE FROM UserMissions WHERE UserId = {userId}");
+
+        await transaction.CommitAsync();
+    }
+
+    public async System.Threading.Tasks.Task DeleteByIdAsync(Guid id)
+    {
+        // Same child-first raw SQL as DeleteAllByUserIdAsync (NO_ACTION FKs).
+        using var transaction = await _context.Database.BeginTransactionAsync();
+
+        await _context.Database.ExecuteSqlInterpolatedAsync($@"
+            DELETE e FROM MissionEvidences e
+            JOIN MissionSubmissions s ON e.SubmissionId = s.Id
+            WHERE s.UserMissionId = {id}");
+
+        await _context.Database.ExecuteSqlInterpolatedAsync($@"
+            DELETE FROM MissionSubmissions WHERE UserMissionId = {id}");
+
+        await _context.Database.ExecuteSqlInterpolatedAsync($@"
+            DELETE FROM UserRewards WHERE UserMissionId = {id}");
+
+        await _context.Database.ExecuteSqlInterpolatedAsync($@"
+            DELETE FROM UserMissions WHERE Id = {id}");
 
         await transaction.CommitAsync();
     }

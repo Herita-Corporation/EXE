@@ -20,7 +20,9 @@ import { EmptyState } from "@/components/EmptyState";
 import { MissionThumb } from "@/components/MissionThumb";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { GradientHero } from "@/components/GradientHero";
-import { listUserMissions } from "@/api/endpoints/missions";
+import { deleteMission, listUserMissions, pruneMissions } from "@/api/endpoints/missions";
+import { useToast } from "@/context/ToastContext";
+import { getLiveItineraryIds } from "@/utils/itineraryHistory";
 import { ApiError } from "@/api/http";
 import { useAuth } from "@/context/AuthContext";
 import { MISSION_STATUS_LABEL, MISSION_TYPE_LABEL, UserMission } from "@/types/missions";
@@ -48,6 +50,7 @@ export default function MissionHomeScreen() {
   const { user } = useAuth();
   const gamification = useGamification();
   const { t } = useLocale();
+  const { showToast } = useToast();
   const [tab, setTab] = useState<MissionTab>("active");
   const [missions, setMissions] = useState<UserMission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +59,13 @@ export default function MissionHomeScreen() {
   const load = useCallback(async () => {
     setError(null);
     try {
+      // Drop missions of itineraries that no longer exist before listing.
+      // Best-effort — a failed prune just shows the unpruned list.
+      if (user) {
+        try {
+          await pruneMissions(user.id, await getLiveItineraryIds(user.id));
+        } catch {}
+      }
       const missionList = user ? await listUserMissions(user.id) : [];
       setMissions(missionList);
     } catch (err) {
@@ -84,6 +94,55 @@ export default function MissionHomeScreen() {
   );
 
   const progress = gamification.points / (gamification.points + gamification.pointsToNextTier);
+
+  function confirmDelete(m: UserMission) {
+    Alert.alert(
+      "Xóa nhiệm vụ",
+      `Xóa "${m.title}"?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteMission(m.id);
+              setMissions((prev) => prev.filter((x) => x.id !== m.id));
+              showToast("Đã xóa nhiệm vụ.", "success");
+            } catch (err) {
+              showToast(err instanceof ApiError ? err.message : "Không thể xóa nhiệm vụ.", "error");
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function confirmDeleteAll() {
+    if (!user || activeMissions.length === 0) return;
+    Alert.alert(
+      "Xóa tất cả nhiệm vụ",
+      `Xóa ${activeMissions.length} nhiệm vụ chưa hoàn thành? Nhiệm vụ đã hoàn thành và điểm đã nhận được giữ nguyên.`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa tất cả",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Prune with no trips to keep = every non-Completed mission;
+              // the server never deletes Completed ones here.
+              await pruneMissions(user.id, []);
+              setMissions((prev) => prev.filter((m) => m.status === COMPLETED_STATUS));
+              showToast("Đã xóa các nhiệm vụ chưa hoàn thành.", "success");
+            } catch (err) {
+              showToast(err instanceof ApiError ? err.message : "Không thể xóa nhiệm vụ.", "error");
+            }
+          },
+        },
+      ]
+    );
+  }
 
   function openSample() {
     Alert.alert(t("mission.sampleTitle"), t("mission.sampleMessage"), [
@@ -167,6 +226,16 @@ export default function MissionHomeScreen() {
         })}
       </View>
 
+      {tab === "active" && activeMissions.length > 0 ? (
+        <Pressable
+          onPress={confirmDeleteAll}
+          style={({ pressed }) => [styles.deleteAllBtn, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="trash-outline" size={15} color={colors.danger} />
+          <Text style={styles.deleteAllText}>Xóa tất cả nhiệm vụ</Text>
+        </Pressable>
+      ) : null}
+
       <ErrorBanner message={error} />
 
       {loading ? (
@@ -185,7 +254,9 @@ export default function MissionHomeScreen() {
             ))}
           </>
         ) : (
-          activeMissions.map((m) => <MissionRow key={m.id} mission={m} />)
+          activeMissions.map((m) => (
+            <MissionRow key={m.id} mission={m} onDelete={() => confirmDelete(m)} />
+          ))
         )
       ) : completedMissions.length === 0 ? (
         <EmptyState icon="trophy-outline" title={t("mission.emptyCompletedTitle")} />
@@ -196,7 +267,16 @@ export default function MissionHomeScreen() {
   );
 }
 
-function MissionRow({ mission: m, completed = false }: { mission: UserMission; completed?: boolean }) {
+function MissionRow({
+  mission: m,
+  completed = false,
+  onDelete,
+}: {
+  mission: UserMission;
+  completed?: boolean;
+  /** Omitted for completed missions — those are kept, never deleted. */
+  onDelete?: () => void;
+}) {
   const { t } = useLocale();
   const tone = STATUS_TONE[m.status] ?? STATUS_TONE[4];
 
@@ -236,6 +316,11 @@ function MissionRow({ mission: m, completed = false }: { mission: UserMission; c
             </View>
           </View>
         </View>
+        {onDelete ? (
+          <Pressable onPress={onDelete} hitSlop={10} style={styles.deleteBtn}>
+            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          </Pressable>
+        ) : null}
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Card>
     </Pressable>
@@ -306,6 +391,26 @@ const styles = StyleSheet.create({
   countTextActive: { color: "#FFFFFF" },
 
   missionCard: { flexDirection: "row", alignItems: "center", gap: spacing(1.5) },
+  deleteAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    alignSelf: "flex-end",
+    backgroundColor: colors.dangerSoft,
+    borderRadius: radius.pill,
+    paddingVertical: spacing(0.75),
+    paddingHorizontal: spacing(1.5),
+  },
+  deleteAllText: { fontSize: 12.5, fontWeight: "700", color: colors.danger },
+  deleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.dangerSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   missionTopRow: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
   statusPill: { borderRadius: radius.pill, paddingVertical: 2, paddingHorizontal: spacing(1) },
   statusText: { fontSize: 11, fontWeight: "800" },

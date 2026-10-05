@@ -21,9 +21,19 @@ public interface IUserMissionRepository
     System.Threading.Tasks.Task DeleteByTripIdExceptCompletedAsync(Guid tripId);
 
     /// <summary>
+    /// Removes this user's non-Completed UserMissions whose trip is NOT in
+    /// <paramref name="keepTripIds"/> — i.e. missions left over from
+    /// itineraries that no longer exist. Completed ones keep their rewards.
+    /// </summary>
+    System.Threading.Tasks.Task DeleteForUserExceptTripsAsync(Guid userId, IReadOnlyCollection<Guid> keepTripIds);
+
+    /// <summary>
     /// Removes every UserMission belonging to this user, regardless of
     /// status (including Completed ones and their submissions/evidence) —
     /// a full reset, unlike <see cref="DeleteByTripIdExceptCompletedAsync"/>.
     /// </summary>
     System.Threading.Tasks.Task DeleteAllByUserIdAsync(Guid userId);
+
+    /// <summary>Removes one UserMission with its submissions/evidence/rewards, any status.</summary>
+    System.Threading.Tasks.Task DeleteByIdAsync(Guid id);
 }

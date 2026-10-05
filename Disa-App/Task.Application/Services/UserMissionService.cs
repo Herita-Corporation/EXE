@@ -38,6 +38,9 @@ public class UserMissionService : IUserMissionService
             RewardXP = template.RewardXP,
             RewardCoins = template.RewardCoins,
 
+            TargetLatitude = request.TargetLatitude,
+            TargetLongitude = request.TargetLongitude,
+
             Status = Domain.Enums.MissionStatus.Assigned,
 
             StartAt = DateTime.UtcNow
@@ -70,7 +73,9 @@ public class UserMissionService : IUserMissionService
                 RequiresLocation = x.Template.RequiresLocation,
                 MinVideoSeconds = x.Template.MinVideoSeconds,
                 EvidenceUrl = evidence?.MediaUrl,
-                EvidenceType = evidence?.Type
+                EvidenceType = evidence?.Type,
+                TargetLatitude = x.TargetLatitude,
+                TargetLongitude = x.TargetLongitude
             };
         });
     }
@@ -99,7 +104,9 @@ public class UserMissionService : IUserMissionService
             RequiresLocation = mission.Template.RequiresLocation,
             MinVideoSeconds = mission.Template.MinVideoSeconds,
             EvidenceUrl = evidence?.MediaUrl,
-            EvidenceType = evidence?.Type
+            EvidenceType = evidence?.Type,
+            TargetLatitude = mission.TargetLatitude,
+            TargetLongitude = mission.TargetLongitude
         };
     }
 
@@ -122,6 +129,24 @@ public class UserMissionService : IUserMissionService
     public async System.Threading.Tasks.Task DeleteMissionsForTripAsync(Guid tripId)
     {
         await _userMissionRepository.DeleteByTripIdExceptCompletedAsync(tripId);
+    }
+
+    public async System.Threading.Tasks.Task PruneMissionsAsync(Guid userId, IReadOnlyCollection<Guid> keepTripIds)
+    {
+        await _userMissionRepository.DeleteForUserExceptTripsAsync(userId, keepTripIds);
+    }
+
+    public async System.Threading.Tasks.Task DeleteMissionAsync(Guid id)
+    {
+        var mission = await _userMissionRepository.GetByIdAsync(id);
+        if (mission == null)
+            return;
+
+        // Completed missions are permanent — they carry earned XP/Coins.
+        if (mission.Status == Domain.Enums.MissionStatus.Completed)
+            throw new InvalidOperationException("Không thể xóa nhiệm vụ đã hoàn thành.");
+
+        await _userMissionRepository.DeleteByIdAsync(id);
     }
 
     public async System.Threading.Tasks.Task DeleteAllMissionsForUserAsync(Guid userId)

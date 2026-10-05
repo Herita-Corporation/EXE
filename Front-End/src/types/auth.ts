@@ -21,10 +21,7 @@ export interface RegisterRequest {
 
 export interface RegisterResponse {
   message: string;
-  phoneNumber: string;
-  // DEV ONLY — no real SMS provider exists; IAMService returns the code
-  // directly instead of texting it (see AuthController.Register comment).
-  otpCode: string;
+  email: string;
 }
 
 export interface MeResponse {
@@ -37,27 +34,22 @@ export interface MeResponse {
   roles: string[];
 }
 
-export interface VerifyPhoneOtpRequest {
-  phoneNumber: string;
-  code: string;
-}
-
-export interface ResendPhoneOtpRequest {
-  phoneNumber: string;
-}
-
-export interface ResendPhoneOtpResponse {
-  message: string;
-  otpCode: string; // DEV ONLY — see RegisterResponse
-}
-
 export interface SendEmailVerificationResponse {
   message: string;
   email: string;
-  verificationToken: string; // DEV ONLY — see RegisterResponse
+}
+
+export interface ResendEmailVerificationRequest {
+  email: string;
+}
+
+export interface ResendEmailVerificationResponse {
+  message: string;
+  email: string;
 }
 
 export interface VerifyEmailRequest {
+  email: string;
   token: string;
 }
 
@@ -68,7 +60,6 @@ export interface ChangePhoneRequest {
 export interface ChangePhoneResponse {
   message: string;
   phoneNumber: string;
-  otpCode: string; // DEV ONLY — see RegisterResponse
 }
 
 export interface ChangeEmailRequest {

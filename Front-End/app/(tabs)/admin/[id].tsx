@@ -12,11 +12,13 @@ import * as adminApi from "@/api/endpoints/admin";
 import { ApiError } from "@/api/http";
 import type { Customer } from "@/types/admin";
 import { useLocale } from "@/i18n/LocaleContext";
+import { useToast } from "@/context/ToastContext";
 import { colors, spacing } from "@/theme/colors";
 
 export default function AdminCustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useLocale();
+  const { showToast } = useToast();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState("");
@@ -55,7 +57,7 @@ export default function AdminCustomerDetailScreen() {
     try {
       await adminApi.updateCustomer(id, { username, email });
       await load();
-      Alert.alert(t("admin.updateSuccess"));
+      showToast(t("admin.updateSuccess"), "success");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("admin.actionFailed"));
     } finally {

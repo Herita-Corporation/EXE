@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
@@ -13,11 +13,13 @@ import { getCollectionCovers, setCollectionCover } from "@/utils/collectionCover
 import { getDefaultCover, getMockCollectionMedia } from "@/mocks/collection";
 import { useSmartBack } from "@/utils/backNavigation";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import type { ItineraryResponse } from "@/types/itinerary";
 import { colors, radius, spacing } from "@/theme/colors";
 
 export default function MissionCollectionScreen() {
   const goBack = useSmartBack();
+  const { showToast } = useToast();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ItineraryResponse[]>([]);
@@ -48,7 +50,7 @@ export default function MissionCollectionScreen() {
     if (!user) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Thiếu quyền", "Cần quyền truy cập thư viện ảnh.");
+      showToast("Thiếu quyền — cần quyền truy cập thư viện ảnh.", "error");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({

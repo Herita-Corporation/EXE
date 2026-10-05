@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -16,6 +16,7 @@ import { ApiError } from "@/api/http";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { consumePendingCapturedPhoto, consumePendingCapturedVideo } from "@/utils/pendingCapture";
 import { MISSION_STATUS_LABEL, UserMission } from "@/types/missions";
+import { useToast } from "@/context/ToastContext";
 import { colors, radius, spacing } from "@/theme/colors";
 
 // Mission.Instructions/badge-name/hero-image are all mock/generic below —
@@ -33,6 +34,7 @@ const COMPLETED_STATUS = 2;
 export default function MissionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
   const [mission, setMission] = useState<UserMission | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export default function MissionDetailScreen() {
   async function pickFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Thiếu quyền", "Cần quyền truy cập thư viện ảnh.");
+      showToast("Thiếu quyền — cần quyền truy cập thư viện ảnh.", "error");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -128,13 +130,13 @@ export default function MissionDetailScreen() {
     try {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Thiếu quyền", "Cần quyền vị trí để check-in.");
+        showToast("Thiếu quyền — cần quyền vị trí để check-in.", "error");
         return;
       }
       const loc = await Location.getCurrentPositionAsync({});
       setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
     } catch {
-      Alert.alert("Lỗi", "Không lấy được vị trí hiện tại.");
+      showToast("Không lấy được vị trí hiện tại.", "error");
     } finally {
       setLocating(false);
     }
@@ -152,13 +154,10 @@ export default function MissionDetailScreen() {
         longitude: coords?.lng,
         takenAt: new Date().toISOString(),
       });
-      Alert.alert(
-        "Hoàn thành nhiệm vụ!",
-        `+${mission.rewardXP} XP · +${mission.rewardCoins} Coin`
-      );
+      showToast(`Hoàn thành nhiệm vụ! +${mission.rewardXP} XP · +${mission.rewardCoins} Coin`, "success");
       router.back();
     } catch (err) {
-      Alert.alert("Lỗi", err instanceof ApiError ? err.message : "Không thể nộp minh chứng.");
+      showToast(err instanceof ApiError ? err.message : "Không thể nộp minh chứng.", "error");
     } finally {
       setSubmitting(false);
     }

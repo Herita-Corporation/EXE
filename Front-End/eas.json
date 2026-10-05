@@ -20,7 +20,12 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_IAM_API_URL": "https://iam.disatravel.id.vn",
+        "EXPO_PUBLIC_AITOUR_API_URL": "https://aitour.disatravel.id.vn",
+        "EXPO_PUBLIC_TASK_API_URL": "https://task.disatravel.id.vn"
+      }
     }
   },
   "submit": {

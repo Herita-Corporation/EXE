@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { IconButton } from "@/components/IconButton";
@@ -10,10 +10,12 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import * as adminApi from "@/api/endpoints/admin";
 import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
+import { useToast } from "@/context/ToastContext";
 import { colors, spacing } from "@/theme/colors";
 
 export default function CreateManagerScreen() {
   const { t } = useLocale();
+  const { showToast } = useToast();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,9 +31,8 @@ export default function CreateManagerScreen() {
     setLoading(true);
     try {
       await adminApi.createManager({ username: username.trim(), email: email.trim(), password });
-      Alert.alert(t("admin.createManagerSuccess"), undefined, [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      showToast(t("admin.createManagerSuccess"), "success");
+      router.back();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("admin.createManagerFailed"));
     } finally {

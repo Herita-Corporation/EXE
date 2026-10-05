@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -11,10 +11,12 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import * as authApi from "@/api/endpoints/auth";
 import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
+import { useToast } from "@/context/ToastContext";
 import { colors, spacing } from "@/theme/colors";
 
 export default function ResetPasswordScreen() {
   const { t } = useLocale();
+  const { showToast } = useToast();
   const { devToken } = useLocalSearchParams<{ devToken?: string }>();
   const [token, setToken] = useState(devToken ?? "");
   const [newPassword, setNewPassword] = useState("");
@@ -36,9 +38,8 @@ export default function ResetPasswordScreen() {
     setLoading(true);
     try {
       await authApi.resetPassword({ token: token.trim(), newPassword });
-      Alert.alert(t("resetPassword.resetSuccessTitle"), t("resetPassword.resetSuccessMessage"), [
-        { text: "OK", onPress: () => router.replace("/(auth)/login") },
-      ]);
+      showToast(t("resetPassword.resetSuccessMessage"), "success");
+      router.replace("/(auth)/login");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("resetPassword.resetFailed"));
     } finally {

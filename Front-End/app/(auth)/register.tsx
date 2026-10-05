@@ -52,7 +52,7 @@ export default function RegisterScreen() {
       await login(username.trim(), password);
       router.replace({
         pathname: "/(auth)/otp",
-        params: { phoneNumber: res.phoneNumber, devOtpCode: res.otpCode, purpose: "register" },
+        params: { email: res.email, purpose: "register" },
       });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("auth.registerFailed"));

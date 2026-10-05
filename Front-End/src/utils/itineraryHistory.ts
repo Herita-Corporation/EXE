@@ -17,6 +17,10 @@ export interface ItineraryHistoryEntry {
    * screen — absent/null means the itinerary is just saved, not under way.
    * Generating/confirming an itinerary no longer auto-marks it as ongoing. */
   startedAt?: string | null;
+  /** Index into the flattened list of geocoded activities (coordinates !=
+   * null) across all days — which waypoint GPS navigation is currently
+   * headed to. Survives app restarts. */
+  currentWaypointIndex?: number;
 }
 
 function storageKey(userId: string) {
@@ -53,6 +57,18 @@ export async function markItineraryStarted(
   const current = await getItineraryHistory(userId);
   const next = current.map((e) =>
     e.id === id ? { ...e, startedAt: new Date().toISOString() } : e
+  );
+  await AsyncStorage.setItem(storageKey(userId), JSON.stringify(next));
+}
+
+export async function setItineraryWaypointIndex(
+  userId: string,
+  id: string,
+  index: number
+): Promise<void> {
+  const current = await getItineraryHistory(userId);
+  const next = current.map((e) =>
+    e.id === id ? { ...e, currentWaypointIndex: index } : e
   );
   await AsyncStorage.setItem(storageKey(userId), JSON.stringify(next));
 }

@@ -111,6 +111,7 @@ namespace IAMService
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddScoped<IFileStorageService, FileStorageService>();
             builder.Services.AddScoped<IPushNotificationService, ExpoPushNotificationService>();
+            builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
             var app = builder.Build();
 

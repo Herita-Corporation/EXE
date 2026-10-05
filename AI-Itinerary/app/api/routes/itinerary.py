@@ -17,6 +17,7 @@ from app.core.security import get_user_id_from_claims, require_auth
 from app.database.repositories.itinerary_repository import ItineraryRepository
 from app.database.session import get_db
 from app.integrations.openai_client import OpenAIClient
+from app.integrations.osm_client import OSMClient
 from app.orchestrators.itinerary_orchestrator import ItineraryOrchestrator
 from app.planners.itinerary_builder import compute_total_cost
 from app.schemas.itinerary import (
@@ -180,6 +181,16 @@ async def replace_activity(
     act["cost"] = payload.cost
     act["rating"] = payload.rating
     act["notes"] = payload.notes
+
+    # Re-geocode — the old coordinates belong to the place being replaced,
+    # carrying them over would point navigation at the wrong spot. name+city
+    # only, not +location — see itinerary_orchestrator.py's
+    # _geocode_fixed_activities for why appending GPT's invented street
+    # address hurts Nominatim's hit rate.
+    city = itinerary_data["days"][day_idx].get("city", "")
+    coords = await OSMClient().get_place_coordinates(f"{payload.name}, {city}") if payload.name else None
+    act["coordinates"] = {"lat": coords[0], "lng": coords[1]} if coords else None
+
     itinerary_data["days"][day_idx]["activities"][act_idx] = act
 
     day_plans = [DayPlan(**d) for d in itinerary_data["days"]]

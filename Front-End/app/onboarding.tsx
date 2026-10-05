@@ -59,7 +59,7 @@ export default function OnboardingScreen() {
         {ONBOARDING_SLIDES.map((slide) => (
           <View key={slide.headline} style={{ width, height }}>
             <Image
-              source={{ uri: slide.image }}
+              source={slide.image}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
             />

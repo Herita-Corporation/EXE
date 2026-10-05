@@ -16,6 +16,7 @@ import * as vouchersApi from "@/api/endpoints/vouchers";
 import { ApiError } from "@/api/http";
 import type { PointsBalance, Voucher } from "@/types/vouchers";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { TranslationKey } from "@/i18n/LocaleContext";
 import { brand, colors, radius, spacing } from "@/theme/colors";
@@ -37,6 +38,7 @@ const FILTERS = Object.keys(FILTER_KEYS);
 
 export default function VoucherScreen() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const { t } = useLocale();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [balance, setBalance] = useState<PointsBalance | null>(null);
@@ -73,6 +75,7 @@ export default function VoucherScreen() {
             try {
               await vouchersApi.redeemVoucher(v.id, user.id);
               load();
+              showToast(t("voucher.redeemSuccess"), "success");
             } catch (err) {
               setError(err instanceof ApiError ? err.message : t("voucher.redeemFailed"));
             } finally {

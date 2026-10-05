@@ -24,22 +24,24 @@ import { generateItinerary } from "@/api/endpoints/itinerary";
 import { ApiError } from "@/api/http";
 import { useSmartBack } from "@/utils/backNavigation";
 import { VIETNAM_PROVINCES } from "@/data/vietnamProvinces";
+import { getRegionImage } from "@/data/regionImages";
+import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
 import { colors, radius, spacing } from "@/theme/colors";
 
-const TRAVEL_STYLES: Array<{ key: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { key: "food", label: "Ẩm thực", icon: "restaurant-outline" },
-  { key: "culture", label: "Văn hóa", icon: "library-outline" },
-  { key: "adventure", label: "Phiêu lưu", icon: "walk-outline" },
-  { key: "explore", label: "Khám phá", icon: "compass-outline" },
+const TRAVEL_STYLE_KEYS: Array<{ key: string; labelKey: TranslationKey; icon: keyof typeof Ionicons.glyphMap }> = [
+  { key: "food", labelKey: "createItinerary.styleFood", icon: "restaurant-outline" },
+  { key: "culture", labelKey: "createItinerary.styleCulture", icon: "library-outline" },
+  { key: "adventure", labelKey: "createItinerary.styleAdventure", icon: "walk-outline" },
+  { key: "explore", labelKey: "createItinerary.styleExplore", icon: "compass-outline" },
 ];
 
 // UI-only — GenerateItineraryRequest has no transportation field; the
 // selection is never sent to the API, kept only for Figma fidelity.
-const TRANSPORT_OPTIONS: Array<{ key: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { key: "bus", label: "Xe buýt", icon: "bus-outline" },
-  { key: "train", label: "Tàu hỏa", icon: "train-outline" },
-  { key: "flight", label: "Máy bay", icon: "airplane-outline" },
-  { key: "car", label: "Ô tô", icon: "car-outline" },
+const TRANSPORT_OPTION_KEYS: Array<{ key: string; labelKey: TranslationKey; icon: keyof typeof Ionicons.glyphMap }> = [
+  { key: "bus", labelKey: "createItinerary.transportBus", icon: "bus-outline" },
+  { key: "train", labelKey: "createItinerary.transportTrain", icon: "train-outline" },
+  { key: "flight", labelKey: "createItinerary.transportFlight", icon: "airplane-outline" },
+  { key: "car", labelKey: "createItinerary.transportCar", icon: "car-outline" },
 ];
 
 const MIN_BUDGET_VND = 2_000_000;
@@ -49,8 +51,8 @@ function formatVnd(n: number): string {
   return `${Math.round(n).toLocaleString("vi-VN")} VND`;
 }
 
-function formatVndShort(n: number): string {
-  return `${(n / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} triệu`;
+function formatVndShort(n: number, unit: string): string {
+  return `${(n / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${unit}`;
 }
 
 function todayPlus(days: number): string {
@@ -62,6 +64,7 @@ function todayPlus(days: number): string {
 export default function CreateItineraryScreen() {
   const insets = useSafeAreaInsets();
   const goBack = useSmartBack();
+  const { t } = useLocale();
   const [province, setProvince] = useState<string | null>(null);
   const [provincePickerOpen, setProvincePickerOpen] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
@@ -85,15 +88,15 @@ export default function CreateItineraryScreen() {
   async function onGenerate() {
     setError(null);
     if (!province) {
-      setError("Vui lòng chọn tỉnh/thành muốn đến.");
+      setError(t("createItinerary.errorSelectProvince"));
       return;
     }
     if (startDate > endDate) {
-      setError("Ngày bắt đầu phải trước ngày kết thúc.");
+      setError(t("createItinerary.errorDateOrder"));
       return;
     }
     if (styles_.length === 0) {
-      setError("Chọn ít nhất một phong cách du lịch.");
+      setError(t("createItinerary.errorSelectStyle"));
       return;
     }
 
@@ -111,7 +114,7 @@ export default function CreateItineraryScreen() {
       router.replace(`/(tabs)/mission/itinerary/${result.itinerary_id}`);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Không thể tạo lịch trình. Vui lòng thử lại."
+        err instanceof ApiError ? err.message : t("createItinerary.errorGenerateFailed")
       );
     } finally {
       setLoading(false);
@@ -130,19 +133,19 @@ export default function CreateItineraryScreen() {
           <IconButton icon="arrow-back" variant="glass" onPress={goBack} />
         </View>
         <View style={styles.heroText}>
-          <Text style={styles.heroStep}>BƯỚC 1/3</Text>
-          <Text style={styles.heroTitle}>Tạo lịch trình</Text>
+          <Text style={styles.heroStep}>{t("createItinerary.heroStep")}</Text>
+          <Text style={styles.heroTitle}>{t("createItinerary.heroTitle")}</Text>
         </View>
       </View>
 
       <View style={styles.body}>
         <ErrorBanner message={error} />
 
-        <Text style={styles.label}>Bạn muốn đi đâu?</Text>
+        <Text style={styles.label}>{t("createItinerary.whereLabel")}</Text>
         <Pressable style={styles.selectBox} onPress={() => setProvincePickerOpen(true)}>
           <Ionicons name="location-outline" size={18} color={colors.textMuted} />
           <Text style={[styles.selectText, !province && styles.placeholderText]}>
-            {province ?? "Chọn tỉnh/thành"}
+            {province ?? t("createItinerary.provincePlaceholder")}
           </Text>
           <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
         </Pressable>
@@ -151,7 +154,7 @@ export default function CreateItineraryScreen() {
           <Pressable style={styles.selectBox} onPress={() => setHighlightPickerOpen(true)}>
             <Ionicons name="image-outline" size={18} color={colors.textMuted} />
             <Text style={[styles.selectText, !highlight && styles.placeholderText]}>
-              {highlight ?? "Khu vực cụ thể (tùy chọn)"}
+              {highlight ?? t("createItinerary.areaPlaceholder")}
             </Text>
             <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
           </Pressable>
@@ -159,14 +162,14 @@ export default function CreateItineraryScreen() {
 
         <View style={styles.dateRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Ngày bắt đầu</Text>
+            <Text style={styles.label}>{t("createItinerary.startDateLabel")}</Text>
             <Pressable style={styles.selectBox} onPress={() => setShowStartPicker(true)}>
               <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
               <Text style={styles.selectText}>{startDate}</Text>
             </Pressable>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Ngày kết thúc</Text>
+            <Text style={styles.label}>{t("createItinerary.endDateLabel")}</Text>
             <Pressable style={styles.selectBox} onPress={() => setShowEndPicker(true)}>
               <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
               <Text style={styles.selectText}>{endDate}</Text>
@@ -203,8 +206,8 @@ export default function CreateItineraryScreen() {
               <Ionicons name="people-outline" size={18} color={colors.navy} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.stepperTitle}>Số người</Text>
-              <Text style={styles.stepperSubtitle}>Bao nhiêu người?</Text>
+              <Text style={styles.stepperTitle}>{t("createItinerary.travelersTitle")}</Text>
+              <Text style={styles.stepperSubtitle}>{t("createItinerary.travelersSubtitle")}</Text>
             </View>
             <Pressable
               style={styles.stepperButton}
@@ -228,8 +231,8 @@ export default function CreateItineraryScreen() {
               <Ionicons name="cash-outline" size={18} color={colors.navy} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.stepperTitle}>Ngân sách dự kiến</Text>
-              <Text style={styles.stepperSubtitle}>Mỗi người</Text>
+              <Text style={styles.stepperTitle}>{t("createItinerary.budgetTitle")}</Text>
+              <Text style={styles.stepperSubtitle}>{t("createItinerary.budgetSubtitle")}</Text>
             </View>
             <Text style={styles.budgetValue}>{formatVnd(budgetVnd)}</Text>
           </View>
@@ -244,17 +247,21 @@ export default function CreateItineraryScreen() {
             thumbTintColor={colors.navy}
           />
           <View style={styles.budgetRangeRow}>
-            <Text style={styles.budgetRangeText}>{formatVndShort(MIN_BUDGET_VND)}</Text>
-            <Text style={styles.budgetRangeText}>{formatVndShort(MAX_BUDGET_VND)}+</Text>
+            <Text style={styles.budgetRangeText}>
+              {formatVndShort(MIN_BUDGET_VND, t("createItinerary.budgetUnitMillion"))}
+            </Text>
+            <Text style={styles.budgetRangeText}>
+              {formatVndShort(MAX_BUDGET_VND, t("createItinerary.budgetUnitMillion"))}+
+            </Text>
           </View>
         </View>
 
-        <Text style={styles.label}>Phong cách du lịch</Text>
+        <Text style={styles.label}>{t("createItinerary.travelStyleLabel")}</Text>
         <View style={styles.chipGrid}>
-          {TRAVEL_STYLES.map((s) => (
+          {TRAVEL_STYLE_KEYS.map((s) => (
             <Chip
               key={s.key}
-              label={s.label}
+              label={t(s.labelKey)}
               icon={s.icon}
               selected={styles_.includes(s.key)}
               onPress={() => toggle(styles_, s.key, setStyles_)}
@@ -263,22 +270,22 @@ export default function CreateItineraryScreen() {
           ))}
         </View>
 
-        <Text style={styles.label}>Phương tiện ưa thích</Text>
+        <Text style={styles.label}>{t("createItinerary.transportLabel")}</Text>
         <View style={styles.chipGrid}>
-          {TRANSPORT_OPTIONS.map((t) => (
+          {TRANSPORT_OPTION_KEYS.map((opt) => (
             <Chip
-              key={t.key}
-              label={t.label}
-              icon={t.icon}
-              selected={transport.includes(t.key)}
-              onPress={() => toggle(transport, t.key, setTransport)}
+              key={opt.key}
+              label={t(opt.labelKey)}
+              icon={opt.icon}
+              selected={transport.includes(opt.key)}
+              onPress={() => toggle(transport, opt.key, setTransport)}
               style={styles.chipHalf}
             />
           ))}
         </View>
 
         <Button
-          title="Tạo lịch trình"
+          title={t("createItinerary.generateButton")}
           icon="sparkles"
           iconPosition="right"
           onPress={onGenerate}
@@ -290,7 +297,7 @@ export default function CreateItineraryScreen() {
       <Modal visible={provincePickerOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Chọn tỉnh/thành</Text>
+            <Text style={styles.modalTitle}>{t("createItinerary.provincePickerTitle")}</Text>
             <FlatList
               data={VIETNAM_PROVINCES}
               keyExtractor={(item) => item.name}
@@ -310,7 +317,7 @@ export default function CreateItineraryScreen() {
                 </Pressable>
               )}
             />
-            <Button title="Đóng" variant="ghost" onPress={() => setProvincePickerOpen(false)} />
+            <Button title={t("common.close")} variant="ghost" onPress={() => setProvincePickerOpen(false)} />
           </View>
         </View>
       </Modal>
@@ -319,10 +326,10 @@ export default function CreateItineraryScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>
-              Khu vực nổi bật ở {province}
+              {t("createItinerary.highlightPickerTitle", { province: province ?? "" })}
             </Text>
             <Text style={styles.modalSubtitle}>
-              Chọn một khu vực cụ thể để lịch trình tập trung vào đó, hoặc bỏ qua để AI lên kế hoạch cho cả tỉnh/thành.
+              {t("createItinerary.highlightPickerSubtitle")}
             </Text>
             <FlatList
               data={selectedProvince?.highlights ?? []}
@@ -340,9 +347,7 @@ export default function CreateItineraryScreen() {
                   <Card
                     variant="media"
                     imageHeight={90}
-                    imageSource={`https://picsum.photos/seed/disa-highlight-${encodeURIComponent(
-                      `${province}-${item.name}`
-                    )}/300/200`}
+                    imageSource={getRegionImage(item.name, province)}
                     overlay={
                       highlight === item.name ? (
                         <Ionicons name="checkmark-circle" size={20} color={colors.navy} />
@@ -357,14 +362,14 @@ export default function CreateItineraryScreen() {
               )}
             />
             <Button
-              title="Không chọn (cả tỉnh/thành)"
+              title={t("createItinerary.noAreaSelection")}
               variant="outline"
               onPress={() => {
                 setHighlight(null);
                 setHighlightPickerOpen(false);
               }}
             />
-            <Button title="Đóng" variant="ghost" onPress={() => setHighlightPickerOpen(false)} />
+            <Button title={t("common.close")} variant="ghost" onPress={() => setHighlightPickerOpen(false)} />
           </View>
         </View>
       </Modal>

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -14,11 +14,13 @@ import type { DisaEvent } from "@/types/events";
 import { useSmartBack } from "@/utils/backNavigation";
 import { enablePushNotifications } from "@/utils/pushNotifications";
 import { useLocale } from "@/i18n/LocaleContext";
+import { useToast } from "@/context/ToastContext";
 import { colors, spacing } from "@/theme/colors";
 
 export default function EventsScreen() {
   const goBack = useSmartBack();
   const { t } = useLocale();
+  const { showToast } = useToast();
   const [enablingPush, setEnablingPush] = useState(false);
   const [events, setEvents] = useState<DisaEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,9 +48,9 @@ export default function EventsScreen() {
     setEnablingPush(true);
     try {
       const enabled = await enablePushNotifications();
-      Alert.alert(
-        enabled ? t("events.notificationsEnabledTitle") : t("events.notificationsFailedTitle"),
-        enabled ? t("events.notificationsEnabledMessage") : t("events.notificationsFailedMessage")
+      showToast(
+        enabled ? t("events.notificationsEnabledMessage") : t("events.notificationsFailedMessage"),
+        enabled ? "success" : "error"
       );
     } finally {
       setEnablingPush(false);

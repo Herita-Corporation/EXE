@@ -28,6 +28,11 @@ export interface BudgetBreakdown {
   miscellaneous: number;
 }
 
+export interface LocationCoords {
+  lat: number;
+  lng: number;
+}
+
 export interface Activity {
   activity_id: string;
   name: string;
@@ -39,6 +44,8 @@ export interface Activity {
   rating?: number | null;
   notes?: string | null;
   location?: string | null;
+  /** Server-geocoded GPS — null for flexible slots or a geocoding miss. */
+  coordinates?: LocationCoords | null;
 }
 
 export interface DayPlan {

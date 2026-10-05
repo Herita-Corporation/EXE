@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,6 +13,7 @@ import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { SettingsRow } from "@/components/SettingsRow";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { changePassword, uploadAvatar } from "@/api/endpoints/auth";
 import { ApiError } from "@/api/http";
 import { getItineraryHistory } from "@/utils/itineraryHistory";
@@ -22,6 +23,7 @@ import { colors, radius, shadow, spacing } from "@/theme/colors";
 
 export default function AccountScreen() {
   const { user, logout, refreshMe } = useAuth();
+  const { showToast } = useToast();
   const gamification = useGamification();
   const { t } = useLocale();
   const [tripCount, setTripCount] = useState(0);
@@ -74,13 +76,13 @@ export default function AccountScreen() {
   }
 
   function stub(feature: string) {
-    Alert.alert(feature, "Tính năng này chưa có backend hỗ trợ.");
+    showToast(`${feature}: Tính năng này chưa có backend hỗ trợ.`, "info");
   }
 
   async function onChangeAvatar() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert(t("admin.missingPermission"), t("admin.missingPermissionMessage"));
+      showToast(t("admin.missingPermissionMessage"), "error");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -96,7 +98,7 @@ export default function AccountScreen() {
       await uploadAvatar(result.assets[0].uri);
       await refreshMe();
     } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("account.avatarUploadFailed"));
+      showToast(err instanceof ApiError ? err.message : t("account.avatarUploadFailed"), "error");
     } finally {
       setUploadingAvatar(false);
     }

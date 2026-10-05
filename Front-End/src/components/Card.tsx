@@ -10,7 +10,7 @@ interface Props {
   style?: ViewStyle;
   variant?: Variant;
   /** Only used when variant="media" — renders a rounded photo header above children. */
-  imageSource?: ImageSource | string;
+  imageSource?: ImageSource | string | number;
   imageHeight?: number;
   /** Absolutely-positioned slot over the image (e.g. a favorite-heart icon or rating badge). */
   overlay?: React.ReactNode;

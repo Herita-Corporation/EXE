@@ -139,6 +139,22 @@ public class Activity
 
     [JsonPropertyName("notes")]
     public string? Notes { get; set; }
+
+    // Server-side geocoded (Nominatim) — null when the lookup missed. Only
+    // fixed-anchor activities (hotel/transportation/attraction/...) carry
+    // this; flexible slots (meals/coffee/shopping) are skipped to limit
+    // geocoding latency (see AI-Itinerary's itinerary_orchestrator.py).
+    [JsonPropertyName("coordinates")]
+    public LocationCoords? Coordinates { get; set; }
+}
+
+public class LocationCoords
+{
+    [JsonPropertyName("lat")]
+    public double Lat { get; set; }
+
+    [JsonPropertyName("lng")]
+    public double Lng { get; set; }
 }
 
 // ── Activity Alternatives ("edit this place" feature) ────────────────────────

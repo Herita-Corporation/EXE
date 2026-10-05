@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
+import * as Location from "expo-location";
 import { useFocusEffect, useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -21,8 +23,11 @@ import {
   getItineraryHistory,
   markItineraryStarted,
   removeItineraryFromHistory,
+  setItineraryWaypointIndex,
 } from "@/utils/itineraryHistory";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
+import { getRegionImage } from "@/data/regionImages";
 import type { Activity, ActivityAlternative, ItineraryResponse } from "@/types/itinerary";
 import { MISSION_TYPE_PHOTO, MISSION_TYPE_VIDEO, MissionTemplate } from "@/types/missions";
 import { colors, radius, spacing } from "@/theme/colors";
@@ -57,6 +62,32 @@ function formatVnd(n: number) {
   return `${Math.round(n).toLocaleString("vi-VN")} VND`;
 }
 
+// Meters between two GPS points (haversine) — used to detect "arrived" at
+// the current navigation waypoint.
+function distanceMeters(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLng = Math.sin(dLng / 2);
+  const h =
+    sinDLat * sinDLat +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinDLng * sinDLng;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+const ARRIVAL_RADIUS_METERS = 150;
+
+function openMapsFor(activity: Activity) {
+  if (!activity.coordinates) return;
+  const { lat, lng } = activity.coordinates;
+  Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+}
+
 function MissionChip({
   icon,
   label,
@@ -85,6 +116,7 @@ function MissionChip({
 export default function ItineraryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [data, setData] = useState<ItineraryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -100,6 +132,17 @@ export default function ItineraryDetailScreen() {
   const [confirming, setConfirming] = useState(false);
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [waypointIndex, setWaypointIndex] = useState(0);
+  const waypointIndexRef = useRef(0);
+  const watchSubRef = useRef<Location.LocationSubscription | null>(null);
+
+  // Flattened, in-order list of geocoded activities (fixed anchors only —
+  // see AI-Itinerary's itinerary_orchestrator.py) across every day — the
+  // sequence GPS navigation walks through.
+  const waypoints = useMemo(
+    () => data?.days.flatMap((day) => day.activities).filter((a) => a.coordinates) ?? [],
+    [data]
+  );
 
   useEffect(() => {
     listMissionTemplates()
@@ -149,6 +192,9 @@ export default function ItineraryDetailScreen() {
         const entry = history.find((h) => h.id === id);
         setConfirmed(!!entry);
         setStarted(!!entry?.startedAt);
+        const idx = entry?.currentWaypointIndex ?? 0;
+        setWaypointIndex(idx);
+        waypointIndexRef.current = idx;
       });
       return () => {
         cancelled = true;
@@ -176,7 +222,7 @@ export default function ItineraryDetailScreen() {
             if (user) await removeItineraryFromHistory(user.id, id);
             router.back();
           } catch (err) {
-            Alert.alert("Lỗi", err instanceof ApiError ? err.message : "Không thể xóa.");
+            showToast(err instanceof ApiError ? err.message : "Không thể xóa.", "error");
           } finally {
             setDeleting(false);
           }
@@ -203,7 +249,7 @@ export default function ItineraryDetailScreen() {
       });
       setAssignedKeys((prev) => new Set(prev).add(key));
     } catch (err) {
-      Alert.alert("Lỗi", err instanceof ApiError ? err.message : "Không thể giao nhiệm vụ.");
+      showToast(err instanceof ApiError ? err.message : "Không thể giao nhiệm vụ.", "error");
     } finally {
       setAssigningKey(null);
     }
@@ -218,7 +264,7 @@ export default function ItineraryDetailScreen() {
       const res = await getActivityAlternatives(id, activity.activity_id);
       setAlternatives(res.alternatives);
     } catch (err) {
-      Alert.alert("Lỗi", err instanceof ApiError ? err.message : "Không thể tải gợi ý địa điểm.");
+      showToast(err instanceof ApiError ? err.message : "Không thể tải gợi ý địa điểm.", "error");
       setEditingActivity(null);
     } finally {
       setLoadingAlternatives(false);
@@ -233,7 +279,7 @@ export default function ItineraryDetailScreen() {
       setData(updated);
       setEditingActivity(null);
     } catch (err) {
-      Alert.alert("Lỗi", err instanceof ApiError ? err.message : "Không thể đổi địa điểm.");
+      showToast(err instanceof ApiError ? err.message : "Không thể đổi địa điểm.", "error");
     } finally {
       setReplacingActivityId(null);
     }
@@ -254,11 +300,67 @@ export default function ItineraryDetailScreen() {
         createdAt: data.created_at,
       });
       setConfirmed(true);
-      Alert.alert("Đã lưu lộ trình", "Lộ trình đã được lưu vào Lộ trình của tôi.");
+      showToast("Lộ trình đã được lưu vào Lộ trình của tôi.", "success");
     } finally {
       setConfirming(false);
     }
   }
+
+  // Opens the phone's map app for the current waypoint and (re)starts GPS
+  // watching — called both the first time the user starts the itinerary and
+  // every time they tap the button again afterwards (resume after closing
+  // Maps, app restart, etc.). Only watches while this screen is focused —
+  // not a true background service (would need extra OS permissions/setup).
+  async function startNavigation() {
+    if (waypoints.length === 0) {
+      showToast("Lịch trình này không có điểm GPS để chỉ đường.", "info");
+      return;
+    }
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (!perm.granted) {
+      showToast("Cần quyền vị trí để tự động chuyển điểm.", "error");
+      return;
+    }
+
+    const target = waypoints[waypointIndexRef.current];
+    if (target) openMapsFor(target);
+
+    if (watchSubRef.current) return; // already watching
+    watchSubRef.current = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.Balanced, timeInterval: 10000, distanceInterval: 20 },
+      (pos) => {
+        const current = waypoints[waypointIndexRef.current];
+        if (!current?.coordinates) return;
+        const dist = distanceMeters(
+          { lat: pos.coords.latitude, lng: pos.coords.longitude },
+          current.coordinates
+        );
+        if (dist > ARRIVAL_RADIUS_METERS) return;
+
+        const nextIndex = waypointIndexRef.current + 1;
+        waypointIndexRef.current = nextIndex;
+        setWaypointIndex(nextIndex);
+        if (user) setItineraryWaypointIndex(user.id, id, nextIndex).catch(() => {});
+
+        const next = waypoints[nextIndex];
+        if (next) {
+          showToast(`Đã đến ${current.name} — đang chuyển hướng tới điểm tiếp theo.`, "success");
+          openMapsFor(next);
+        } else {
+          showToast("Đã hoàn thành toàn bộ lộ trình!", "success");
+          watchSubRef.current?.remove();
+          watchSubRef.current = null;
+        }
+      }
+    );
+  }
+
+  useEffect(() => {
+    return () => {
+      watchSubRef.current?.remove();
+      watchSubRef.current = null;
+    };
+  }, []);
 
   // Trước đây lộ trình tự động được coi là "đang diễn ra" chỉ dựa vào ngày
   // tháng. Giờ chỉ chuyển sang "đang diễn ra" khi user bấm nút này — nếu
@@ -268,9 +370,12 @@ export default function ItineraryDetailScreen() {
     if (!user) return;
     setStarting(true);
     try {
-      await markItineraryStarted(user.id, id);
-      setStarted(true);
-      Alert.alert("Đã bắt đầu", "Lộ trình đang diễn ra.");
+      if (!started) {
+        await markItineraryStarted(user.id, id);
+        setStarted(true);
+        showToast("Lộ trình đang diễn ra.", "success");
+      }
+      await startNavigation();
     } finally {
       setStarting(false);
     }
@@ -309,6 +414,7 @@ export default function ItineraryDetailScreen() {
 
       {data.days.map((day, dayIdx) => (
         <View key={`${day.date}-${dayIdx}`} style={styles.daySection}>
+          <Image source={getRegionImage(day.city)} style={styles.dayImage} contentFit="cover" />
           <View style={styles.dayHeaderRow}>
             <View style={styles.dayDot} />
             <Text style={styles.dayTitle}>
@@ -414,12 +520,11 @@ export default function ItineraryDetailScreen() {
       />
       {confirmed ? (
         <Button
-          title={started ? "Đang diễn ra" : "Bắt đầu lộ trình"}
+          title={started ? "Mở chỉ đường" : "Bắt đầu lộ trình"}
           variant={started ? "secondary" : "primary"}
           icon={started ? "navigate" : "play"}
           onPress={onStartItinerary}
           loading={starting}
-          disabled={started}
         />
       ) : null}
       <Button title="Xóa lịch trình" variant="danger" onPress={onDelete} loading={deleting} />
@@ -481,6 +586,7 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "700", color: colors.navy },
   headerSubtitle: { color: colors.textMuted, fontSize: 13 },
   daySection: { gap: spacing(1) },
+  dayImage: { width: "100%", height: 120, borderRadius: radius.lg },
   dayHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
   dayDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
   dayTitle: { fontSize: 16, fontWeight: "700", color: colors.navy },

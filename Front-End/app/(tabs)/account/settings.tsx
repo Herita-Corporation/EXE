@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import Constants from "expo-constants";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -15,11 +16,13 @@ import * as authApi from "@/api/endpoints/auth";
 import { ApiError } from "@/api/http";
 import { enablePushNotifications } from "@/utils/pushNotifications";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, spacing } from "@/theme/colors";
+import { useToast } from "@/context/ToastContext";
+import { colors, radius, spacing } from "@/theme/colors";
 
 export default function AccountSettingsScreen() {
   const { user, refreshMe } = useAuth();
   const { t, locale, setLocale } = useLocale();
+  const { showToast } = useToast();
   // Email/Location/Biometric remain cosmetic/local-only — no backend for
   // those exists. Push is wired to the real Expo push token registration
   // (see onTogglePush below).
@@ -33,10 +36,10 @@ export default function AccountSettingsScreen() {
   const [newPhone, setNewPhone] = useState("");
   const [savingField, setSavingField] = useState(false);
   const [verifyingEmail, setVerifyingEmail] = useState(false);
-  const [verifyingPhone, setVerifyingPhone] = useState(false);
+  const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
 
   function stub(feature: string) {
-    Alert.alert(feature, "Tính năng này chưa được hỗ trợ.");
+    showToast(`${feature}: Tính năng này chưa được hỗ trợ.`, "info");
   }
 
   async function onTogglePush(next: boolean) {
@@ -48,61 +51,26 @@ export default function AccountSettingsScreen() {
     const enabled = await enablePushNotifications();
     setPushEnabled(enabled);
     if (!enabled) {
-      Alert.alert(t("settings.error"), t("settings.pushNotificationsFailed"));
+      showToast(t("settings.pushNotificationsFailed"), "error");
     }
   }
 
   function onSelectLanguage() {
-    Alert.alert(t("settings.selectLanguage"), undefined, [
-      { text: t("settings.languageEnglish"), onPress: () => setLocale("en") },
-      { text: t("settings.languageVietnamese"), onPress: () => setLocale("vi") },
-      { text: t("common.cancel"), style: "cancel" },
-    ]);
+    setLanguagePickerOpen(true);
   }
 
   async function onVerifyEmail() {
     setVerifyingEmail(true);
     try {
       const res = await authApi.sendEmailVerification();
-      Alert.alert(
-        t("settings.confirmEmailSentTitle"),
-        t("settings.confirmEmailSentBody", { code: res.verificationToken }),
-        [
-          { text: t("common.cancel"), style: "cancel" },
-          {
-            text: t("settings.confirm"),
-            onPress: async () => {
-              try {
-                await authApi.verifyEmail({ token: res.verificationToken });
-                await refreshMe();
-                Alert.alert(t("settings.success"), t("settings.emailVerifiedMessage"));
-              } catch (err) {
-                Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.emailVerifyFailed"));
-              }
-            },
-          },
-        ]
-      );
-    } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.sendEmailVerificationFailed"));
-    } finally {
-      setVerifyingEmail(false);
-    }
-  }
-
-  async function onVerifyPhone() {
-    if (!user?.phoneNumber) return;
-    setVerifyingPhone(true);
-    try {
-      const res = await authApi.resendPhoneOtp({ phoneNumber: user.phoneNumber });
       router.push({
         pathname: "/(auth)/otp",
-        params: { phoneNumber: user.phoneNumber, devOtpCode: res.otpCode, purpose: "settings" },
+        params: { email: res.email, purpose: "settings" },
       });
     } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.sendOtpFailed"));
+      showToast(err instanceof ApiError ? err.message : t("settings.sendEmailVerificationFailed"), "error");
     } finally {
-      setVerifyingPhone(false);
+      setVerifyingEmail(false);
     }
   }
 
@@ -113,9 +81,9 @@ export default function AccountSettingsScreen() {
       await authApi.changeEmail({ newEmail: newEmail.trim() });
       await refreshMe();
       setEditingField(null);
-      Alert.alert(t("settings.success"), t("settings.emailUpdatedMessage"));
+      showToast(t("settings.emailUpdatedMessage"), "success");
     } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.changeEmailFailed"));
+      showToast(err instanceof ApiError ? err.message : t("settings.changeEmailFailed"), "error");
     } finally {
       setSavingField(false);
     }
@@ -125,15 +93,11 @@ export default function AccountSettingsScreen() {
     if (!newPhone.trim()) return;
     setSavingField(true);
     try {
-      const res = await authApi.changePhone({ newPhoneNumber: newPhone.trim() });
+      await authApi.changePhone({ newPhoneNumber: newPhone.trim() });
       await refreshMe();
       setEditingField(null);
-      router.push({
-        pathname: "/(auth)/otp",
-        params: { phoneNumber: res.phoneNumber, devOtpCode: res.otpCode, purpose: "settings" },
-      });
     } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.changePhoneFailed"));
+      showToast(err instanceof ApiError ? err.message : t("settings.changePhoneFailed"), "error");
     } finally {
       setSavingField(false);
     }
@@ -193,15 +157,6 @@ export default function AccountSettingsScreen() {
             setEditingField(editingField === "phone" ? null : "phone");
             setNewPhone(user?.phoneNumber ?? "");
           }}
-          right={
-            user?.isPhoneVerified ? (
-              <Badge label={t("settings.verified")} tone="success" />
-            ) : (
-              <Pressable onPress={onVerifyPhone} hitSlop={8} disabled={verifyingPhone}>
-                <Text style={styles.verifyLink}>{verifyingPhone ? "..." : t("settings.verify")}</Text>
-              </Pressable>
-            )
-          }
         />
         {editingField === "phone" ? (
           <View style={styles.editRow}>
@@ -299,14 +254,29 @@ export default function AccountSettingsScreen() {
         />
       </Card>
 
-      <Text style={styles.sectionLabel}>{t("settings.developer")}</Text>
-      <Card style={styles.sectionCard}>
-        <SettingsRow
-          icon="construct-outline"
-          label="Cấu hình địa chỉ API (Expo Go)"
-          onPress={() => router.push("/settings")}
-        />
-      </Card>
+      <Modal visible={languagePickerOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>{t("settings.selectLanguage")}</Text>
+            {(["en", "vi"] as const).map((code) => (
+              <Pressable
+                key={code}
+                style={styles.modalRow}
+                onPress={() => {
+                  setLocale(code);
+                  setLanguagePickerOpen(false);
+                }}
+              >
+                <Text style={styles.modalRowText}>
+                  {code === "en" ? t("settings.languageEnglish") : t("settings.languageVietnamese")}
+                </Text>
+                {locale === code ? <Ionicons name="checkmark" size={18} color={colors.navy} /> : null}
+              </Pressable>
+            ))}
+            <Button title={t("common.cancel")} variant="ghost" onPress={() => setLanguagePickerOpen(false)} />
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -326,4 +296,22 @@ const styles = StyleSheet.create({
   verifyLink: { color: colors.navy, fontWeight: "700", fontSize: 13 },
   editRow: { gap: spacing(1), paddingBottom: spacing(1.25) },
   editButtonsRow: { flexDirection: "row", justifyContent: "flex-end", gap: spacing(1) },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  modalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing(2.5),
+    gap: spacing(1),
+  },
+  modalTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  modalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing(1.25),
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalRowText: { fontSize: 15, color: colors.text },
 });

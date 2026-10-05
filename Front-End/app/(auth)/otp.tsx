@@ -26,9 +26,8 @@ function formatTime(totalSeconds: number) {
 export default function OtpScreen() {
   const { refreshMe } = useAuth();
   const { t } = useLocale();
-  const { phoneNumber, devOtpCode, purpose } = useLocalSearchParams<{
-    phoneNumber?: string;
-    devOtpCode?: string;
+  const { email, purpose } = useLocalSearchParams<{
+    email?: string;
     purpose?: string;
   }>();
   const [code, setCode] = useState("");
@@ -36,10 +35,6 @@ export default function OtpScreen() {
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // DEV ONLY — no real SMS provider exists yet, so IAMService hands the code
-  // straight back in the API response instead of texting it. Shown here so
-  // the flow stays fully testable; remove once a real SMS gateway is wired up.
-  const [devCode, setDevCode] = useState(devOtpCode ?? null);
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -48,11 +43,11 @@ export default function OtpScreen() {
   }, [seconds]);
 
   async function onVerify() {
-    if (code.length < 6 || verifying || !phoneNumber) return;
+    if (code.length < 6 || verifying || !email) return;
     setError(null);
     setVerifying(true);
     try {
-      await authApi.verifyPhoneOtp({ phoneNumber, code });
+      await authApi.verifyEmail({ email, token: code });
       await refreshMe().catch(() => {});
       if (purpose === "register") {
         router.replace("/(tabs)/home");
@@ -67,12 +62,11 @@ export default function OtpScreen() {
   }
 
   async function onResend() {
-    if (resending || seconds > 0 || !phoneNumber) return;
+    if (resending || seconds > 0 || !email) return;
     setError(null);
     setResending(true);
     try {
-      const res = await authApi.resendPhoneOtp({ phoneNumber });
-      setDevCode(res.otpCode);
+      await authApi.resendEmailVerification({ email });
       setSeconds(RESEND_SECONDS);
       setCode("");
     } catch (err) {
@@ -94,18 +88,9 @@ export default function OtpScreen() {
         <Text style={styles.title}>{t("otp.title")}</Text>
         <Text style={styles.subtitle}>
           {t("otp.subtitlePrefix")}{" "}
-          {phoneNumber ? <Text style={styles.phone}>{phoneNumber}</Text> : t("otp.subtitleFallback")}.
+          {email ? <Text style={styles.phone}>{email}</Text> : t("otp.subtitleFallback")}.
         </Text>
       </View>
-
-      {devCode ? (
-        <View style={styles.devBanner}>
-          <Text style={styles.devBannerText}>
-            Demo — chưa có dịch vụ SMS thật. Mã xác thực của bạn là{" "}
-            <Text style={styles.devBannerCode}>{devCode}</Text>
-          </Text>
-        </View>
-      ) : null}
 
       <View style={styles.card}>
         <ErrorBanner message={error} />
@@ -154,15 +139,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing(2),
   },
   phone: { color: colors.navy, fontWeight: "700" },
-  devBanner: {
-    backgroundColor: colors.goldMuted,
-    borderRadius: 12,
-    padding: spacing(1.5),
-    marginTop: spacing(2),
-    marginHorizontal: spacing(0.5),
-  },
-  devBannerText: { color: colors.navyDeep, fontSize: 12, textAlign: "center" },
-  devBannerCode: { fontWeight: "800", fontSize: 14 },
   card: { marginTop: spacing(3), alignItems: "center", gap: spacing(2) },
   timerText: { color: colors.textMuted, fontSize: 13 },
   timerValue: { color: colors.navy, fontWeight: "700" },

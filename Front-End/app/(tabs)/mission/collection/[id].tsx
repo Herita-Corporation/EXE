@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,10 +9,12 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { getItinerary } from "@/api/endpoints/itinerary";
 import { getMockCollectionMedia } from "@/mocks/collection";
 import type { ItineraryResponse } from "@/types/itinerary";
+import { useToast } from "@/context/ToastContext";
 import { colors, radius, spacing } from "@/theme/colors";
 
 export default function ItineraryCollectionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { showToast } = useToast();
   const [itinerary, setItinerary] = useState<ItineraryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export default function ItineraryCollectionScreen() {
             key={item.id}
             style={styles.tile}
             onPress={() =>
-              Alert.alert(item.caption, "Xem chi tiết minh chứng chưa có backend hỗ trợ.")
+              showToast(`${item.caption}: Xem chi tiết minh chứng chưa có backend hỗ trợ.`, "info")
             }
           >
             <Image source={{ uri: item.uri }} style={styles.tileImage} contentFit="cover" />

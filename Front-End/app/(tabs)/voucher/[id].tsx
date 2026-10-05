@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -14,11 +14,13 @@ import { VoucherCategoryPill, VoucherIcon } from "@/components/VoucherIcon";
 import * as vouchersApi from "@/api/endpoints/vouchers";
 import type { Voucher } from "@/types/vouchers";
 import { useLocale } from "@/i18n/LocaleContext";
+import { useToast } from "@/context/ToastContext";
 import { colors, radius, spacing } from "@/theme/colors";
 
 export default function VoucherDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useLocale();
+  const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const [voucher, setVoucher] = useState<Voucher | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,7 +61,7 @@ export default function VoucherDetailScreen() {
           <IconButton
             icon="share-outline"
             variant="glass"
-            onPress={() => Alert.alert("Share", "Chưa hỗ trợ chia sẻ.")}
+            onPress={() => showToast("Chưa hỗ trợ chia sẻ.", "info")}
           />
         </View>
       </View>

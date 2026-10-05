@@ -11,6 +11,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { VoucherIcon } from "@/components/VoucherIcon";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { TranslationKey } from "@/i18n/LocaleContext";
@@ -49,6 +50,7 @@ const OFFER_STYLE: Record<
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const gamification = useGamification();
   const { t } = useLocale();
   const displayName = user?.username ?? t("common.voyager");
@@ -69,7 +71,7 @@ export default function HomeScreen() {
           icon="notifications-outline"
           variant="solid"
           size={20}
-          onPress={() => Alert.alert("Thông báo", "Chưa có thông báo mới.")}
+          onPress={() => showToast("Chưa có thông báo mới.", "info")}
         />
       </View>
 
@@ -163,7 +165,7 @@ export default function HomeScreen() {
           <Pressable
             key={offer.id}
             onPress={() =>
-              Alert.alert("Claim Offer", `Đổi ưu đãi "${offer.title}"? (demo — chưa có backend ưu đãi)`)
+              showToast(`Đổi ưu đãi "${offer.title}"? (demo — chưa có backend ưu đãi)`, "info")
             }
           >
             <Card variant="elevated" style={styles.offerCard}>

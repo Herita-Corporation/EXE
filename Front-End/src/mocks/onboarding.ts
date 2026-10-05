@@ -1,9 +1,11 @@
-// MOCK — static content, no backend involved. Images are generic placeholder
-// photography (picsum.photos, seeded for stable results) until the project
-// has real brand photography to drop in.
+// MOCK — static content, no backend involved. Images are real landmark
+// photos bundled from Wikimedia Commons (same set as
+// src/mocks/featuredMissions.ts — see its header comment for licensing),
+// replacing the old picsum.photos placeholders.
 
 export interface OnboardingSlide {
-  image: string;
+  /** require() asset module id. */
+  image: number;
   headline: string;
   description: string;
   cta: string;
@@ -11,21 +13,21 @@ export interface OnboardingSlide {
 
 export const ONBOARDING_SLIDES: OnboardingSlide[] = [
   {
-    image: "https://picsum.photos/seed/disa-halong/1200/2000",
+    image: require("@/assets/images/missions/fansipan.jpg"),
     headline: "AI Trip Planner",
     description:
       "Experience the future of travel with personalized itineraries crafted by our intelligent concierge, tailored to your unique rhythm and heritage.",
     cta: "Next",
   },
   {
-    image: "https://picsum.photos/seed/disa-train/1200/2000",
+    image: require("@/assets/images/missions/cau-vang.jpg"),
     headline: "Curated Stays & Journeys",
     description:
       "From hidden gems to iconic landmarks, we hand-pick the finest experiences to match your taste and heritage.",
     cta: "Next",
   },
   {
-    image: "https://picsum.photos/seed/disa-hoian/1200/2000",
+    image: require("@/assets/images/missions/hoi-an-den-hoa-dang.jpg"),
     headline: "Your AI Tour Guide",
     description:
       "Unlock the secrets of every destination with real-time audio guidance and cultural insights that bring history to life.",

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
@@ -14,10 +14,12 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import * as eventsApi from "@/api/endpoints/events";
 import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
+import { useToast } from "@/context/ToastContext";
 import { colors, radius, spacing } from "@/theme/colors";
 
 export default function CreateEventScreen() {
   const { t } = useLocale();
+  const { showToast } = useToast();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tag, setTag] = useState("");
@@ -33,7 +35,7 @@ export default function CreateEventScreen() {
   async function pickCoverImage() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert(t("admin.missingPermission"), t("admin.missingPermissionMessage"));
+      showToast(t("admin.missingPermissionMessage"), "error");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({

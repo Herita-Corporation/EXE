@@ -116,9 +116,6 @@ export default function LoginScreen() {
           {t("common.privacyPolicy")}  ·  {t("common.termsOfService")}  ·  {t("auth.support")}
         </Text>
         <Text style={styles.copyright}>{t("auth.copyright")}</Text>
-        <Link href="/settings" style={styles.devLink}>
-          <Ionicons name="settings-outline" size={12} color={colors.textMuted} /> Cấu hình API
-        </Link>
       </View>
     </ScreenContainer>
   );
@@ -153,10 +150,4 @@ const styles = StyleSheet.create({
   footer: { marginTop: "auto", paddingTop: spacing(4), gap: spacing(0.5) },
   footerLinks: { color: colors.textMuted, fontSize: 12, textAlign: "center" },
   copyright: { color: colors.textMuted, fontSize: 11, textAlign: "center" },
-  devLink: {
-    color: colors.textMuted,
-    textAlign: "center",
-    marginTop: spacing(1),
-    fontSize: 12,
-  },
 });

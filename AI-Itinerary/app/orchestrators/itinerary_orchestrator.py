@@ -35,12 +35,15 @@ from app.database.models.itinerary import GeneratedItinerary
 from app.database.repositories.cache_repository import CacheRepository
 from app.database.repositories.itinerary_repository import ItineraryRepository
 from app.integrations.openai_client import OpenAIClient
+from app.integrations.osm_client import OSMClient
 from app.planners.itinerary_builder import ItineraryBuilder, compute_total_cost
 from app.schemas.itinerary import (
     BudgetBreakdown,
     DayPlan,
     GenerationContext,
     ItineraryResponse,
+    LocationCoords,
+    SlotType,
     TripSummary,
 )
 from app.schemas.request import GenerateItineraryRequest
@@ -59,6 +62,7 @@ class ItineraryOrchestrator:
         self.openai_client = OpenAIClient()
         self.itinerary_repo = ItineraryRepository(db)
         self.cache_repo = CacheRepository(db)
+        self.osm_client = OSMClient()
 
     async def generate(
         self, request: GenerateItineraryRequest, *, user_id: UUID
@@ -154,6 +158,12 @@ class ItineraryOrchestrator:
                 cities=request.cities,
             )
 
+            # ── Step 6.5: Geocode fixed-anchor activities ────────────────────
+            # Only cache-miss path — a cache hit's day_plans already carry
+            # coordinates baked in from when that entry was first generated
+            # (see Cache section below, which stores the geocoded result).
+            await self._geocode_fixed_activities(day_plans, request.cities)
+
             # ── Step 7: Validate Budget ──────────────────────────────────────
             total_cost = compute_total_cost(day_plans)
 
@@ -235,6 +245,34 @@ class ItineraryOrchestrator:
             raise InvalidCityError()
         if request.trip_duration_days <= 0:
             raise InvalidDateError("Trip duration must be at least 1 day.")
+
+    async def _geocode_fixed_activities(self, day_plans, cities) -> None:
+        """
+        Attach GPS coordinates to fixed-anchor activities (hotel,
+        transportation, attraction, landmark, museum) — the ones that make
+        sense as map-navigation waypoints. Flexible slots (meals/coffee/
+        shopping) are skipped to keep the number of Nominatim calls (rate
+        limited to 1/sec, see osm_client.py) from adding too much latency
+        on top of the GPT call. Best-effort: a lookup miss just leaves
+        coordinates=None, it never fails the whole generation.
+        """
+        fallback_city = cities[0] if cities else ""
+        for day in day_plans:
+            city = day.city or fallback_city
+            for activity in day.activities:
+                if activity.slot_type != SlotType.FIXED:
+                    continue
+                if not activity.name:
+                    continue
+                # Deliberately name+city, NOT name+activity.location — GPT
+                # invents a specific street address it was never grounded
+                # against, and appending it to the query made Nominatim's
+                # free-text search return zero results even for well-known
+                # real landmarks (verified: every lookup got a 200 OK, most
+                # came back empty once location was appended).
+                coords = await self.osm_client.get_place_coordinates(f"{activity.name}, {city}")
+                if coords:
+                    activity.coordinates = LocationCoords(lat=coords[0], lng=coords[1])
 
     def _validate_structure(self, day_plans) -> None:
         """

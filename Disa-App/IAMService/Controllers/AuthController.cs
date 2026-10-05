@@ -18,18 +18,31 @@ public class AuthController : ControllerBase
     private readonly JwtTokenGenerator _jwt;
     private readonly BCryptPassworkHasher _hasher;
     private readonly IFileStorageService _fileStorageService;
+    private readonly IEmailSender _emailSender;
 
     public AuthController(
         IAMDbContext context,
         JwtTokenGenerator jwt,
         BCryptPassworkHasher hasher,
-        IFileStorageService fileStorageService)
+        IFileStorageService fileStorageService,
+        IEmailSender emailSender)
     {
         _context = context;
         _jwt = jwt;
         _hasher = hasher;
         _fileStorageService = fileStorageService;
+        _emailSender = emailSender;
     }
+
+    private static string BuildVerificationEmailHtml(string code) =>
+        $"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+          <h2 style="color:#0D2D5E">DISA Travel</h2>
+          <p>Mã xác thực email của bạn là:</p>
+          <p style="font-size:28px;font-weight:700;letter-spacing:4px;color:#0D2D5E">{code}</p>
+          <p style="color:#666;font-size:13px">Mã có hiệu lực trong 15 phút. Nếu bạn không yêu cầu mã này, hãy bỏ qua email.</p>
+        </div>
+        """;
 
     // CUSTOMER REGISTER
 
@@ -73,17 +86,13 @@ public class AuthController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        var otp = await IssueVerificationCodeAsync(user.Id, "PhoneOtp", request.PhoneNumber);
+        var code = await IssueVerificationCodeAsync(user.Id, "EmailToken", user.Email);
+        await _emailSender.SendAsync(user.Email, "Xác thực email DISA Travel", BuildVerificationEmailHtml(code.Code));
 
         return Ok(new
         {
-            Message = "Đăng ký tài khoản thành công",
-            PhoneNumber = request.PhoneNumber,
-            // DEV ONLY — no real SMS provider is wired up (same gap as
-            // ForgotPassword's ResetToken below). The code is returned here
-            // instead of actually being texted, so the OTP flow is still
-            // fully testable end-to-end without a paid SMS gateway.
-            OtpCode = otp.Code
+            Message = "Đăng ký tài khoản thành công, vui lòng kiểm tra email để xác thực",
+            Email = user.Email
         });
     }
 
@@ -327,55 +336,6 @@ public class AuthController : ControllerBase
         return Ok("Đăng xuất thành công");
     }
 
-    // ── XÁC THỰC SỐ ĐIỆN THOẠI (OTP) ──────────────────────────────────────
-
-    [HttpPost("verify-phone-otp")]
-    public async Task<IActionResult> VerifyPhoneOtp(VerifyPhoneOtpRequest request)
-    {
-        var code = await _context.VerificationCodes
-            .Where(x => x.Type == "PhoneOtp"
-                && x.Target == request.PhoneNumber
-                && x.Code == request.Code
-                && x.ConsumedAt == null)
-            .OrderByDescending(x => x.CreatedAt)
-            .FirstOrDefaultAsync();
-
-        if (code == null)
-            return BadRequest("Mã OTP không đúng");
-
-        if (code.ExpiresAt < DateTime.UtcNow)
-            return BadRequest("Mã OTP đã hết hạn");
-
-        var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == code.UserId);
-        if (user == null)
-            return NotFound("Không tìm thấy người dùng");
-
-        code.ConsumedAt = DateTime.UtcNow;
-        user.IsPhoneVerified = true;
-
-        await _context.SaveChangesAsync();
-
-        return Ok("Xác thực số điện thoại thành công");
-    }
-
-    [HttpPost("resend-phone-otp")]
-    public async Task<IActionResult> ResendPhoneOtp(ResendPhoneOtpRequest request)
-    {
-        var user = await _context.Users
-            .FirstOrDefaultAsync(x => x.PhoneNumber == request.PhoneNumber);
-
-        if (user == null)
-            return NotFound("Không tìm thấy tài khoản với số điện thoại này");
-
-        var otp = await IssueVerificationCodeAsync(user.Id, "PhoneOtp", request.PhoneNumber);
-
-        return Ok(new
-        {
-            Message = "Đã gửi lại mã OTP",
-            OtpCode = otp.Code // DEV ONLY — see comment in Register()
-        });
-    }
-
     // ── XÁC THỰC EMAIL ─────────────────────────────────────────────────────
 
     [Authorize]
@@ -386,16 +346,34 @@ public class AuthController : ControllerBase
         var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId);
         if (user == null) return NotFound("Không tìm thấy người dùng");
 
-        var token = await IssueVerificationCodeAsync(user.Id, "EmailToken", user.Email);
+        var code = await IssueVerificationCodeAsync(user.Id, "EmailToken", user.Email);
+        await _emailSender.SendAsync(user.Email, "Xác thực email DISA Travel", BuildVerificationEmailHtml(code.Code));
 
         return Ok(new
         {
             Message = "Đã gửi email xác nhận",
-            Email = user.Email,
-            // DEV ONLY — no real email provider is wired up (same gap as
-            // ForgotPassword's ResetToken). Returned directly instead of
-            // being emailed as a clickable link.
-            VerificationToken = token.Code
+            Email = user.Email
+        });
+    }
+
+    // Unauthenticated — used right after Register() (no JWT yet) when the
+    // user wants a fresh code, e.g. the first one expired or landed in spam.
+    [HttpPost("resend-email-verification")]
+    public async Task<IActionResult> ResendEmailVerification(ResendEmailVerificationRequest request)
+    {
+        var user = await _context.Users
+            .FirstOrDefaultAsync(x => x.Email == request.Email);
+
+        if (user == null)
+            return NotFound("Không tìm thấy tài khoản với email này");
+
+        var code = await IssueVerificationCodeAsync(user.Id, "EmailToken", user.Email);
+        await _emailSender.SendAsync(user.Email, "Xác thực email DISA Travel", BuildVerificationEmailHtml(code.Code));
+
+        return Ok(new
+        {
+            Message = "Đã gửi lại email xác thực",
+            Email = user.Email
         });
     }
 
@@ -403,15 +381,18 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> VerifyEmail(VerifyEmailRequest request)
     {
         var code = await _context.VerificationCodes
-            .FirstOrDefaultAsync(x => x.Type == "EmailToken"
+            .Where(x => x.Type == "EmailToken"
+                && x.Target == request.Email
                 && x.Code == request.Token
-                && x.ConsumedAt == null);
+                && x.ConsumedAt == null)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefaultAsync();
 
         if (code == null)
-            return BadRequest("Token xác thực không đúng");
+            return BadRequest("Mã xác thực không đúng");
 
         if (code.ExpiresAt < DateTime.UtcNow)
-            return BadRequest("Token xác thực đã hết hạn");
+            return BadRequest("Mã xác thực đã hết hạn");
 
         var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == code.UserId);
         if (user == null)
@@ -438,18 +419,16 @@ public class AuthController : ControllerBase
         var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId);
         if (user == null) return NotFound("Không tìm thấy người dùng");
 
+        // No verification step — phone number is a plain profile field now
+        // (see Phase F3: identity verification is email-only).
         user.PhoneNumber = request.NewPhoneNumber;
-        user.IsPhoneVerified = false;
 
         await _context.SaveChangesAsync();
 
-        var otp = await IssueVerificationCodeAsync(user.Id, "PhoneOtp", request.NewPhoneNumber);
-
         return Ok(new
         {
-            Message = "Đã cập nhật số điện thoại, vui lòng xác thực",
-            PhoneNumber = request.NewPhoneNumber,
-            OtpCode = otp.Code // DEV ONLY — see comment in Register()
+            Message = "Đã cập nhật số điện thoại",
+            PhoneNumber = request.NewPhoneNumber
         });
     }
 
@@ -493,9 +472,10 @@ public class AuthController : ControllerBase
         foreach (var old in outstanding)
             old.ConsumedAt = DateTime.UtcNow;
 
-        var code = type == "PhoneOtp"
-            ? RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6")
-            : Guid.NewGuid().ToString("N");
+        // 6-digit numeric code for every type — fits the app's single OTP
+        // input UI (was PhoneOtp-only before SMS OTP was dropped; EmailToken
+        // used to be a 32-char GUID meant for a clickable link instead).
+        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
 
         var verification = new VerificationCode
         {
@@ -503,7 +483,7 @@ public class AuthController : ControllerBase
             Type = type,
             Code = code,
             Target = target,
-            ExpiresAt = DateTime.UtcNow.Add(type == "PhoneOtp" ? TimeSpan.FromMinutes(5) : TimeSpan.FromHours(24)),
+            ExpiresAt = DateTime.UtcNow.AddMinutes(15),
             CreatedAt = DateTime.UtcNow
         };
 

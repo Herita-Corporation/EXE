@@ -247,7 +247,7 @@ export default function MissionDetailScreen() {
           contentFit="cover"
         />
         <View style={[styles.heroOverlay, { top: insets.top + spacing(1.5) }]}>
-          <IconButton icon="arrow-back" variant="glass" onPress={() => router.back()} />
+          <IconButton icon="arrow-back" variant="solid" onPress={() => router.back()} />
         </View>
       </View>
 

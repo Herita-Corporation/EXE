@@ -14,11 +14,11 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Slider from "@react-native-community/slider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenContainer } from "@/components/ScreenContainer";
+import { IconButton } from "@/components/IconButton";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -197,15 +197,9 @@ export default function CreateItineraryScreen() {
           colors={["transparent", "rgba(0,0,0,0.55)"]}
           style={styles.heroScrim}
         />
-        {/* Back button — glassmorphism pill */}
-        <Pressable
-          style={[styles.backBtn, { top: insets.top + spacing(1.5) }]}
-          onPress={goBack}
-        >
-          <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
-          <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
-          <Text style={styles.backBtnText}>Quay lại</Text>
-        </Pressable>
+        <View style={[styles.backBtn, { top: insets.top + spacing(1.5) }]}>
+          <IconButton icon="arrow-back" variant="solid" onPress={goBack} />
+        </View>
         <View style={styles.heroText}>
           <Text style={styles.heroStep}>{t("createItinerary.heroStep")}</Text>
           <Text style={styles.heroTitle}>{t("createItinerary.heroTitle")}</Text>
@@ -551,20 +545,6 @@ const styles = StyleSheet.create({
   backBtn: {
     position: "absolute",
     left: spacing(2),
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    overflow: "hidden",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    paddingHorizontal: spacing(1.5),
-    paddingVertical: spacing(0.75),
-  },
-  backBtnText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
   },
   heroText: { position: "absolute", bottom: spacing(2), left: spacing(2.5) },
   heroStep: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5, textTransform: "uppercase" },

@@ -19,6 +19,7 @@ import { useFocusEffect, useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Button } from "@/components/Button";
+import { IconButton } from "@/components/IconButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import {
   deleteItinerary,
@@ -890,9 +891,7 @@ export default function ItineraryDetailScreen() {
       >
         {/* ── Top Header Row (Back arrow, Title) ── */}
         <View style={screenStyles.headerRow}>
-          <Pressable style={screenStyles.backBtn} onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color="#0F172A" />
-          </Pressable>
+          <IconButton icon="arrow-back" onPress={() => router.back()} />
           <Text style={screenStyles.headerTitle} numberOfLines={1}>
             {data.trip_summary.cities.join(", ")}
           </Text>
@@ -1041,9 +1040,6 @@ const screenStyles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: spacing(1),
   },
-  backBtn: {
-    padding: spacing(0.5),
-  },
   headerTitle: {
     fontSize: 20,
     fontWeight: "800",
@@ -1053,7 +1049,7 @@ const screenStyles = StyleSheet.create({
     paddingHorizontal: spacing(1),
   },
   headerSpacer: {
-    width: 32,
+    width: 44,
   },
   subtitleText: {
     fontSize: 14,

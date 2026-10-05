@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import Constants from "expo-constants";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -11,13 +10,14 @@ import { SettingsRow } from "@/components/SettingsRow";
 import { Badge } from "@/components/Badge";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
+import { LanguagePickerModal } from "@/components/LanguageSwitcher";
 import { useAuth } from "@/context/AuthContext";
 import * as authApi from "@/api/endpoints/auth";
 import { ApiError } from "@/api/http";
 import { enablePushNotifications } from "@/utils/pushNotifications";
 import { useLocale } from "@/i18n/LocaleContext";
 import { useToast } from "@/context/ToastContext";
-import { colors, radius, spacing } from "@/theme/colors";
+import { colors, spacing } from "@/theme/colors";
 
 export default function AccountSettingsScreen() {
   const { user, refreshMe } = useAuth();
@@ -254,29 +254,10 @@ export default function AccountSettingsScreen() {
         />
       </Card>
 
-      <Modal visible={languagePickerOpen} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>{t("settings.selectLanguage")}</Text>
-            {(["en", "vi"] as const).map((code) => (
-              <Pressable
-                key={code}
-                style={styles.modalRow}
-                onPress={() => {
-                  setLocale(code);
-                  setLanguagePickerOpen(false);
-                }}
-              >
-                <Text style={styles.modalRowText}>
-                  {code === "en" ? t("settings.languageEnglish") : t("settings.languageVietnamese")}
-                </Text>
-                {locale === code ? <Ionicons name="checkmark" size={18} color={colors.navy} /> : null}
-              </Pressable>
-            ))}
-            <Button title={t("common.cancel")} variant="ghost" onPress={() => setLanguagePickerOpen(false)} />
-          </View>
-        </View>
-      </Modal>
+      <LanguagePickerModal
+        visible={languagePickerOpen}
+        onClose={() => setLanguagePickerOpen(false)}
+      />
     </ScreenContainer>
   );
 }
@@ -296,22 +277,4 @@ const styles = StyleSheet.create({
   verifyLink: { color: colors.navy, fontWeight: "700", fontSize: 13 },
   editRow: { gap: spacing(1), paddingBottom: spacing(1.25) },
   editButtonsRow: { flexDirection: "row", justifyContent: "flex-end", gap: spacing(1) },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: spacing(2.5),
-    gap: spacing(1),
-  },
-  modalTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
-  modalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: spacing(1.25),
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modalRowText: { fontSize: 15, color: colors.text },
 });

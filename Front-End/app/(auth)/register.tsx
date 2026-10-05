@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -7,6 +7,7 @@ import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { LanguageSwitcherButton } from "@/components/LanguageSwitcher";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
@@ -63,6 +64,7 @@ export default function RegisterScreen() {
 
   return (
     <ScreenContainer>
+      <LanguageSwitcherButton style={styles.languageSwitcher} />
       <Text style={styles.wordmark}>DISA Travel</Text>
 
       <Card variant="elevated" style={styles.card}>
@@ -133,9 +135,21 @@ export default function RegisterScreen() {
             {agreed ? <Ionicons name="checkmark" size={14} color={colors.primaryText} /> : null}
           </View>
           <Text style={styles.tosText}>
-            {t("auth.agreeToThe")}<Text style={styles.tosLink}>{t("common.termsOfService")}</Text>
+            {t("auth.agreeToThe")}
+            <Text
+              style={styles.tosLink}
+              onPress={() => Linking.openURL("https://disatravel.id.vn/terms")}
+            >
+              {t("common.termsOfService")}
+            </Text>
             {t("auth.and")}
-            <Text style={styles.tosLink}>{t("common.privacyPolicy")}</Text>.
+            <Text
+              style={styles.tosLink}
+              onPress={() => Linking.openURL("https://disatravel.id.vn/privacy")}
+            >
+              {t("common.privacyPolicy")}
+            </Text>
+            .
           </Text>
         </Pressable>
 
@@ -166,6 +180,7 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
+  languageSwitcher: { marginTop: spacing(1.5) },
   wordmark: {
     fontSize: 24,
     fontWeight: "700",

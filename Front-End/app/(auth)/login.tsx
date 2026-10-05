@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,6 +8,7 @@ import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { LanguageSwitcherButton } from "@/components/LanguageSwitcher";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
@@ -41,6 +42,7 @@ export default function LoginScreen() {
 
   return (
     <ScreenContainer>
+      <LanguageSwitcherButton style={styles.languageSwitcher} />
       <View style={styles.header}>
         <Image
           source={
@@ -113,7 +115,17 @@ export default function LoginScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.footerLinks}>
-          {t("common.privacyPolicy")}  ·  {t("common.termsOfService")}  ·  {t("auth.support")}
+          <Text onPress={() => Linking.openURL("https://disatravel.id.vn/privacy")}>
+            {t("common.privacyPolicy")}
+          </Text>
+          {"  ·  "}
+          <Text onPress={() => Linking.openURL("https://disatravel.id.vn/terms")}>
+            {t("common.termsOfService")}
+          </Text>
+          {"  ·  "}
+          <Text onPress={() => Linking.openURL("mailto:disatravel.support@gmail.com")}>
+            {t("auth.support")}
+          </Text>
         </Text>
         <Text style={styles.copyright}>{t("auth.copyright")}</Text>
       </View>
@@ -122,7 +134,8 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { alignItems: "center", gap: spacing(1), marginTop: spacing(4) },
+  languageSwitcher: { marginTop: spacing(1.5) },
+  header: { alignItems: "center", gap: spacing(1), marginTop: spacing(2) },
   // Matches brand/logo-horizontal.png's real aspect ratio (1200×180).
   logoImage: { height: 34, aspectRatio: 1200 / 180, marginBottom: spacing(3) },
   title: { fontSize: 26, fontWeight: "800", color: colors.navy, letterSpacing: -0.3 },

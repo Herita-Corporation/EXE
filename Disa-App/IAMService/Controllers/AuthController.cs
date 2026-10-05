@@ -101,9 +101,11 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
+        // The field is labeled "username or email" on the frontend — the
+        // backend must accept either, not just an exact username match.
         var user = await _context.Users
             .Include(x => x.Roles)
-            .FirstOrDefaultAsync(x => x.Username == request.Username);
+            .FirstOrDefaultAsync(x => x.Username == request.Username || x.Email == request.Username);
 
         if (user == null)
             return Unauthorized("Sai tên đăng nhập hoặc mật khẩu");

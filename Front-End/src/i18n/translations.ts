@@ -36,7 +36,6 @@ export const en = {
   },
   account: {
     myAccount: "My Account",
-    premiumMember: "PREMIUM MEMBER",
     trips: "Trips",
     points: "Points",
     level: "Level",
@@ -440,7 +439,6 @@ export const vi: Translations = {
   },
   account: {
     myAccount: "Tài khoản của tôi",
-    premiumMember: "THÀNH VIÊN CAO CẤP",
     trips: "Chuyến đi",
     points: "Điểm",
     level: "Cấp độ",

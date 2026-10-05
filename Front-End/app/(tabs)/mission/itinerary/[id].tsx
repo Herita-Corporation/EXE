@@ -138,9 +138,16 @@ export default function ItineraryDetailScreen() {
 
   // Flattened, in-order list of geocoded activities (fixed anchors only —
   // see AI-Itinerary's itinerary_orchestrator.py) across every day — the
-  // sequence GPS navigation walks through.
+  // sequence GPS navigation walks through. Transportation legs are excluded
+  // even if they carry coordinates (e.g. from an itinerary cached before the
+  // backend stopped geocoding them) — a transportation activity's name is a
+  // movement description, not a place, so its coordinates point nowhere
+  // reliable and it's not something you "arrive at".
   const waypoints = useMemo(
-    () => data?.days.flatMap((day) => day.activities).filter((a) => a.coordinates) ?? [],
+    () =>
+      data?.days
+        .flatMap((day) => day.activities)
+        .filter((a) => a.coordinates && a.type !== "transportation") ?? [],
     [data]
   );
 
@@ -306,6 +313,37 @@ export default function ItineraryDetailScreen() {
     }
   }
 
+  // Shared by both the immediate check (right after pressing "Start") and
+  // every subsequent watchPositionAsync update — checks the device's
+  // current distance to whatever waypoint is current (by ref, so it always
+  // sees the latest index even from a stale watcher closure), and if within
+  // ARRIVAL_RADIUS_METERS marks that waypoint done and opens Maps for the
+  // next one.
+  function checkArrival(pos: { latitude: number; longitude: number }) {
+    const current = waypoints[waypointIndexRef.current];
+    if (!current?.coordinates) return;
+    const dist = distanceMeters(
+      { lat: pos.latitude, lng: pos.longitude },
+      current.coordinates
+    );
+    if (dist > ARRIVAL_RADIUS_METERS) return;
+
+    const nextIndex = waypointIndexRef.current + 1;
+    waypointIndexRef.current = nextIndex;
+    setWaypointIndex(nextIndex);
+    if (user) setItineraryWaypointIndex(user.id, id, nextIndex).catch(() => {});
+
+    const next = waypoints[nextIndex];
+    if (next) {
+      showToast(`Đã đến ${current.name} — đang chuyển hướng tới điểm tiếp theo.`, "success");
+      openMapsFor(next);
+    } else {
+      showToast("Đã hoàn thành toàn bộ lộ trình!", "success");
+      watchSubRef.current?.remove();
+      watchSubRef.current = null;
+    }
+  }
+
   // Opens the phone's map app for the current waypoint and (re)starts GPS
   // watching — called both the first time the user starts the itinerary and
   // every time they tap the button again afterwards (resume after closing
@@ -325,33 +363,19 @@ export default function ItineraryDetailScreen() {
     const target = waypoints[waypointIndexRef.current];
     if (target) openMapsFor(target);
 
+    // Check immediately with the device's last-known/current fix instead of
+    // waiting for watchPositionAsync's next update — if the user is already
+    // standing at the first waypoint when they press "Start", this catches
+    // it right away rather than only on the next 20m/10s movement tick.
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      checkArrival(pos.coords);
+    } catch {}
+
     if (watchSubRef.current) return; // already watching
     watchSubRef.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.Balanced, timeInterval: 10000, distanceInterval: 20 },
-      (pos) => {
-        const current = waypoints[waypointIndexRef.current];
-        if (!current?.coordinates) return;
-        const dist = distanceMeters(
-          { lat: pos.coords.latitude, lng: pos.coords.longitude },
-          current.coordinates
-        );
-        if (dist > ARRIVAL_RADIUS_METERS) return;
-
-        const nextIndex = waypointIndexRef.current + 1;
-        waypointIndexRef.current = nextIndex;
-        setWaypointIndex(nextIndex);
-        if (user) setItineraryWaypointIndex(user.id, id, nextIndex).catch(() => {});
-
-        const next = waypoints[nextIndex];
-        if (next) {
-          showToast(`Đã đến ${current.name} — đang chuyển hướng tới điểm tiếp theo.`, "success");
-          openMapsFor(next);
-        } else {
-          showToast("Đã hoàn thành toàn bộ lộ trình!", "success");
-          watchSubRef.current?.remove();
-          watchSubRef.current = null;
-        }
-      }
+      { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 15 },
+      (pos) => checkArrival(pos.coords)
     );
   }
 

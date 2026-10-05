@@ -38,6 +38,7 @@ from app.integrations.openai_client import OpenAIClient
 from app.integrations.osm_client import OSMClient
 from app.planners.itinerary_builder import ItineraryBuilder, compute_total_cost
 from app.schemas.itinerary import (
+    ActivityType,
     BudgetBreakdown,
     DayPlan,
     GenerationContext,
@@ -248,19 +249,28 @@ class ItineraryOrchestrator:
 
     async def _geocode_fixed_activities(self, day_plans, cities) -> None:
         """
-        Attach GPS coordinates to fixed-anchor activities (hotel,
-        transportation, attraction, landmark, museum) — the ones that make
-        sense as map-navigation waypoints. Flexible slots (meals/coffee/
-        shopping) are skipped to keep the number of Nominatim calls (rate
-        limited to 1/sec, see osm_client.py) from adding too much latency
-        on top of the GPT call. Best-effort: a lookup miss just leaves
-        coordinates=None, it never fails the whole generation.
+        Attach GPS coordinates to fixed-anchor activities (hotel, attraction,
+        landmark, museum) — the ones that make sense as map-navigation
+        waypoints. Flexible slots (meals/coffee/shopping) are skipped to keep
+        the number of Nominatim calls (rate limited to 1/sec, see
+        osm_client.py) from adding too much latency on top of the GPT call.
+        Best-effort: a lookup miss just leaves coordinates=None, it never
+        fails the whole generation.
+
+        TRANSPORTATION is also skipped even though it's a FIXED-slot type —
+        its `name` is a movement description ("Di chuyển từ sân bay về
+        trung tâm"), not a place, so geocoding it against Nominatim either
+        misses outright or free-text-matches something unrelated. Treating
+        that as a navigation waypoint sent GPS navigation to the wrong
+        location.
         """
         fallback_city = cities[0] if cities else ""
         for day in day_plans:
             city = day.city or fallback_city
             for activity in day.activities:
                 if activity.slot_type != SlotType.FIXED:
+                    continue
+                if activity.type == ActivityType.TRANSPORTATION:
                     continue
                 if not activity.name:
                     continue
@@ -280,8 +290,6 @@ class ItineraryOrchestrator:
         start (day 1) / end (every day) at the hotel. Warn-only — GPT is
         no longer programmatically corrected, just monitored.
         """
-        from app.schemas.itinerary import ActivityType
-
         for i, day in enumerate(day_plans):
             if not day.activities:
                 continue

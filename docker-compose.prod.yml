@@ -190,6 +190,7 @@ services:
       GooglePlay__PackageName: com.disa.travel.frontend
       GooglePlay__ServiceAccountKeyPath: "/app/secrets/google-play-key.json"
       GooglePlay__PubSubServiceAccountEmail: "${GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL:-}"
+      GooglePlay__RtdnAudience: "https://iam.${DOMAIN}/api/premium/rtdn-webhook"
     volumes:
       - iam_uploads:/app/Uploads
       - ./secrets/google-play-key.json:/app/secrets/google-play-key.json:ro

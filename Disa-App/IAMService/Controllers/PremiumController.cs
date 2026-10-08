@@ -125,10 +125,19 @@ public class PremiumController : ControllerBase
         if (!authHeader.StartsWith("Bearer ", StringComparison.Ordinal))
             return Unauthorized();
 
+        // Audience is checked too when configured — the Pub/Sub push subscription
+        // is set up with this exact URL as its OIDC audience, so a token minted
+        // for some other endpoint can't be replayed here.
+        var audience = _configuration["GooglePlay:RtdnAudience"];
+        var settings = new GoogleJsonWebSignature.ValidationSettings
+        {
+            Audience = string.IsNullOrWhiteSpace(audience) ? null : new[] { audience },
+        };
+
         GoogleJsonWebSignature.Payload payload;
         try
         {
-            payload = await GoogleJsonWebSignature.ValidateAsync(authHeader["Bearer ".Length..]);
+            payload = await GoogleJsonWebSignature.ValidateAsync(authHeader["Bearer ".Length..], settings);
         }
         catch (Exception ex)
         {

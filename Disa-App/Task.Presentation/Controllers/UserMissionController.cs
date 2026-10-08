@@ -54,12 +54,40 @@ public class UserMissionController : ControllerBase
         return Ok(result);
     }
 
+    // User deletes one mission from the Missions screen.
+    [HttpDelete("{id}")]
+    public async System.Threading.Tasks.Task<IActionResult> Delete(Guid id)
+    {
+        try
+        {
+            await _service.DeleteMissionAsync(id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Completed missions are kept.
+            return BadRequest(new { Message = ex.Message });
+        }
+
+        return Ok(new { Success = true });
+    }
+
     // Called when an itinerary is deleted — removes the still-active
     // missions assigned under it (completed ones are kept).
     [HttpDelete("trip/{tripId}")]
     public async System.Threading.Tasks.Task<IActionResult> DeleteForTrip(Guid tripId)
     {
         await _service.DeleteMissionsForTripAsync(tripId);
+
+        return Ok(new { Success = true });
+    }
+
+    // Called after a new itinerary is created — removes the still-active
+    // missions of itineraries that no longer exist (trip not in KeepTripIds).
+    // Completed ones are kept, like DeleteForTrip.
+    [HttpPost("user/{userId}/prune")]
+    public async System.Threading.Tasks.Task<IActionResult> Prune(Guid userId, PruneMissionsRequest request)
+    {
+        await _service.PruneMissionsAsync(userId, request.KeepTripIds);
 
         return Ok(new { Success = true });
     }

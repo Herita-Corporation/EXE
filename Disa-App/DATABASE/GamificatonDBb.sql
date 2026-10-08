@@ -73,10 +73,21 @@ BEGIN
 
         CompletedAt DATETIME2,
 
+        TargetLatitude FLOAT NULL,
+
+        TargetLongitude FLOAT NULL,
+
         CONSTRAINT FK_UserMission_Template
             FOREIGN KEY(TemplateId)
             REFERENCES MissionTemplates(Id)
     );
+END
+-- Upgrade for a TaskDb created before missions stored their place's GPS —
+-- submission is rejected when the user is too far from (TargetLatitude,
+-- TargetLongitude); see MissionSubmissionService.
+IF COL_LENGTH(N'dbo.UserMissions', 'TargetLatitude') IS NULL
+BEGIN
+    ALTER TABLE UserMissions ADD TargetLatitude FLOAT NULL, TargetLongitude FLOAT NULL;
 END
 IF OBJECT_ID(N'dbo.MissionSubmissions', N'U') IS NULL
 BEGIN

@@ -43,6 +43,9 @@ export interface UserMission {
   evidenceUrl?: string | null;
   /** Matches Task.Domain.Enums.EvidenceType (1 = Photo, 2 = Video). */
   evidenceType?: number | null;
+  /** GPS of the mission's place — submissions too far from it are rejected. */
+  targetLatitude?: number | null;
+  targetLongitude?: number | null;
 }
 
 export interface AssignMissionRequest {
@@ -52,6 +55,9 @@ export interface AssignMissionRequest {
   templateId: string;
   /** Overrides the mission's title (e.g. "Chụp ảnh tại Cầu Rồng") — falls back to the template's own name when omitted. */
   title?: string;
+  /** GPS of the mission's place — the server checks submissions against it. */
+  targetLatitude?: number | null;
+  targetLongitude?: number | null;
 }
 
 export interface AssignMissionResponse {

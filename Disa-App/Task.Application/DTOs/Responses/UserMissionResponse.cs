@@ -37,4 +37,9 @@ public class UserMissionResponse
 
     /// <summary>Matches Task.Domain.Enums.EvidenceType (1 = Photo, 2 = Video).</summary>
     public EvidenceType? EvidenceType { get; set; }
+
+    /// <summary>GPS of the mission's place — null when it couldn't be located.</summary>
+    public double? TargetLatitude { get; set; }
+
+    public double? TargetLongitude { get; set; }
 }

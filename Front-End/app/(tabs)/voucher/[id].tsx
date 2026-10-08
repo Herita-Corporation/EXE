@@ -57,7 +57,7 @@ export default function VoucherDetailScreen() {
       <View style={styles.hero}>
         <Image source={{ uri: voucher.imageUrl }} style={styles.heroImage} contentFit="cover" />
         <View style={[styles.heroTopRow, { top: insets.top + spacing(1.5) }]}>
-          <IconButton icon="arrow-back" variant="glass" onPress={() => router.back()} />
+          <IconButton icon="arrow-back" variant="solid" onPress={() => router.back()} />
           <IconButton
             icon="share-outline"
             variant="glass"

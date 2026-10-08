@@ -47,11 +47,27 @@ export function getUserMission(id: string) {
   return request<UserMission>("task", `/api/user-missions/${id}`);
 }
 
+// User deletes one not-yet-completed mission (the server refuses Completed ones).
+export function deleteMission(id: string) {
+  return request<{ success: boolean }>("task", `/api/user-missions/${id}`, {
+    method: "DELETE",
+  });
+}
+
 // Called when an itinerary is deleted — removes the still-active missions
 // assigned under it (completed ones, and their earned rewards, are kept).
 export function deleteMissionsForTrip(tripId: string) {
   return request<{ success: boolean }>("task", `/api/user-missions/trip/${tripId}`, {
     method: "DELETE",
+  });
+}
+
+// Called after a new itinerary is created — removes the still-active missions
+// of every itinerary not in keepTripIds (completed ones are kept).
+export function pruneMissions(userId: string, keepTripIds: string[]) {
+  return request<{ success: boolean }>("task", `/api/user-missions/user/${userId}/prune`, {
+    method: "POST",
+    data: { keepTripIds },
   });
 }
 

@@ -60,6 +60,8 @@ function userFromToken(accessToken: string, knownUsername = ""): AuthUser | null
     isEmailVerified: false,
     isPhoneVerified: false,
     avatarUrl: null,
+    isPremium: false,
+    premiumExpiresAt: null,
     roles,
   };
 }
@@ -72,6 +74,8 @@ function meFields(me: MeResponse) {
     isEmailVerified: me.isEmailVerified,
     isPhoneVerified: me.isPhoneVerified,
     avatarUrl: me.avatarUrl,
+    isPremium: me.isPremium,
+    premiumExpiresAt: me.premiumExpiresAt,
     roles: me.roles,
   };
 }

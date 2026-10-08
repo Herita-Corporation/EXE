@@ -187,8 +187,12 @@ services:
       Smtp__User: "disatravel.support@gmail.com"
       Smtp__Password: "${SMTP_PASSWORD:-}"
       Smtp__FromAddress: "disatravel.support@gmail.com"
+      GooglePlay__PackageName: com.disa.travel.frontend
+      GooglePlay__ServiceAccountKeyPath: "/app/secrets/google-play-key.json"
+      GooglePlay__PubSubServiceAccountEmail: "${GOOGLE_PUBSUB_SERVICE_ACCOUNT_EMAIL:-}"
     volumes:
       - iam_uploads:/app/Uploads
+      - ./secrets/google-play-key.json:/app/secrets/google-play-key.json:ro
     depends_on:
       sqlserver:
         condition: service_healthy

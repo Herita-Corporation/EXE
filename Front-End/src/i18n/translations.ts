@@ -36,6 +36,8 @@ export const en = {
   },
   account: {
     myAccount: "My Account",
+    premiumMember: "PREMIUM MEMBER",
+    upgradeToPremium: "Upgrade to Premium",
     trips: "Trips",
     points: "Points",
     level: "Level",
@@ -409,6 +411,16 @@ export const en = {
     verifyFailed: "Verification failed.",
     resendFailed: "Could not resend the code.",
   },
+  premium: {
+    title: "DISA Premium",
+    description: "Unlock Premium perks — early access to special missions and vouchers.",
+    upgradeButton: "Upgrade now",
+    alreadyPremium: "You're already a Premium member.",
+    upgradeSuccess: "Upgraded to Premium!",
+    verifyFailed: "Could not verify the purchase. Please try again.",
+    purchaseFailed: "Purchase failed.",
+    loadingPlan: "Loading plan...",
+  },
 };
 
 export type Translations = typeof en;
@@ -446,6 +458,8 @@ export const vi: Translations = {
   },
   account: {
     myAccount: "Tài khoản của tôi",
+    premiumMember: "THÀNH VIÊN CAO CẤP",
+    upgradeToPremium: "Nâng cấp Premium",
     trips: "Chuyến đi",
     points: "Điểm",
     level: "Cấp độ",
@@ -818,5 +832,15 @@ export const vi: Translations = {
     havingTrouble: "Gặp sự cố? Liên hệ Hỗ trợ DISA",
     verifyFailed: "Xác thực thất bại.",
     resendFailed: "Không thể gửi lại mã.",
+  },
+  premium: {
+    title: "DISA Premium",
+    description: "Mở khóa quyền lợi Premium — ưu tiên truy cập nhiệm vụ và voucher đặc biệt.",
+    upgradeButton: "Nâng cấp ngay",
+    alreadyPremium: "Bạn đã là thành viên Premium.",
+    upgradeSuccess: "Nâng cấp Premium thành công!",
+    verifyFailed: "Không xác thực được giao dịch. Vui lòng thử lại.",
+    purchaseFailed: "Giao dịch thất bại.",
+    loadingPlan: "Đang tải gói...",
   },
 };

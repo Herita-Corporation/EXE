@@ -1,2 +1,6 @@
 # Local secrets — see .env.example for the template.
 .env
+
+# Google Play service-account key (used by iam-service's GooglePlayBillingService) —
+# placed by hand on the server, never committed. See docker-compose.prod.yml.
+/secrets/

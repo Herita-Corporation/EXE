@@ -112,6 +112,7 @@ namespace IAMService
             builder.Services.AddScoped<IFileStorageService, FileStorageService>();
             builder.Services.AddScoped<IPushNotificationService, ExpoPushNotificationService>();
             builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+            builder.Services.AddScoped<IGooglePlayBillingService, GooglePlayBillingService>();
 
             var app = builder.Build();
 

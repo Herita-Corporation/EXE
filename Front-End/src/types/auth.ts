@@ -31,6 +31,8 @@ export interface MeResponse {
   isEmailVerified: boolean;
   isPhoneVerified: boolean;
   avatarUrl: string | null;
+  isPremium: boolean;
+  premiumExpiresAt: string | null;
   roles: string[];
 }
 
@@ -106,6 +108,8 @@ export interface AuthUser {
   isEmailVerified: boolean;
   isPhoneVerified: boolean;
   avatarUrl: string | null;
+  isPremium: boolean;
+  premiumExpiresAt: string | null;
   roles: string[];
 }
 

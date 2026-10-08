@@ -25,6 +25,17 @@ public partial class User
 
     public bool IsActive { get; set; }
 
+    public bool IsPremium { get; set; }
+
+    public string? PremiumProductId { get; set; }
+
+    public DateTime? PremiumExpiresAt { get; set; }
+
+    // Tracks which Google Play subscription purchase currently grants this
+    // user Premium — the RTDN webhook only gives us a purchaseToken, so we
+    // need this to look up which user it belongs to.
+    public string? PremiumPurchaseToken { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

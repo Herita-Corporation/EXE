@@ -180,6 +180,8 @@ public class AuthController : ControllerBase
             IsEmailVerified = user.IsEmailVerified,
             IsPhoneVerified = user.IsPhoneVerified,
             AvatarUrl = user.AvatarUrl,
+            IsPremium = user.IsPremium,
+            PremiumExpiresAt = user.PremiumExpiresAt,
 
             Roles = User.Claims
                 .Where(x => x.Type == ClaimTypes.Role)

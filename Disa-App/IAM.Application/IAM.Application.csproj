@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Apis.AndroidPublisher.v3" Version="1.77.0.4284" />
     <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.3.11" />
     <PackageReference Include="MailKit" Version="4.18.1" />
   </ItemGroup>

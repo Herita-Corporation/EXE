@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Avatar } from "@/components/Avatar";
+import { Badge } from "@/components/Badge";
 import { Card } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -121,6 +122,13 @@ export default function AccountScreen() {
         </View>
         <Text style={styles.name}>{displayName}</Text>
         {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
+        {user?.isPremium ? (
+          <Badge label={t("account.premiumMember")} tone="gold" />
+        ) : (
+          <Pressable onPress={() => router.push("/(tabs)/account/premium")}>
+            <Badge label={t("account.upgradeToPremium")} tone="outline" />
+          </Pressable>
+        )}
         </View>
 
       <View style={styles.statsRow}>

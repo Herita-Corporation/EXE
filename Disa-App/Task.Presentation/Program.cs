@@ -5,6 +5,7 @@ using System.Text;
 using Task.Application.Interfaces.Services;
 using Task.Application.Services;
 using Task.Infrastructure;
+using Task.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +43,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 var app = builder.Build();
+
+// Demo voucher catalog ships with the service — inserted once if missing.
+// Never blocks startup (e.g. the database isn't reachable yet).
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<TaskDbContext>();
+        var seeded = await DemoVoucherSeeder.SeedAsync(db);
+        if (seeded > 0) app.Logger.LogInformation("Seeded {Count} demo voucher(s).", seeded);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Demo voucher seeding skipped.");
+    }
+}
 
 if (app.Environment.IsDevelopment())
 {

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/Button";
 import { translateText } from "@/api/endpoints/translate";
@@ -16,6 +17,7 @@ import { colors, radius, spacing } from "@/theme/colors";
 export default function AiGuideTranslateScreen() {
   const { languageCode } = useLocalSearchParams<{ languageCode?: string }>();
   const { t } = useLocale();
+  const insets = useSafeAreaInsets();
   const language =
     MINORITY_LANGUAGES.find((l) => l.code === languageCode) ?? MINORITY_LANGUAGES[0];
 
@@ -41,13 +43,13 @@ export default function AiGuideTranslateScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, { paddingTop: insets.top + spacing(1) }]}>
         <IconButton icon="arrow-back" onPress={() => router.back()} />
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={styles.title}>{t("aiGuide.translateTo")}</Text>
           <Text style={styles.subtitle}>{language.name}</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -95,7 +97,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing(2),
-    paddingTop: spacing(5),
     paddingBottom: spacing(1),
   },
   title: { fontSize: 12, fontWeight: "700", color: colors.textMuted, letterSpacing: 0.5 },

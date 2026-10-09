@@ -74,5 +74,5 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 10,
   },
-  pillText: { fontSize: 11.5, fontWeight: "800" },
+  pillText: { fontSize: 12, fontWeight: "800" },
 });

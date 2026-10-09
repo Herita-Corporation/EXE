@@ -5,37 +5,45 @@ import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
+import { BackHeader } from "@/components/BackHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { getItinerary } from "@/api/endpoints/itinerary";
+import { listUserMissions } from "@/api/endpoints/missions";
 import { getItineraryHistory } from "@/utils/itineraryHistory";
 import { getCollectionCovers, setCollectionCover } from "@/utils/collectionCovers";
-import { getDefaultCover, getMockCollectionMedia } from "@/mocks/collection";
+import { memoriesForTrip } from "@/utils/memories";
+import { getRegionImage } from "@/data/regionImages";
 import { useSmartBack } from "@/utils/backNavigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import { useLocale } from "@/i18n/LocaleContext";
 import type { ItineraryResponse } from "@/types/itinerary";
+import { MISSION_TYPE_PHOTO, type UserMission } from "@/types/missions";
 import { colors, radius, spacing } from "@/theme/colors";
 
 export default function MissionCollectionScreen() {
   const goBack = useSmartBack();
   const { showToast } = useToast();
   const { user } = useAuth();
+  const { t } = useLocale();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ItineraryResponse[]>([]);
+  const [missions, setMissions] = useState<UserMission[]>([]);
   const [covers, setCovers] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [history, savedCovers] = await Promise.all([
+    const [history, savedCovers, missionList] = await Promise.all([
       getItineraryHistory(user.id),
       getCollectionCovers(user.id),
+      listUserMissions(user.id).catch(() => [] as UserMission[]),
     ]);
     const results = await Promise.all(
       history.map((h) => getItinerary(h.id).catch(() => null))
     );
     setItems(results.filter((r): r is ItineraryResponse => r !== null));
+    setMissions(missionList);
     setCovers(savedCovers);
     setLoading(false);
   }, [user]);
@@ -50,7 +58,7 @@ export default function MissionCollectionScreen() {
     if (!user) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      showToast("Thiếu quyền — cần quyền truy cập thư viện ảnh.", "error");
+      showToast(t("memories.library"), "error");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -66,27 +74,26 @@ export default function MissionCollectionScreen() {
 
   return (
     <ScreenContainer backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={goBack} />
-        <Text style={styles.title}>My Collection</Text>
-        <View style={{ width: 40 }} />
-      </View>
-      <Text style={styles.subtitle}>
-        Photos and videos captured while completing missions on each trip.
-      </Text>
+      <BackHeader title={t("memories.title")} onBack={goBack} />
+      <Text style={styles.subtitle}>{t("memories.subtitle")}</Text>
 
       {loading ? (
         <ActivityIndicator color={colors.navy} />
       ) : items.length === 0 ? (
         <EmptyState
-          title="Chưa có lịch trình nào"
-          description="Tạo lịch trình để bắt đầu lưu giữ kỷ niệm chuyến đi."
+          icon="images-outline"
+          title={t("memories.emptyTitle")}
+          description={t("memories.emptyDescription")}
         />
       ) : (
         <View style={styles.grid}>
           {items.map((item) => {
-            const mediaCount = getMockCollectionMedia(item).length;
-            const cover = covers[item.itinerary_id] ?? getDefaultCover(item.itinerary_id);
+            const media = memoriesForTrip(missions, item.itinerary_id);
+            // Cover priority: the user's own pick → their first mission
+            // photo on this trip → a photo of the destination.
+            const firstPhoto = media.find((m) => m.evidenceType === MISSION_TYPE_PHOTO)?.evidenceUrl;
+            const custom = covers[item.itinerary_id] ?? firstPhoto;
+            const cover = custom ? { uri: custom } : getRegionImage(item.trip_summary.cities[0]);
             return (
               <Pressable
                 key={item.itinerary_id}
@@ -94,7 +101,7 @@ export default function MissionCollectionScreen() {
                 onPress={() => router.push(`/(tabs)/mission/collection/${item.itinerary_id}`)}
               >
                 <View style={styles.coverWrap}>
-                  <Image source={{ uri: cover }} style={styles.cover} contentFit="cover" />
+                  <Image source={cover} style={styles.cover} contentFit="cover" />
                   <Pressable
                     style={styles.editButton}
                     onPress={() => pickCover(item.itinerary_id)}
@@ -104,9 +111,9 @@ export default function MissionCollectionScreen() {
                   </Pressable>
                 </View>
                 <Text style={styles.tileTitle} numberOfLines={1}>
-                  {item.trip_summary.cities.join(" & ")} Escape
+                  {item.trip_summary.cities.join(" → ")}
                 </Text>
-                <Text style={styles.tileMeta}>{mediaCount} memories</Text>
+                <Text style={styles.tileMeta}>{t("memories.count", { count: media.length })}</Text>
               </Pressable>
             );
           })}
@@ -117,8 +124,6 @@ export default function MissionCollectionScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 18, fontWeight: "700", color: colors.navy },
   subtitle: { color: colors.textMuted, fontSize: 13 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing(1.5) },
   tile: { width: "47%", gap: spacing(0.5) },

@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
+import { remoteImage } from "@/data/regionImages";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { GradientHero } from "@/components/GradientHero";
@@ -12,6 +13,8 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Chip } from "@/components/Chip";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { SkeletonCard } from "@/components/Skeleton";
+import { haptics } from "@/utils/haptics";
 import * as vouchersApi from "@/api/endpoints/vouchers";
 import { ApiError } from "@/api/http";
 import type { PointsBalance, Voucher } from "@/types/vouchers";
@@ -45,11 +48,29 @@ export default function VoucherScreen() {
   const [filter, setFilter] = useState("All Offers");
   const [error, setError] = useState<string | null>(null);
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(() => {
-    vouchersApi.listVouchers().then(setVouchers).catch(() => {});
     if (user) vouchersApi.getPointsBalance(user.id).then(setBalance).catch(() => {});
-  }, [user]);
+    // Only the catalog drives loading/error — a missing balance just shows 0.
+    return vouchersApi
+      .listVouchers()
+      .then((list) => {
+        setVouchers(list);
+        setError(null);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : t("voucher.loadFailed")))
+      .finally(() => setLoading(false));
+  }, [user, t]);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
+
+  const availablePoints = balance?.availablePoints ?? 0;
 
   useFocusEffect(
     useCallback(() => {
@@ -75,6 +96,7 @@ export default function VoucherScreen() {
             try {
               await vouchersApi.redeemVoucher(v.id, user.id);
               load();
+              haptics.success();
               showToast(t("voucher.redeemSuccess"), "success");
             } catch (err) {
               setError(err instanceof ApiError ? err.message : t("voucher.redeemFailed"));
@@ -88,13 +110,18 @@ export default function VoucherScreen() {
   }
 
   return (
-    <ScreenContainer avoidTabBar>
+    <ScreenContainer
+      avoidTabBar
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.navy} />
+      }
+    >
       <ScreenHeader title={t("tabs.voucher")} subtitle={t("voucher.exploreExperiences")} />
 
       <GradientHero style={styles.balanceCard} markStyle={{ opacity: 0.1 }}>
         <Text style={styles.balanceLabel}>{t("voucher.totalVoyagerBalance")}</Text>
         <Text style={styles.balanceValue}>
-          {(balance?.availablePoints ?? 0).toLocaleString()} <Text style={styles.balanceUnit}>{t("voucher.points")}</Text>
+          {availablePoints.toLocaleString()} <Text style={styles.balanceUnit}>{t("voucher.points")}</Text>
         </Text>
         <View style={styles.balanceButtonsRow}>
           <Pressable style={styles.balanceBtn} onPress={() => router.push("/(tabs)/voucher/collection")}>
@@ -132,7 +159,12 @@ export default function VoucherScreen() {
         ))}
       </ScrollView>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
+      ) : filtered.length === 0 && !error ? (
         <EmptyState icon="pricetags-outline" title={t("voucher.noVouchers")} />
       ) : null}
 
@@ -140,7 +172,7 @@ export default function VoucherScreen() {
         <Pressable key={v.id} onPress={() => router.push(`/(tabs)/voucher/${v.id}`)}>
           <Card
             variant="media"
-            imageSource={v.imageUrl}
+            imageSource={remoteImage(v.imageUrl)}
             imageHeight={150}
             overlay={<VoucherCategoryPill category={v.category} />}
           >
@@ -163,6 +195,7 @@ export default function VoucherScreen() {
                 title={t("voucher.redeem")}
                 size="sm"
                 loading={redeemingId === v.id}
+                disabled={v.pointsCost > availablePoints}
                 onPress={() => onRedeem(v)}
               />
             </View>
@@ -200,7 +233,7 @@ const styles = StyleSheet.create({
   filterContent: { alignItems: "center" },
   voucherHead: { flexDirection: "row", alignItems: "center", gap: spacing(1.5) },
   voucherTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
-  voucherDescription: { fontSize: 12.5, lineHeight: 17, color: colors.textMuted },
+  voucherDescription: { fontSize: 13, lineHeight: 17, color: colors.textMuted },
   voucherDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing(0.5) },
   pointsIcon: {
     width: 22,

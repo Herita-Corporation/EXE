@@ -13,14 +13,3 @@ export interface DisaEvent {
   isActive: boolean;
   createdAt: string;
 }
-
-export interface EventFormValues {
-  title: string;
-  description: string;
-  tag: string;
-  city: string;
-  startDate: string; // ISO date string
-  endDate: string; // ISO date string
-  isActive?: boolean;
-  coverImageUri?: string | null; // local file uri from expo-image-picker; only sent when replacing the image
-}

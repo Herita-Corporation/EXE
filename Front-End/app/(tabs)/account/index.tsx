@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,7 +42,6 @@ export default function AccountScreen() {
   );
 
   const displayName = user?.username ?? t("common.voyager");
-  const canAccessAdmin = !!user?.roles?.some((r) => r === "Admin" || r === "Manager");
 
   async function onChangePassword() {
     setPwError(null);
@@ -64,6 +63,13 @@ export default function AccountScreen() {
     }
   }
 
+  function confirmLogout() {
+    Alert.alert(t("extra.logoutConfirmTitle"), t("extra.logoutConfirmMessage"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("account.logout"), style: "destructive", onPress: onLogout },
+    ]);
+  }
+
   async function onLogout() {
     setLoggingOut(true);
     try {
@@ -74,14 +80,10 @@ export default function AccountScreen() {
     }
   }
 
-  function stub(feature: string) {
-    showToast(`${feature}: Tính năng này chưa có backend hỗ trợ.`, "info");
-  }
-
   async function onChangeAvatar() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      showToast(t("admin.missingPermissionMessage"), "error");
+      showToast(t("memories.library"), "error");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -142,8 +144,8 @@ export default function AccountScreen() {
       <Text style={styles.sectionLabel}>{t("account.personalInfo")}</Text>
       <Card style={styles.sectionCard}>
         <SettingsRow
-          icon="person-outline"
-          label={t("account.profileDetails")}
+          icon="lock-closed-outline"
+          label={t("extra.changePassword")}
           onPress={() => setShowProfileDetails((s) => !s)}
           right={
             <Ionicons
@@ -185,19 +187,6 @@ export default function AccountScreen() {
         />
       </Card>
 
-      {canAccessAdmin ? (
-        <>
-          <Text style={styles.sectionLabel}>{t("admin.adminSection")}</Text>
-          <Card style={styles.sectionCard}>
-            <SettingsRow
-              icon="shield-checkmark-outline"
-              label={t("admin.title")}
-              onPress={() => router.push("/(tabs)/admin")}
-            />
-          </Card>
-        </>
-      ) : null}
-
       <Text style={styles.sectionLabel}>{t("account.appSettings")}</Text>
       <Card style={styles.sectionCard}>
         <SettingsRow
@@ -206,7 +195,7 @@ export default function AccountScreen() {
           onPress={() => router.push("/(tabs)/account/settings")}
         />
         <View style={styles.rowDivider} />
-        <SettingsRow icon="help-circle-outline" label={t("account.helpSupport")} onPress={() => stub(t("account.helpSupport"))} />
+        <SettingsRow icon="help-circle-outline" label={t("account.helpSupport")} onPress={() => Linking.openURL("mailto:disatravel.support@gmail.com")} />
       </Card>
 
       <Text style={styles.sectionLabel}>{t("account.dangerZone")}</Text>
@@ -215,7 +204,7 @@ export default function AccountScreen() {
           icon="log-out-outline"
           label={t("account.logout")}
           danger
-          onPress={onLogout}
+          onPress={confirmLogout}
           right={loggingOut ? <ActivityIndicator color={colors.danger} /> : <View />}
         />
       </Card>

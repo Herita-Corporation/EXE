@@ -80,17 +80,16 @@ export default function ForgotPasswordScreen() {
             {devToken ? (
               <View style={styles.devBanner}>
                 <Text style={styles.devBannerText}>
-                  Demo — chưa có dịch vụ email thật. Mã đặt lại của bạn là{" "}
+                  {t("extra.devTokenNotice")}{" "}
                   <Text style={styles.devBannerCode}>{devToken}</Text>
                 </Text>
               </View>
             ) : null}
-            <Button title={t("forgotPassword.continueToReset")} shape="rounded" onPress={onContinue} />
+            <Button title={t("forgotPassword.continueToReset")} onPress={onContinue} />
           </>
         ) : (
           <Button
             title={t("forgotPassword.sendResetLink")}
-            shape="rounded"
             onPress={onSubmit}
             loading={loading}
           />

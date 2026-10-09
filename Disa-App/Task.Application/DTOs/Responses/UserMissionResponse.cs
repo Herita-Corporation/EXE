@@ -6,6 +6,12 @@ public class UserMissionResponse
 {
     public Guid Id { get; set; }
 
+    /// <summary>Itinerary the mission was assigned from — lets the client group evidence per trip.</summary>
+    public Guid TripId { get; set; }
+
+    /// <summary>Itinerary activity the mission belongs to (AI-Itinerary activity_id).</summary>
+    public Guid PlaceId { get; set; }
+
     public string Title { get; set; } = string.Empty;
 
     public MissionStatus Status { get; set; }

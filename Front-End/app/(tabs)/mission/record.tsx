@@ -7,6 +7,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/Button";
 import { IconButton } from "@/components/IconButton";
 import { setPendingCapturedVideo } from "@/utils/pendingCapture";
+import { useLocale } from "@/i18n/LocaleContext";
+import { useToast } from "@/context/ToastContext";
 import { colors, spacing } from "@/theme/colors";
 
 // Real capture flow — backs mission/[id].tsx's evidence submission
@@ -25,6 +27,9 @@ export default function MissionRecordScreen() {
     minSeconds?: string;
   }>();
   const insets = useSafeAreaInsets();
+  const { t } = useLocale();
+  const { showToast } = useToast();
+  const min = minSeconds ? Number(minSeconds) : null;
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [recording, setRecording] = useState(false);
@@ -47,15 +52,15 @@ export default function MissionRecordScreen() {
     return (
       <View style={[styles.root, styles.permissionWrap]}>
         <Ionicons name="videocam-outline" size={40} color="#FFFFFF" />
-        <Text style={styles.permissionText}>Cần quyền camera và micro để quay video minh chứng.</Text>
+        <Text style={styles.permissionText}>{t("capture.videoPermission")}</Text>
         <Button
-          title="Cấp quyền"
+          title={t("capture.grant")}
           onPress={async () => {
             await requestCameraPermission();
             await requestMicPermission();
           }}
         />
-        <Button title="Quay lại" variant="ghost" onPress={() => router.back()} />
+        <Button title={t("capture.back")} variant="ghost" onPress={() => router.back()} />
       </View>
     );
   }
@@ -73,6 +78,12 @@ export default function MissionRecordScreen() {
     try {
       const video = await cameraRef.current?.recordAsync({ maxDuration: MAX_SECONDS });
       if (video?.uri) {
+        // Server rejects evidence shorter than the template's minimum — catch
+        // it here so the user can simply hold the button again.
+        if (min && secondsRef.current < min) {
+          showToast(t("capture.tooShort", { min }), "error");
+          return;
+        }
         setPendingCapturedVideo(video.uri, secondsRef.current);
         router.back();
       }
@@ -90,8 +101,6 @@ export default function MissionRecordScreen() {
     cameraRef.current?.stopRecording();
   }
 
-  const min = minSeconds ? Number(minSeconds) : null;
-
   return (
     <View style={styles.root}>
       <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" mode="video" />
@@ -101,20 +110,27 @@ export default function MissionRecordScreen() {
         <View style={styles.missionPill}>
           <Ionicons name="compass" size={14} color={colors.goldMuted} />
           <Text style={styles.missionPillText} numberOfLines={1}>
-            Mission: {missionTitle ?? "Evidence"}
+            {t("capture.missionPrefix", { title: missionTitle ?? t("capture.evidence") })}
           </Text>
         </View>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <View style={styles.center}>
-        <Text style={styles.timer}>{formatTime(seconds)}</Text>
+        <Text style={styles.timer}>
+          {formatTime(seconds)}
+          <Text style={styles.timerMax}> / {formatTime(MAX_SECONDS)}</Text>
+        </Text>
         <Text style={styles.status}>
-          {recording ? "Đang quay..." : min ? `Giữ để quay (tối thiểu ${min}s)` : "Giữ nút để quay"}
+          {recording
+            ? t("capture.recording", { max: MAX_SECONDS })
+            : min
+              ? t("capture.holdToRecordMin", { min, max: MAX_SECONDS })
+              : t("capture.holdToRecord", { max: MAX_SECONDS })}
         </Text>
       </View>
 
-      <View style={styles.bottomRow}>
+      <View style={[styles.bottomRow, { bottom: insets.bottom + spacing(4) }]}>
         <Pressable
           style={[styles.shutterOuter, recording && styles.shutterOuterActive]}
           onPressIn={onPressIn}
@@ -122,7 +138,7 @@ export default function MissionRecordScreen() {
         >
           <View style={[styles.shutterInner, recording && styles.shutterInnerActive]} />
         </Pressable>
-        <Text style={styles.hint}>Giữ để quay, thả ra để dừng</Text>
+        <Text style={styles.hint}>{t("capture.hint")}</Text>
       </View>
     </View>
   );
@@ -154,10 +170,10 @@ const styles = StyleSheet.create({
   missionPillText: { color: "#FFFFFF", fontSize: 12, fontWeight: "600", flexShrink: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing(1) },
   timer: { fontSize: 40, fontWeight: "800", color: "#FFFFFF" },
+  timerMax: { fontSize: 20, fontWeight: "600", color: "rgba(255,255,255,0.6)" },
   status: { color: "rgba(255,255,255,0.85)", fontSize: 13 },
   bottomRow: {
     position: "absolute",
-    bottom: spacing(4),
     left: 0,
     right: 0,
     alignItems: "center",

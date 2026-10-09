@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useRef, useState } from "react";
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +22,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   async function onSubmit() {
     setError(null);
@@ -69,14 +70,22 @@ export default function LoginScreen() {
           label={t("auth.usernameOrEmail")}
           icon="mail-outline"
           autoCapitalize="none"
+          autoComplete="username"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => passwordRef.current?.focus()}
           value={username}
           onChangeText={setUsername}
           placeholder={t("auth.usernameOrEmailPlaceholder")}
         />
         <Input
           label={t("auth.password")}
+          ref={passwordRef}
           icon="lock-closed-outline"
           secureTextEntry={!showPassword}
+          autoComplete="current-password"
+          returnKeyType="go"
+          onSubmitEditing={onSubmit}
           value={password}
           onChangeText={setPassword}
           placeholder="••••••••"

@@ -15,19 +15,18 @@ import { getUserMission, submitMission } from "@/api/endpoints/missions";
 import { ApiError } from "@/api/http";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { consumePendingCapturedPhoto, consumePendingCapturedVideo } from "@/utils/pendingCapture";
-import { MISSION_STATUS_LABEL, UserMission } from "@/types/missions";
+import {
+  MISSION_STATUS_KEY,
+  MISSION_TYPE_KEY,
+  MISSION_TYPE_PHOTO,
+  UserMission,
+} from "@/types/missions";
+import { getRegionImage } from "@/data/regionImages";
 import { useToast } from "@/context/ToastContext";
+import { useLocale } from "@/i18n/LocaleContext";
+import { formatDate } from "@/utils/date";
+import { haptics } from "@/utils/haptics";
 import { colors, radius, spacing } from "@/theme/colors";
-
-// Mission.Instructions/badge-name/hero-image are all mock/generic below —
-// UserMission has no free-text description/image fields, so per-mission
-// specifics beyond photo/video/location requirements can't be rendered
-// without inventing fake data.
-const GENERIC_INSTRUCTIONS = [
-  "Reach the mission location shown by your AI Guide.",
-  "Capture a photo or short video as evidence (or check in with your location).",
-  "Submit — the mission completes and rewards are credited right away.",
-];
 
 const COMPLETED_STATUS = 2;
 
@@ -50,10 +49,18 @@ function formatDistance(m: number) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
 }
 
+/** Mission titles are "<action> tại <place>" (see itinerary/[id].tsx) — the
+ * place name picks a matching region photo when we have one. */
+function placeFromTitle(title: string) {
+  const match = title.match(/\s(?:tại|at)\s(.+)$/i);
+  return match ? match[1] : title;
+}
+
 export default function MissionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
+  const { t, locale } = useLocale();
   const [mission, setMission] = useState<UserMission | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,13 +91,13 @@ export default function MissionDetailScreen() {
         .catch(
           (err) =>
             !cancelled &&
-            setError(err instanceof ApiError ? err.message : "Không tải được nhiệm vụ.")
+            setError(err instanceof ApiError ? err.message : t("missionDetail.loadFailed"))
         )
         .finally(() => !cancelled && setLoading(false));
       return () => {
         cancelled = true;
       };
-    }, [id])
+    }, [id, t])
   );
 
   // Picks up a photo captured on mission/camera.tsx, if any.
@@ -115,7 +122,7 @@ export default function MissionDetailScreen() {
   function openCamera() {
     router.push({
       pathname: "/(tabs)/mission/camera",
-      params: { missionTitle: mission?.title ?? "Nhiệm vụ" },
+      params: { missionTitle: mission?.title ?? t("missionDetail.fallbackTitle") },
     });
   }
 
@@ -123,7 +130,7 @@ export default function MissionDetailScreen() {
     router.push({
       pathname: "/(tabs)/mission/record",
       params: {
-        missionTitle: mission?.title ?? "Nhiệm vụ",
+        missionTitle: mission?.title ?? t("missionDetail.fallbackTitle"),
         minSeconds: mission?.minVideoSeconds ? String(mission.minVideoSeconds) : undefined,
       },
     });
@@ -132,7 +139,7 @@ export default function MissionDetailScreen() {
   async function pickFromLibrary() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      showToast("Thiếu quyền — cần quyền truy cập thư viện ảnh.", "error");
+      showToast(t("missionDetail.libraryPermission"), "error");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -153,7 +160,7 @@ export default function MissionDetailScreen() {
   async function getCurrentCoords() {
     const perm = await Location.requestForegroundPermissionsAsync();
     if (!perm.granted) {
-      showToast("Thiếu quyền — cần quyền vị trí để xác minh nhiệm vụ.", "error");
+      showToast(t("missionDetail.locationPermission"), "error");
       return null;
     }
     const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -169,12 +176,12 @@ export default function MissionDetailScreen() {
       if (!here || !target) return;
       const d = distanceMeters(here, target);
       if (d <= MAX_DISTANCE_METERS) {
-        showToast("Vị trí hợp lệ — bạn đang ở địa điểm nhiệm vụ.", "success");
+        showToast(t("missionDetail.locationOk"), "success");
       } else {
-        showToast(`Vị trí không hợp lệ — bạn đang cách địa điểm ${formatDistance(d)}.`, "error");
+        showToast(t("missionDetail.locationFar", { distance: formatDistance(d) }), "error");
       }
     } catch {
-      showToast("Không lấy được vị trí hiện tại.", "error");
+      showToast(t("missionDetail.locationFailed"), "error");
     } finally {
       setLocating(false);
     }
@@ -191,15 +198,12 @@ export default function MissionDetailScreen() {
       } catch {}
       if (target) {
         if (!here) {
-          showToast("Cần vị trí hiện tại để xác minh nhiệm vụ.", "error");
+          showToast(t("missionDetail.needLocation"), "error");
           return;
         }
         const d = distanceMeters(here, target);
         if (d > MAX_DISTANCE_METERS) {
-          showToast(
-            `Vị trí không hợp lệ — bạn đang cách địa điểm ${formatDistance(d)}. Nhiệm vụ chưa hoàn thành.`,
-            "error"
-          );
+          showToast(t("missionDetail.locationFarSubmit", { distance: formatDistance(d) }), "error");
           return;
         }
       }
@@ -211,10 +215,14 @@ export default function MissionDetailScreen() {
         longitude: here?.lng,
         takenAt: new Date().toISOString(),
       });
-      showToast(`Hoàn thành nhiệm vụ! +${mission.rewardXP} XP · +${mission.rewardCoins} Coin`, "success");
+      haptics.success();
+      showToast(
+        t("missionDetail.completedToast", { xp: mission.rewardXP, coins: mission.rewardCoins }),
+        "success"
+      );
       router.back();
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Không thể nộp minh chứng.", "error");
+      showToast(err instanceof ApiError ? err.message : t("missionDetail.submitFailed"), "error");
     } finally {
       setSubmitting(false);
     }
@@ -233,19 +241,25 @@ export default function MissionDetailScreen() {
     return (
       <ScreenContainer backgroundColor={colors.surface}>
         <IconButton icon="arrow-back" onPress={() => router.back()} />
-        <ErrorBanner message={error ?? "Không tìm thấy nhiệm vụ."} />
+        <ErrorBanner message={error ?? t("missionDetail.notFound")} />
       </ScreenContainer>
     );
   }
 
+  const completed = mission.status === COMPLETED_STATUS;
+  // The submitted photo is the best hero once there is one; otherwise a
+  // photo of the mission's place (or the generic region fallback).
+  const heroSource =
+    mission.evidenceUrl && mission.evidenceType === MISSION_TYPE_PHOTO
+      ? { uri: mission.evidenceUrl }
+      : getRegionImage(placeFromTitle(mission.title));
+  const typeKey = MISSION_TYPE_KEY[mission.type];
+  const statusKey = MISSION_STATUS_KEY[mission.status];
+
   return (
     <ScreenContainer scroll noPadding backgroundColor={colors.surface}>
       <View style={styles.hero}>
-        <Image
-          source={{ uri: `https://picsum.photos/seed/disa-mission-${mission.id}/900/500` }}
-          style={styles.heroImage}
-          contentFit="cover"
-        />
+        <Image source={heroSource} style={styles.heroImage} contentFit="cover" />
         <View style={[styles.heroOverlay, { top: insets.top + spacing(1.5) }]}>
           <IconButton icon="arrow-back" variant="solid" onPress={() => router.back()} />
         </View>
@@ -253,70 +267,83 @@ export default function MissionDetailScreen() {
 
       <View style={styles.body}>
         <View style={styles.badgeRow}>
-          <Badge label="Medium Difficulty" tone="primary" />
-          <Badge label={`${mission.rewardXP + mission.rewardCoins} pts`} tone="gold" />
+          {typeKey ? <Badge label={t(typeKey)} tone="primary" /> : null}
+          <Badge label={`${mission.rewardXP + mission.rewardCoins} ${t("mission.pts")}`} tone="gold" />
         </View>
 
         <Text style={styles.title}>{mission.title}</Text>
-        <Badge label={MISSION_STATUS_LABEL[mission.status] ?? "—"} tone="outline" />
+        {completed ? (
+          <Text style={styles.completedDate}>
+            {t("missionDetail.completedOn", { date: formatDate(mission.completedAt, locale) })}
+          </Text>
+        ) : null}
 
         <Card style={styles.instructionsCard}>
           <View style={styles.instructionsHeaderRow}>
             <Ionicons name="information-circle-outline" size={18} color={colors.navy} />
-            <Text style={styles.instructionsTitle}>Mission Instructions</Text>
+            <Text style={styles.instructionsTitle}>{t("missionDetail.instructionsTitle")}</Text>
           </View>
-          {GENERIC_INSTRUCTIONS.map((step, idx) => (
-            <View key={idx} style={styles.instructionRow}>
-              <View style={styles.instructionNumber}>
-                <Text style={styles.instructionNumberText}>{idx + 1}</Text>
+          {(["missionDetail.step1", "missionDetail.step2", "missionDetail.step3"] as const).map(
+            (step, idx) => (
+              <View key={step} style={styles.instructionRow}>
+                <View style={styles.instructionNumber}>
+                  <Text style={styles.instructionNumberText}>{idx + 1}</Text>
+                </View>
+                <Text style={styles.instructionText}>{t(step)}</Text>
               </View>
-              <Text style={styles.instructionText}>{step}</Text>
-            </View>
-          ))}
+            )
+          )}
         </Card>
 
         <View style={styles.rewardRow}>
           <Card style={styles.rewardCard}>
-            <Ionicons name="medal-outline" size={20} color={colors.gold} />
-            <Text style={styles.rewardLabel}>BADGE EARNED</Text>
-            <Text style={styles.rewardValue}>Explorer</Text>
+            <Ionicons name="flag-outline" size={20} color={colors.navy} />
+            <Text style={styles.rewardLabel}>{t("missionDetail.statusTitle")}</Text>
+            <Text style={styles.rewardValue}>{statusKey ? t(statusKey) : "—"}</Text>
           </Card>
           <Card style={styles.rewardCard}>
-            <Ionicons name="gift-outline" size={20} color={colors.navy} />
-            <Text style={styles.rewardLabel}>BONUS REWARD</Text>
+            <Ionicons name="gift-outline" size={20} color={colors.gold} />
+            <Text style={styles.rewardLabel}>{t("missionDetail.rewardTitle")}</Text>
             <Text style={styles.rewardValue}>
               +{mission.rewardXP} XP · +{mission.rewardCoins} Coin
             </Text>
           </Card>
         </View>
 
-        {mission.status !== COMPLETED_STATUS ? (
+        {!completed ? (
           <Card style={styles.submitCard}>
-            <Text style={styles.submitTitle}>Nộp minh chứng</Text>
+            <Text style={styles.submitTitle}>{t("missionDetail.submitTitle")}</Text>
 
             {videoUri ? (
               <View style={styles.videoPreview}>
                 <Ionicons name="videocam" size={28} color={colors.navy} />
-                <Text style={styles.videoPreviewText}>Video đã quay ({videoDuration}s)</Text>
+                <Text style={styles.videoPreviewText}>
+                  {t("missionDetail.videoRecorded", { seconds: videoDuration })}
+                </Text>
               </View>
             ) : photoUri ? (
               <Image source={{ uri: photoUri }} style={styles.photoPreview} contentFit="cover" />
             ) : (
-              <View style={styles.interactivePlaceholder}>
-                <Text style={styles.interactivePlaceholderText}>Interactive View</Text>
+              <View style={styles.evidencePlaceholder}>
+                <Ionicons
+                  name={mission.requiresVideo ? "videocam-outline" : "image-outline"}
+                  size={26}
+                  color={colors.textMuted}
+                />
+                <Text style={styles.evidencePlaceholderText}>{t("missionDetail.evidenceHint")}</Text>
               </View>
             )}
 
             <View style={styles.submitButtonRow}>
               {mission.requiresPhoto ? (
                 <>
-                  <Button title="Chụp ảnh" variant="secondary" icon="camera-outline" onPress={openCamera} style={{ flex: 1 }} />
-                  <Button title="Chọn từ thư viện" variant="secondary" icon="images-outline" onPress={pickFromLibrary} style={{ flex: 1 }} />
+                  <Button title={t("missionDetail.takePhoto")} variant="secondary" icon="camera-outline" onPress={openCamera} style={{ flex: 1 }} />
+                  <Button title={t("missionDetail.pickFromLibrary")} variant="secondary" icon="images-outline" onPress={pickFromLibrary} style={{ flex: 1 }} />
                 </>
               ) : null}
               {mission.requiresVideo ? (
                 <Button
-                  title={videoUri ? "Quay lại" : "Quay video"}
+                  title={videoUri ? t("missionDetail.reRecord") : t("missionDetail.recordVideo")}
                   variant="secondary"
                   icon="videocam-outline"
                   onPress={openRecorder}
@@ -329,11 +356,13 @@ export default function MissionDetailScreen() {
               title={
                 distance != null
                   ? distance <= MAX_DISTANCE_METERS
-                    ? `Vị trí hợp lệ · cách ${formatDistance(distance)}`
-                    : `Vị trí không hợp lệ · cách ${formatDistance(distance)}`
+                    ? t("missionDetail.locationValid", { distance: formatDistance(distance) })
+                    : t("missionDetail.locationInvalid", { distance: formatDistance(distance) })
                   : coords
-                    ? `Vị trí: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`
-                    : "Kiểm tra vị trí"
+                    ? t("missionDetail.locationCoords", {
+                        coords: `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`,
+                      })
+                    : t("missionDetail.checkLocation")
               }
               variant="ghost"
               icon={
@@ -348,7 +377,7 @@ export default function MissionDetailScreen() {
             />
 
             <Button
-              title="Nộp minh chứng"
+              title={t("missionDetail.submit")}
               onPress={onSubmit}
               loading={submitting}
               disabled={(mission.requiresPhoto && !photoUri) || (mission.requiresVideo && !videoUri)}
@@ -361,12 +390,13 @@ export default function MissionDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  hero: { height: 220 },
+  hero: { height: 220, backgroundColor: colors.surfaceAlt },
   heroImage: StyleSheet.absoluteFill,
   heroOverlay: { position: "absolute", left: spacing(2.5) },
   body: { padding: spacing(2.5), gap: spacing(1.5) },
   badgeRow: { flexDirection: "row", gap: spacing(1) },
   title: { fontSize: 24, fontWeight: "700", color: colors.text },
+  completedDate: { fontSize: 13, color: colors.success, fontWeight: "600" },
   instructionsCard: { gap: spacing(1) },
   instructionsHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing(0.75) },
   instructionsTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
@@ -384,7 +414,7 @@ const styles = StyleSheet.create({
   rewardRow: { flexDirection: "row", gap: spacing(1.5) },
   rewardCard: { flex: 1, alignItems: "center", gap: 2 },
   rewardLabel: { fontSize: 10, fontWeight: "700", color: colors.textMuted, letterSpacing: 0.5 },
-  rewardValue: { fontSize: 13, fontWeight: "700", color: colors.text },
+  rewardValue: { fontSize: 13, fontWeight: "700", color: colors.text, textAlign: "center" },
   submitCard: { gap: spacing(1) },
   submitTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
   photoPreview: { width: "100%", height: 180, borderRadius: radius.md },
@@ -398,14 +428,19 @@ const styles = StyleSheet.create({
     gap: spacing(0.5),
   },
   videoPreviewText: { color: colors.navy, fontSize: 13, fontWeight: "700" },
-  interactivePlaceholder: {
+  evidencePlaceholder: {
     width: "100%",
     height: 100,
     borderRadius: radius.md,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     alignItems: "center",
     justifyContent: "center",
+    gap: spacing(0.5),
+    paddingHorizontal: spacing(2),
   },
-  interactivePlaceholderText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
+  evidencePlaceholderText: { color: colors.textMuted, fontSize: 12, fontWeight: "600", textAlign: "center" },
   submitButtonRow: { flexDirection: "row", gap: spacing(1) },
 });

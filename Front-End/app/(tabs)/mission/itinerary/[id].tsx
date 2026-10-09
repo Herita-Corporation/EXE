@@ -19,15 +19,25 @@ import { useFocusEffect, useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Button } from "@/components/Button";
+import { BackHeader } from "@/components/BackHeader";
 import { IconButton } from "@/components/IconButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { Chip } from "@/components/Chip";
+import { formatDate } from "@/utils/date";
+import { haptics } from "@/utils/haptics";
+import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
 import {
   deleteItinerary,
   getActivityAlternatives,
   getItinerary,
   replaceActivity,
 } from "@/api/endpoints/itinerary";
-import { assignMission, deleteMissionsForTrip, listMissionTemplates } from "@/api/endpoints/missions";
+import {
+  assignMission,
+  deleteMissionsForTrip,
+  listMissionTemplates,
+  listUserMissions,
+} from "@/api/endpoints/missions";
 import { ApiError } from "@/api/http";
 import {
   addItineraryToHistory,
@@ -50,21 +60,31 @@ function isEditablePlace(activity: Activity) {
   return activity.type !== "transportation";
 }
 
-const ACTIVITY_TYPE_LABEL: Record<string, string> = {
-  transportation: "Di chuyển",
-  breakfast: "Bữa sáng",
-  lunch: "Bữa trưa",
-  dinner: "Bữa tối",
-  attraction: "Tham quan",
-  hotel: "Khách sạn",
-  shopping: "Mua sắm",
-  experience: "Trải nghiệm",
-  market: "Chợ",
-  coffee: "Cà phê",
+const ACTIVITY_TYPE_KEY: Record<string, TranslationKey> = {
+  transportation: "itineraryDetail.typeTransportation",
+  breakfast: "itineraryDetail.typeBreakfast",
+  lunch: "itineraryDetail.typeLunch",
+  dinner: "itineraryDetail.typeDinner",
+  attraction: "itineraryDetail.typeAttraction",
+  hotel: "itineraryDetail.typeHotel",
+  shopping: "itineraryDetail.typeShopping",
+  experience: "itineraryDetail.typeExperience",
+  market: "itineraryDetail.typeMarket",
+  coffee: "itineraryDetail.typeCoffee",
 };
 
-function activityTypeLabel(type: string) {
-  return ACTIVITY_TYPE_LABEL[type] ?? type;
+function activityTypeLabel(type: string, t: (key: TranslationKey) => string) {
+  const key = ACTIVITY_TYPE_KEY[type];
+  return key ? t(key) : type;
+}
+
+/** Compact VND for tight summary tiles: 12,5tr / 850k. */
+function formatVndShort(n: number) {
+  if (n >= 1_000_000) {
+    return `${(n / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}tr`;
+  }
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+  return `${Math.round(n)}`;
 }
 
 function formatVnd(n: number) {
@@ -123,12 +143,16 @@ async function resolvePlaceCoords(
 function SwipeButton({
   onSwipeSuccess,
   text,
+  releaseText,
+  loadingText,
   icon = "camera-outline",
   disabled = false,
   loading = false,
 }: {
   onSwipeSuccess: () => void;
   text: string;
+  releaseText: string;
+  loadingText: string;
   icon?: keyof typeof Ionicons.glyphMap;
   disabled?: boolean;
   loading?: boolean;
@@ -266,9 +290,9 @@ function SwipeButton({
             },
           ]}
         >
-          <Ionicons name="chevron-forward" size={14} color="#0284C7" style={{ opacity: 0.3 }} />
-          <Ionicons name="chevron-forward" size={14} color="#0284C7" style={{ marginLeft: -8, opacity: 0.6 }} />
-          <Ionicons name="chevron-forward" size={14} color="#0284C7" style={{ marginLeft: -8 }} />
+          <Ionicons name="chevron-forward" size={14} color={colors.primary} style={{ opacity: 0.3 }} />
+          <Ionicons name="chevron-forward" size={14} color={colors.primary} style={{ marginLeft: -8, opacity: 0.6 }} />
+          <Ionicons name="chevron-forward" size={14} color={colors.primary} style={{ marginLeft: -8 }} />
         </Animated.View>
       )}
 
@@ -286,7 +310,7 @@ function SwipeButton({
           },
         ]}
       >
-        {loading || done ? "Đang nhận nhiệm vụ..." : "Thả tay để nhận"}
+        {loading || done ? loadingText : releaseText}
       </Animated.Text>
 
       <Animated.View
@@ -319,9 +343,9 @@ const swipeStyles = StyleSheet.create({
   container: {
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     justifyContent: "center",
     overflow: "hidden",
     position: "relative",
@@ -332,14 +356,14 @@ const swipeStyles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#0284C7",
+    backgroundColor: colors.primary,
     borderRadius: 22,
   },
   text: {
     textAlign: "center",
     fontSize: 12,
     fontWeight: "700",
-    color: "#475569",
+    color: colors.textMuted,
     paddingHorizontal: 44,
   },
   chevrons: {
@@ -363,12 +387,12 @@ const swipeStyles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#0284C7",
+    backgroundColor: colors.primary,
     borderWidth: 2,
     borderColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#0284C7",
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 4,
@@ -382,6 +406,8 @@ function ActivityCard({
   activity,
   photoAssigned,
   videoAssigned,
+  photoXp,
+  videoXp,
   assigningPhoto,
   assigningVideo,
   onAssignPhoto,
@@ -392,6 +418,8 @@ function ActivityCard({
   activity: Activity;
   photoAssigned: boolean;
   videoAssigned: boolean;
+  photoXp: number;
+  videoXp: number;
   assigningPhoto: boolean;
   assigningVideo: boolean;
   onAssignPhoto: () => void;
@@ -399,6 +427,7 @@ function ActivityCard({
   onEdit: () => void;
   onDirections: () => void;
 }) {
+  const { t } = useLocale();
   const isTransport = activity.type === "transportation";
 
   return (
@@ -418,8 +447,8 @@ function ActivityCard({
         </Text>
         {isEditablePlace(activity) && (
           <Pressable style={cardStyles.editBtn} onPress={onEdit} hitSlop={8}>
-            <Ionicons name="create-outline" size={15} color="#0284c7" />
-            <Text style={cardStyles.editText}>Sửa</Text>
+            <Ionicons name="create-outline" size={15} color={colors.link} />
+            <Text style={cardStyles.editText}>{t("itineraryDetail.edit")}</Text>
           </Pressable>
         )}
       </View>
@@ -432,7 +461,7 @@ function ActivityCard({
       {/* Tag pills */}
       <View style={cardStyles.tagRow}>
         <View style={cardStyles.chip}>
-          <Text style={cardStyles.chipText}>{activityTypeLabel(activity.type)}</Text>
+          <Text style={cardStyles.chipText}>{activityTypeLabel(activity.type, t)}</Text>
         </View>
         {activity.location ? (
           <View style={cardStyles.chip}>
@@ -450,7 +479,7 @@ function ActivityCard({
           onPress={onDirections}
         >
           <Ionicons name="navigate" size={16} color="#FFFFFF" />
-          <Text style={cardStyles.directionsText}>Chỉ đường</Text>
+          <Text style={cardStyles.directionsText}>{t("itineraryDetail.directions")}</Text>
         </Pressable>
       )}
 
@@ -460,13 +489,15 @@ function ActivityCard({
           {/* Photo mission slider / status */}
           {photoAssigned ? (
             <View style={cardStyles.assignedBadge}>
-              <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
-              <Text style={cardStyles.assignedText}>Đã nhận nhiệm vụ Chụp ảnh (+50 XP)</Text>
+              <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+              <Text style={cardStyles.assignedText}>{t("itineraryDetail.photoAssigned", { xp: photoXp })}</Text>
             </View>
           ) : (
             <SwipeButton
               icon="camera-outline"
-              text="Trượt để nhận nhiệm vụ chụp ảnh"
+              text={t("itineraryDetail.swipePhoto")}
+              releaseText={t("itineraryDetail.releaseToAccept")}
+              loadingText={t("itineraryDetail.accepting")}
               onSwipeSuccess={onAssignPhoto}
               loading={assigningPhoto}
             />
@@ -475,13 +506,15 @@ function ActivityCard({
           {/* Video mission slider / status */}
           {videoAssigned ? (
             <View style={cardStyles.assignedBadge}>
-              <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
-              <Text style={cardStyles.assignedText}>Đã nhận nhiệm vụ Quay video (+50 XP)</Text>
+              <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+              <Text style={cardStyles.assignedText}>{t("itineraryDetail.videoAssigned", { xp: videoXp })}</Text>
             </View>
           ) : (
             <SwipeButton
               icon="videocam-outline"
-              text="Trượt để nhận nhiệm vụ quay video"
+              text={t("itineraryDetail.swipeVideo")}
+              releaseText={t("itineraryDetail.releaseToAccept")}
+              loadingText={t("itineraryDetail.accepting")}
               onSwipeSuccess={onAssignVideo}
               loading={assigningVideo}
             />
@@ -494,13 +527,13 @@ function ActivityCard({
 
 const cardStyles = StyleSheet.create({
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     padding: spacing(2),
     marginBottom: spacing(1.5),
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#000",
+    borderColor: colors.border,
+    shadowColor: colors.navy,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
@@ -515,12 +548,12 @@ const cardStyles = StyleSheet.create({
   timeText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#64748B",
+    color: colors.textMuted,
   },
   costText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   titleRow: {
     flexDirection: "row",
@@ -532,7 +565,7 @@ const cardStyles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     lineHeight: 22,
   },
   editBtn: {
@@ -544,11 +577,11 @@ const cardStyles = StyleSheet.create({
   editText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0284c7",
+    color: colors.primary,
   },
   descText: {
     fontSize: 13,
-    color: "#64748B",
+    color: colors.textMuted,
     lineHeight: 18,
   },
   tagRow: {
@@ -558,7 +591,7 @@ const cardStyles = StyleSheet.create({
     marginTop: 2,
   },
   chip: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: spacing(1.25),
     paddingVertical: spacing(0.5),
     borderRadius: radius.md,
@@ -567,14 +600,14 @@ const cardStyles = StyleSheet.create({
   chipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#334155",
+    color: colors.text,
   },
   directionsBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#0284C7",
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: spacing(1),
     marginTop: spacing(0.75),
@@ -592,18 +625,18 @@ const cardStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#F0FDF4",
+    backgroundColor: colors.successSoft,
     borderWidth: 1,
-    borderColor: "#BBF7D0",
+    borderColor: colors.successSoft,
     borderRadius: 14,
     paddingHorizontal: spacing(1.5),
     paddingVertical: spacing(0.75),
     marginVertical: 2,
   },
   assignedText: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#16A34A",
+    color: colors.success,
   },
 });
 
@@ -614,6 +647,7 @@ export default function ItineraryDetailScreen() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
+  const { t, locale } = useLocale();
 
   const [data, setData] = useState<ItineraryResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -631,6 +665,7 @@ export default function ItineraryDetailScreen() {
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
   const [waypointIndex, setWaypointIndex] = useState(0);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const waypointIndexRef = useRef(0);
   const watchSubRef = useRef<Location.LocationSubscription | null>(null);
@@ -649,11 +684,32 @@ export default function ItineraryDetailScreen() {
       .catch(() => {});
   }, []);
 
+  // Missions already accepted on this trip — so the swipe sliders show
+  // "accepted" after a reload instead of offering a duplicate.
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      let cancelled = false;
+      listUserMissions(user.id)
+        .then((missions) => {
+          if (cancelled) return;
+          const keys = missions
+            .filter((m) => m.tripId?.toLowerCase() === id.toLowerCase() && m.placeId)
+            .map((m) => `${m.placeId!.toLowerCase()}:${m.type}`);
+          setAssignedKeys((prev) => new Set([...prev, ...keys]));
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }, [user, id])
+  );
+
   const photoTemplate = templates.find(
-    (t) => t.type === MISSION_TYPE_PHOTO && t.name === "Chụp ảnh kỷ niệm"
+    (tpl) => tpl.type === MISSION_TYPE_PHOTO && tpl.name === "Chụp ảnh kỷ niệm"
   );
   const videoTemplate = templates.find(
-    (t) => t.type === MISSION_TYPE_VIDEO && t.name === "Quay video khám phá"
+    (tpl) => tpl.type === MISSION_TYPE_VIDEO && tpl.name === "Quay video khám phá"
   );
 
   useFocusEffect(
@@ -666,13 +722,13 @@ export default function ItineraryDetailScreen() {
         .catch(
           (err) =>
             !cancelled &&
-            setError(err instanceof ApiError ? err.message : "Không tải được lịch trình.")
+            setError(err instanceof ApiError ? err.message : t("itineraryDetail.loadFailed"))
         )
         .finally(() => !cancelled && setLoading(false));
       return () => {
         cancelled = true;
       };
-    }, [id])
+    }, [id, t])
   );
 
   useFocusEffect(
@@ -700,7 +756,8 @@ export default function ItineraryDetailScreen() {
     label: string
   ) {
     if (!user || !data) return;
-    const key = `${activity.activity_id}:${template.type}`;
+    const key = `${activity.activity_id.toLowerCase()}:${template.type}`;
+    const missionTitle = t("itineraryDetail.missionTitle", { label, place: activity.name });
 
     setAssigningKey(key);
     try {
@@ -710,24 +767,25 @@ export default function ItineraryDetailScreen() {
         tripId: data.itinerary_id,
         placeId: activity.activity_id,
         templateId: template.id,
-        title: `${label} tại ${activity.name}`,
+        title: missionTitle,
         targetLatitude: target?.lat ?? null,
         targetLongitude: target?.lng ?? null,
       });
       setAssignedKeys((prev) => new Set(prev).add(key));
+      haptics.success();
       showToast(`Đã nhận nhiệm vụ: ${label} tại ${activity.name} 🎯`, "success");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Không thể giao nhiệm vụ.", "error");
+      showToast(err instanceof ApiError ? err.message : t("itineraryDetail.assignFailed"), "error");
     } finally {
       setAssigningKey(null);
     }
   }
 
   function onDelete() {
-    Alert.alert("Xóa lịch trình", "Bạn chắc chắn muốn xóa lịch trình này?", [
-      { text: "Hủy", style: "cancel" },
+    Alert.alert(t("itineraryDetail.deleteTitle"), t("itineraryDetail.deleteMessage"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Xóa",
+        text: t("common.delete"),
         style: "destructive",
         onPress: async () => {
           setDeleting(true);
@@ -739,7 +797,7 @@ export default function ItineraryDetailScreen() {
             if (user) await removeItineraryFromHistory(user.id, id);
             router.back();
           } catch (err) {
-            showToast(err instanceof ApiError ? err.message : "Không thể xóa.", "error");
+            showToast(err instanceof ApiError ? err.message : t("itineraryDetail.deleteFailed"), "error");
           } finally {
             setDeleting(false);
           }
@@ -757,7 +815,7 @@ export default function ItineraryDetailScreen() {
       const res = await getActivityAlternatives(id, activity.activity_id);
       setAlternatives(res.alternatives);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Không thể tải gợi ý địa điểm.", "error");
+      showToast(err instanceof ApiError ? err.message : t("itineraryDetail.altLoadFailed"), "error");
       setEditingActivity(null);
     } finally {
       setLoadingAlternatives(false);
@@ -772,7 +830,7 @@ export default function ItineraryDetailScreen() {
       setData(updated);
       setEditingActivity(null);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Không thể đổi địa điểm.", "error");
+      showToast(err instanceof ApiError ? err.message : t("itineraryDetail.replaceFailed"), "error");
     } finally {
       setReplacingActivityId(null);
     }
@@ -789,7 +847,7 @@ export default function ItineraryDetailScreen() {
         createdAt: data.created_at,
       });
       setConfirmed(true);
-      showToast("Lộ trình đã được lưu vào Lộ trình của tôi.", "success");
+      showToast(t("itineraryDetail.savedToast"), "success");
     } finally {
       setConfirming(false);
     }
@@ -806,10 +864,10 @@ export default function ItineraryDetailScreen() {
     if (user) setItineraryWaypointIndex(user.id, id, nextIndex).catch(() => {});
     const next = waypoints[nextIndex];
     if (next) {
-      showToast(`Đã đến ${current.name} — chuyển hướng tới điểm tiếp theo.`, "success");
+      showToast(t("itineraryDetail.arrivedToast", { place: current.name }), "success");
       openMapsFor(next);
     } else {
-      showToast("Đã hoàn thành toàn bộ lộ trình!", "success");
+      showToast(t("itineraryDetail.finishedToast"), "success");
       watchSubRef.current?.remove();
       watchSubRef.current = null;
     }
@@ -817,12 +875,12 @@ export default function ItineraryDetailScreen() {
 
   async function startNavigation() {
     if (waypoints.length === 0) {
-      showToast("Lịch trình này không có điểm GPS để chỉ đường.", "info");
+      showToast(t("itineraryDetail.noGps"), "info");
       return;
     }
     const perm = await Location.requestForegroundPermissionsAsync();
     if (!perm.granted) {
-      showToast("Cần quyền vị trí để tự động chuyển điểm.", "error");
+      showToast(t("itineraryDetail.needLocation"), "error");
       return;
     }
     const target = waypoints[waypointIndexRef.current];
@@ -845,7 +903,7 @@ export default function ItineraryDetailScreen() {
       if (!started) {
         await markItineraryStarted(user.id, id);
         setStarted(true);
-        showToast("Lộ trình đang diễn ra.", "success");
+        showToast(t("itineraryDetail.startedToast"), "success");
       }
       await startNavigation();
     } finally {
@@ -862,7 +920,7 @@ export default function ItineraryDetailScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#F8FAFC", alignItems: "center", justifyContent: "center" }}>
+      <View style={screenStyles.centered}>
         <ActivityIndicator color={colors.navy} size="large" />
       </View>
     );
@@ -870,129 +928,186 @@ export default function ItineraryDetailScreen() {
 
   if (error || !data) {
     return (
-      <ScreenContainer backgroundColor="#F8FAFC">
-        <ErrorBanner message={error ?? "Không tìm thấy lịch trình."} />
+      // Swipe-back is disabled on this route, so the error state must keep a
+      // visible way out.
+      <ScreenContainer>
+        <BackHeader title={t("itineraries.title")} onBack={() => router.back()} />
+        <ErrorBanner message={error ?? t("itineraryDetail.notFound")} />
       </ScreenContainer>
     );
   }
 
   const city = data.trip_summary.cities[0] ?? "";
   const heroImage = getRegionImage(city);
+  const visibleDays = data.days
+    .map((day, dayIdx) => ({ day, dayIdx }))
+    .filter(({ dayIdx }) => selectedDay === null || selectedDay === dayIdx);
+  const nextWaypoint = waypoints[waypointIndex];
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+    <View style={screenStyles.root}>
       <ScrollView
         contentContainerStyle={{
           paddingTop: insets.top + spacing(1),
-          paddingBottom: insets.bottom + spacing(4),
+          // Room for the sticky action bar below.
+          paddingBottom: insets.bottom + ACTION_BAR_HEIGHT + spacing(3),
           paddingHorizontal: spacing(2),
         }}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[STICKY_DAY_CHIPS_INDEX]}
       >
-        {/* ── Top Header Row (Back arrow, Title) ── */}
-        <View style={screenStyles.headerRow}>
-          <IconButton icon="arrow-back" onPress={() => router.back()} />
-          <Text style={screenStyles.headerTitle} numberOfLines={1}>
-            {data.trip_summary.cities.join(", ")}
+        {/* 0 ── Header: back · title · delete ── */}
+        <BackHeader
+          title={data.trip_summary.cities.join(", ")}
+          onBack={() => router.back()}
+          right={
+            <IconButton
+              icon="trash-outline"
+              color={colors.danger}
+              onPress={onDelete}
+              size={20}
+            />
+          }
+        />
+
+        {/* 1 ── Hero + trip summary ── */}
+        <View>
+          <Text style={screenStyles.subtitleText}>
+            {t("itineraryDetail.subtitle", { days: data.trip_summary.trip_duration_days })}
           </Text>
-          {/* Spacer keeps the title centered opposite the back button */}
-          <View style={screenStyles.headerSpacer} />
-        </View>
-
-        {/* ── Subheader ── */}
-        <Text style={screenStyles.subtitleText}>
-          Hành trình {data.trip_summary.trip_duration_days} ngày do DISA AI lên kế hoạch riêng cho bạn.
-        </Text>
-
-        {/* ── Hero Image Banner ── */}
-        <View style={screenStyles.bannerContainer}>
-          <Image source={heroImage} style={screenStyles.bannerImage} contentFit="cover" />
-        </View>
-
-        {/* ── Days & Activities ── */}
-        {data.days.map((day, dayIdx) => (
-          <View key={`${day.date}-${dayIdx}`} style={screenStyles.daySection}>
-            {/* Day Header */}
-            <View style={screenStyles.dayHeaderRow}>
-              <View style={screenStyles.dayDot} />
-              <Text style={screenStyles.dayTitle}>
-                Ngày {dayIdx + 1} · {day.city}
-              </Text>
-            </View>
-
-            {/* Activity Cards */}
-            {day.activities.map((activity, idx) => {
-              const photoKey = `${activity.activity_id}:${MISSION_TYPE_PHOTO}`;
-              const videoKey = `${activity.activity_id}:${MISSION_TYPE_VIDEO}`;
-              return (
-                <ActivityCard
-                  key={`${activity.activity_id}-${idx}`}
-                  activity={activity}
-                  photoAssigned={assignedKeys.has(photoKey)}
-                  videoAssigned={assignedKeys.has(videoKey)}
-                  assigningPhoto={assigningKey === photoKey}
-                  assigningVideo={assigningKey === videoKey}
-                  onAssignPhoto={() =>
-                    photoTemplate
-                      ? handleAssignMission(activity, photoTemplate, "Chụp ảnh")
-                      : undefined
-                  }
-                  onAssignVideo={() =>
-                    videoTemplate
-                      ? handleAssignMission(activity, videoTemplate, "Quay video")
-                      : undefined
-                  }
-                  onEdit={() => onEditActivity(activity)}
-                  onDirections={() => openMapsFor(activity, day.city)}
-                />
-              );
-            })}
+          <View style={screenStyles.bannerContainer}>
+            <Image source={heroImage} style={screenStyles.bannerImage} contentFit="cover" />
           </View>
-        ))}
+          <View style={screenStyles.summaryCard}>
+            <SummaryStat
+              icon="calendar-outline"
+              label={t("itineraryDetail.daysLabel")}
+              value={String(data.trip_summary.trip_duration_days)}
+            />
+            <View style={screenStyles.summaryDivider} />
+            <SummaryStat
+              icon="location-outline"
+              label={t("itineraryDetail.stops")}
+              value={String(waypoints.length)}
+            />
+            <View style={screenStyles.summaryDivider} />
+            <SummaryStat
+              icon="wallet-outline"
+              label={t("itineraryDetail.totalCost")}
+              value={formatVndShort(data.total_cost)}
+              hint={`${t("itineraryDetail.budget")} ${formatVndShort(data.trip_summary.budget)}`}
+            />
+          </View>
+        </View>
 
-        {/* ── Actions Row (Save / Start) ── */}
-        <View style={screenStyles.actionSection}>
-          {!confirmed ? (
-            <Button
-              title="Lưu lịch trình này"
-              icon="bookmark-outline"
-              onPress={onConfirmItinerary}
-              loading={confirming}
+        {/* 2 ── Day filter chips (sticky while scrolling) ── */}
+        <View style={screenStyles.dayChipsWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={screenStyles.dayChips}>
+            <Chip
+              label={t("itineraryDetail.allDays")}
+              selected={selectedDay === null}
+              onPress={() => setSelectedDay(null)}
             />
-          ) : (
-            <Button
-              title="Đã lưu vào lộ trình"
-              icon="checkmark-circle"
-              variant="secondary"
-              onPress={() => {}}
-              disabled
-            />
-          )}
-          {confirmed && (
-            <Button
-              title={started ? "Mở chỉ đường" : "Bắt đầu lộ trình"}
-              icon={started ? "navigate" : "play"}
-              variant={started ? "secondary" : "primary"}
-              onPress={onStartItinerary}
-              loading={starting}
-            />
-          )}
-          <Button
-            title="Xóa lịch trình"
-            variant="danger"
-            icon="trash-outline"
-            onPress={onDelete}
-            loading={deleting}
-          />
+            {data.days.map((day, dayIdx) => (
+              <Chip
+                key={`${day.date}-${dayIdx}`}
+                label={t("itineraryDetail.dayShort", { n: dayIdx + 1 })}
+                selected={selectedDay === dayIdx}
+                onPress={() => setSelectedDay(dayIdx)}
+              />
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* 3 ── Days & activities ── */}
+        <View>
+          {visibleDays.map(({ day, dayIdx }) => (
+            <View key={`${day.date}-${dayIdx}`} style={screenStyles.daySection}>
+              <View style={screenStyles.dayHeaderRow}>
+                <View style={screenStyles.dayDot} />
+                <Text style={screenStyles.dayTitle}>
+                  {t("itineraryDetail.day", { n: dayIdx + 1, city: day.city })}
+                </Text>
+                <Text style={screenStyles.dayDate}>{formatDate(day.date, locale)}</Text>
+              </View>
+
+              {day.activities.map((activity, idx) => {
+                const photoKey = `${activity.activity_id.toLowerCase()}:${MISSION_TYPE_PHOTO}`;
+                const videoKey = `${activity.activity_id.toLowerCase()}:${MISSION_TYPE_VIDEO}`;
+                return (
+                  <ActivityCard
+                    key={`${activity.activity_id}-${idx}`}
+                    activity={activity}
+                    photoAssigned={assignedKeys.has(photoKey)}
+                    videoAssigned={assignedKeys.has(videoKey)}
+                    photoXp={photoTemplate?.rewardXP ?? 0}
+                    videoXp={videoTemplate?.rewardXP ?? 0}
+                    assigningPhoto={assigningKey === photoKey}
+                    assigningVideo={assigningKey === videoKey}
+                    onAssignPhoto={() =>
+                      photoTemplate
+                        ? handleAssignMission(activity, photoTemplate, t("itineraryDetail.photoLabel"))
+                        : undefined
+                    }
+                    onAssignVideo={() =>
+                      videoTemplate
+                        ? handleAssignMission(activity, videoTemplate, t("itineraryDetail.videoLabel"))
+                        : undefined
+                    }
+                    onEdit={() => onEditActivity(activity)}
+                    onDirections={() => openMapsFor(activity, day.city)}
+                  />
+                );
+              })}
+            </View>
+          ))}
         </View>
       </ScrollView>
 
+      {/* ── Sticky action bar: save → start → open directions ── */}
+      <View style={[screenStyles.actionBar, { paddingBottom: insets.bottom + spacing(1.5) }]}>
+        {confirmed && started ? (
+          <Text style={screenStyles.nextStopText} numberOfLines={1}>
+            {nextWaypoint
+              ? t("itineraryDetail.nextStop", { place: nextWaypoint.name })
+              : t("itineraryDetail.tripDone")}
+          </Text>
+        ) : null}
+        {!confirmed ? (
+          <Button
+            title={t("itineraryDetail.save")}
+            icon="bookmark-outline"
+            onPress={onConfirmItinerary}
+            loading={confirming}
+          />
+        ) : (
+          <Button
+            title={started ? t("itineraryDetail.openDirections") : t("itineraryDetail.start")}
+            icon={started ? "navigate" : "play"}
+            onPress={onStartItinerary}
+            loading={starting}
+          />
+        )}
+      </View>
+
+      {deleting ? (
+        <View style={screenStyles.deletingOverlay}>
+          <ActivityIndicator color={colors.primaryText} size="large" />
+        </View>
+      ) : null}
+
       {/* ── Replace Activity Modal ── */}
-      <Modal visible={!!editingActivity} animationType="slide" transparent>
+      <Modal
+        visible={!!editingActivity}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setEditingActivity(null)}
+      >
         <View style={screenStyles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditingActivity(null)} />
           <View style={screenStyles.editModalSheet}>
             <Text style={screenStyles.modalTitle}>
-              Chọn địa điểm thay thế cho "{editingActivity?.name}"
+              {t("itineraryDetail.altTitle", { name: editingActivity?.name ?? "" })}
             </Text>
             {loadingAlternatives ? (
               <ActivityIndicator color={colors.navy} style={{ marginVertical: spacing(3) }} />
@@ -1021,11 +1136,11 @@ export default function ItineraryDetailScreen() {
                   </Pressable>
                 )}
                 ListEmptyComponent={
-                  <Text style={screenStyles.altEmptyText}>Không có gợi ý nào phù hợp.</Text>
+                  <Text style={screenStyles.altEmptyText}>{t("itineraryDetail.noAlternatives")}</Text>
                 }
               />
             )}
-            <Button title="Đóng" variant="ghost" onPress={() => setEditingActivity(null)} />
+            <Button title={t("common.close")} variant="ghost" onPress={() => setEditingActivity(null)} />
           </View>
         </View>
       </Modal>
@@ -1033,41 +1148,91 @@ export default function ItineraryDetailScreen() {
   );
 }
 
+function SummaryStat({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <View style={screenStyles.summaryStat}>
+      <Ionicons name={icon} size={16} color={colors.gold} />
+      <Text style={screenStyles.summaryValue} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={screenStyles.summaryLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      {hint ? (
+        <Text style={screenStyles.summaryHint} numberOfLines={1}>
+          {hint}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+// Index of the day-chip row among the ScrollView's direct children
+// (header, hero+summary, chips, days) — it sticks under the top edge.
+const STICKY_DAY_CHIPS_INDEX = 2;
+const ACTION_BAR_HEIGHT = 72;
+
 const screenStyles = StyleSheet.create({
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing(1),
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#0F172A",
+  root: { flex: 1, backgroundColor: colors.background },
+  centered: {
     flex: 1,
-    textAlign: "center",
-    paddingHorizontal: spacing(1),
-  },
-  headerSpacer: {
-    width: 44,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
   },
   subtitleText: {
     fontSize: 14,
-    color: "#64748B",
+    color: colors.textMuted,
+    marginTop: spacing(0.5),
     marginBottom: spacing(2),
   },
   bannerContainer: {
     height: 150,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     overflow: "hidden",
-    marginBottom: spacing(2.5),
+    backgroundColor: colors.surfaceAlt,
   },
   bannerImage: {
     width: "100%",
     height: "100%",
   },
+  // Overlaps the bottom of the banner, like the voucher detail's floating icon.
+  summaryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.brandNavy,
+    borderRadius: radius.lg,
+    paddingVertical: spacing(1.5),
+    paddingHorizontal: spacing(1),
+    marginTop: -spacing(4),
+    marginHorizontal: spacing(1.5),
+    ...shadow,
+  },
+  summaryStat: { flex: 1, alignItems: "center", gap: 2 },
+  summaryValue: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
+  summaryLabel: { color: "rgba(255,255,255,0.7)", fontSize: 11 },
+  summaryHint: { color: "rgba(255,255,255,0.55)", fontSize: 10 },
+  summaryDivider: { width: 1, height: 36, backgroundColor: "rgba(255,255,255,0.15)" },
+  dayChipsWrap: {
+    backgroundColor: colors.background,
+    paddingVertical: spacing(1.25),
+    marginHorizontal: -spacing(2),
+    marginTop: spacing(1),
+  },
+  dayChips: { gap: spacing(1), paddingHorizontal: spacing(2) },
   daySection: {
-    marginBottom: spacing(2),
+    marginTop: spacing(1),
+    marginBottom: spacing(1),
   },
   dayHeaderRow: {
     flexDirection: "row",
@@ -1079,16 +1244,38 @@ const screenStyles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#0B2D5B",
+    backgroundColor: colors.gold,
   },
   dayTitle: {
+    flex: 1,
     fontSize: 16,
     fontWeight: "800",
-    color: "#0B2D5B",
+    color: colors.navy,
   },
-  actionSection: {
-    gap: spacing(1.25),
-    marginTop: spacing(1),
+  dayDate: { fontSize: 12, color: colors.textMuted, fontWeight: "600" },
+  actionBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: spacing(1.5),
+    paddingHorizontal: spacing(2),
+    gap: spacing(1),
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    ...shadow,
+  },
+  nextStopText: { fontSize: 12, fontWeight: "600", color: colors.textMuted, textAlign: "center" },
+  deletingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(8,29,64,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalBackdrop: {
     flex: 1,
@@ -1096,9 +1283,9 @@ const screenStyles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   editModalSheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     padding: spacing(2.5),
     maxHeight: "75%",
     gap: spacing(1),
@@ -1106,32 +1293,32 @@ const screenStyles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   altRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: spacing(1.25),
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: colors.border,
   },
   altName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   altActivity: {
     fontSize: 12,
-    color: "#64748B",
+    color: colors.textMuted,
   },
   altCost: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0284C7",
+    color: colors.link,
     marginTop: 2,
   },
   altEmptyText: {
-    color: "#64748B",
+    color: colors.textMuted,
     fontSize: 13,
     textAlign: "center",
     paddingVertical: spacing(3),

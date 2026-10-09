@@ -18,11 +18,14 @@ import { Button } from "@/components/Button";
 import { PaginationDots } from "@/components/PaginationDots";
 import { ONBOARDING_SLIDES } from "@/mocks/onboarding";
 import { markOnboardingSeen } from "@/utils/onboardingStore";
+import { LanguageSwitcherButton } from "@/components/LanguageSwitcher";
+import { useLocale } from "@/i18n/LocaleContext";
 import { spacing, typography } from "@/theme/colors";
 
 export default function OnboardingScreen() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { t } = useLocale();
   const [index, setIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -57,7 +60,7 @@ export default function OnboardingScreen() {
         scrollEventThrottle={16}
       >
         {ONBOARDING_SLIDES.map((slide) => (
-          <View key={slide.headline} style={{ width, height }}>
+          <View key={slide.titleKey} style={{ width, height }}>
             <Image
               source={slide.image}
               style={StyleSheet.absoluteFill}
@@ -73,21 +76,30 @@ export default function OnboardingScreen() {
       </ScrollView>
 
       <View style={[styles.topRow, { top: insets.top + spacing(1.5) }]}>
-        <Text style={styles.wordmark}>DISA</Text>
-        <Pressable onPress={finish} style={styles.skipPill}>
-          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-          <Text style={styles.skipText}>Skip</Text>
-        </Pressable>
+        <Image
+          source={require("@/assets/images/brand/logo-horizontal-white.png")}
+          style={styles.logo}
+          contentFit="contain"
+        />
+        <View style={styles.topActions}>
+          <LanguageSwitcherButton style={styles.languagePill} />
+          <Pressable onPress={finish} style={styles.skipPill}>
+            <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+            <Text style={styles.skipText}>{t("onboarding.skip")}</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + spacing(2) }]}>
-        <Text style={styles.headline}>{current.headline}</Text>
-        <Text style={styles.description}>{current.description}</Text>
+        <Text style={styles.headline}>{t(current.titleKey)}</Text>
+        <Text style={styles.description}>{t(current.bodyKey)}</Text>
         <View style={styles.footerRow}>
           <PaginationDots count={ONBOARDING_SLIDES.length} activeIndex={index} />
         </View>
         <Button
-          title={current.cta}
+          title={
+            index < ONBOARDING_SLIDES.length - 1 ? t("onboarding.next") : t("onboarding.getStarted")
+          }
           onPress={goNext}
           icon={index < ONBOARDING_SLIDES.length - 1 ? "arrow-forward" : undefined}
           iconPosition="right"
@@ -108,7 +120,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  wordmark: { color: "#FFFFFF", fontSize: 24, fontWeight: "800", letterSpacing: 1 },
+  // brand/logo-horizontal-white.png is 1200×180.
+  logo: { height: 24, aspectRatio: 1200 / 180 },
+  topActions: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
+  languagePill: { alignSelf: "auto", borderColor: "rgba(255,255,255,0.5)", backgroundColor: "rgba(255,255,255,0.9)" },
   skipPill: {
     paddingHorizontal: spacing(2),
     paddingVertical: spacing(0.75),

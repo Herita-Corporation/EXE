@@ -37,17 +37,3 @@ export interface RedeemVoucherResult {
   redemptionId: string;
   remainingPoints: number;
 }
-
-export interface VoucherFormValues {
-  category: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  pointsCost: number;
-  discountLabel: string;
-  location: string;
-  expiresAt: string;
-  code: string;
-  terms: string[];
-  isActive?: boolean;
-}

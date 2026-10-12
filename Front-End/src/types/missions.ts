@@ -1,5 +1,6 @@
 // Task.Presentation — default ASP.NET Core System.Text.Json output
 // (camelCase, no attribute overrides on the DTOs) -> camelCase here.
+import type { TranslationKey } from "@/i18n/LocaleContext";
 
 export type MissionType = number; // Task.Domain.Enums.MissionType (server enum, numeric over the wire)
 export type MissionStatus = number; // Task.Domain.Enums.MissionStatus
@@ -28,6 +29,10 @@ export interface CreateMissionTemplateRequest {
 
 export interface UserMission {
   id: string;
+  /** Itinerary the mission was assigned from (older servers omit it). */
+  tripId?: string;
+  /** Itinerary activity_id the mission belongs to (older servers omit it). */
+  placeId?: string;
   title: string;
   status: MissionStatus;
   rewardXP: number;
@@ -76,20 +81,20 @@ export interface UserMissionSummary {
   completedCount: number;
 }
 
-/** Task.Domain.Enums.MissionStatus */
-export const MISSION_STATUS_LABEL: Record<number, string> = {
-  0: "Đã giao", // Assigned
-  1: "Chờ duyệt", // PendingReview
-  2: "Hoàn thành", // Completed
-  3: "Không đạt", // Rejected
-  4: "Hết hạn", // Expired
+/** Task.Domain.Enums.MissionStatus → translation key (render with t()). */
+export const MISSION_STATUS_KEY: Record<number, TranslationKey> = {
+  0: "missionStatus.assigned",
+  1: "missionStatus.pendingReview",
+  2: "missionStatus.completed",
+  3: "missionStatus.rejected",
+  4: "missionStatus.expired",
 };
 
-/** Task.Domain.Enums.MissionType */
-export const MISSION_TYPE_LABEL: Record<number, string> = {
-  1: "Chụp ảnh",
-  2: "Quay video",
-  3: "Check-in",
+/** Task.Domain.Enums.MissionType → translation key (render with t()). */
+export const MISSION_TYPE_KEY: Record<number, TranslationKey> = {
+  1: "missionType.photo",
+  2: "missionType.video",
+  3: "missionType.checkIn",
 };
 
 export const MISSION_TYPE_PHOTO = 1;

@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import Constants from "expo-constants";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
+import { BackHeader } from "@/components/BackHeader";
 import { Card } from "@/components/Card";
 import { Toggle } from "@/components/Toggle";
 import { SettingsRow } from "@/components/SettingsRow";
@@ -21,15 +21,13 @@ import { colors, spacing } from "@/theme/colors";
 
 export default function AccountSettingsScreen() {
   const { user, refreshMe } = useAuth();
-  const { t, locale, setLocale } = useLocale();
+  const { t, locale } = useLocale();
   const { showToast } = useToast();
-  // Email/Location/Biometric remain cosmetic/local-only — no backend for
-  // those exists. Push is wired to the real Expo push token registration
-  // (see onTogglePush below).
+  // Only settings with a real effect are shown — push is wired to the Expo
+  // push token registration (see onTogglePush below). Email digests,
+  // location/biometric toggles, currency and theme had no backend or app
+  // behavior behind them, so they were removed rather than faked.
   const [pushEnabled, setPushEnabled] = useState(false);
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [locationEnabled, setLocationEnabled] = useState(true);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   const [editingField, setEditingField] = useState<"email" | "phone" | null>(null);
   const [newEmail, setNewEmail] = useState("");
@@ -37,10 +35,6 @@ export default function AccountSettingsScreen() {
   const [savingField, setSavingField] = useState(false);
   const [verifyingEmail, setVerifyingEmail] = useState(false);
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
-
-  function stub(feature: string) {
-    showToast(`${feature}: Tính năng này chưa được hỗ trợ.`, "info");
-  }
 
   async function onTogglePush(next: boolean) {
     if (!next) {
@@ -105,11 +99,7 @@ export default function AccountSettingsScreen() {
 
   return (
     <ScreenContainer backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={() => router.back()} />
-        <Text style={styles.title}>{t("settings.title")}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BackHeader title={t("settings.title")} onBack={() => router.back()} />
 
       <Text style={styles.sectionLabel}>{t("settings.verification")}</Text>
       <Card style={styles.sectionCard}>
@@ -126,7 +116,11 @@ export default function AccountSettingsScreen() {
               <Badge label={t("settings.verified")} tone="success" />
             ) : (
               <Pressable onPress={onVerifyEmail} hitSlop={8} disabled={verifyingEmail}>
-                <Text style={styles.verifyLink}>{verifyingEmail ? "..." : t("settings.verify")}</Text>
+                {verifyingEmail ? (
+                  <ActivityIndicator size="small" color={colors.navy} />
+                ) : (
+                  <Text style={styles.verifyLink}>{t("settings.verify")}</Text>
+                )}
               </Pressable>
             )
           }
@@ -182,20 +176,6 @@ export default function AccountSettingsScreen() {
           description={locale === "en" ? t("settings.languageEnglish") : t("settings.languageVietnamese")}
           onPress={onSelectLanguage}
         />
-        <View style={styles.divider} />
-        <SettingsRow
-          icon="cash-outline"
-          label={t("settings.currency")}
-          description="USD"
-          onPress={() => stub(t("settings.currency"))}
-        />
-        <View style={styles.divider} />
-        <SettingsRow
-          icon="moon-outline"
-          label={t("settings.theme")}
-          description={t("settings.themeComingSoon")}
-          right={<View />}
-        />
       </Card>
 
       <Text style={styles.sectionLabel}>{t("settings.notifications")}</Text>
@@ -205,30 +185,6 @@ export default function AccountSettingsScreen() {
           description={t("settings.pushNotificationsDesc")}
           value={pushEnabled}
           onValueChange={onTogglePush}
-        />
-        <View style={styles.divider} />
-        <Toggle
-          label={t("settings.emailUpdates")}
-          description={t("settings.emailUpdatesDesc")}
-          value={emailEnabled}
-          onValueChange={setEmailEnabled}
-        />
-      </Card>
-
-      <Text style={styles.sectionLabel}>{t("settings.privacySecurity")}</Text>
-      <Card style={styles.sectionCard}>
-        <Toggle
-          label={t("settings.locationServices")}
-          description={t("settings.locationServicesDesc")}
-          value={locationEnabled}
-          onValueChange={setLocationEnabled}
-        />
-        <View style={styles.divider} />
-        <Toggle
-          label={t("settings.biometricLogin")}
-          description={t("settings.biometricLoginDesc")}
-          value={biometricEnabled}
-          onValueChange={setBiometricEnabled}
         />
       </Card>
 
@@ -263,8 +219,6 @@ export default function AccountSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 20, fontWeight: "700", color: colors.navy },
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",

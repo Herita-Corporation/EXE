@@ -22,6 +22,13 @@ function w(uri: string): ImageSource {
   return { uri, headers: WIKIMEDIA_HEADERS, cacheKey: uri };
 }
 
+/** Image source for a URL coming from the backend (voucher/event images) —
+ * adds the User-Agent Wikimedia requires, otherwise Android's okhttp gets 403. */
+export function remoteImage(uri: string | null | undefined): ImageSource | undefined {
+  if (!uri) return undefined;
+  return /(^|\.)wikimedia\.org\//.test(uri) ? w(uri) : { uri };
+}
+
 // ── Region image map ─────────────────────────────────────────────────────────
 const REGION_IMAGES: Record<string, RegionImageSource> = {
   // ── Hà Nội ──────────────────────────────────────────────────────

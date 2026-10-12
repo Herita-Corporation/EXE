@@ -7,11 +7,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/Button";
 import { IconButton } from "@/components/IconButton";
 import { setPendingCapturedPhoto } from "@/utils/pendingCapture";
+import { useLocale } from "@/i18n/LocaleContext";
+import { haptics } from "@/utils/haptics";
 import { colors, spacing } from "@/theme/colors";
 
 // Real capture flow — backs mission/[id].tsx's evidence submission
-// (submitMission() multipart photo upload). "LIVE RECOGNITION ACTIVE" is
-// cosmetic only; no ML recognition backend exists.
+// (submitMission() multipart photo upload).
 const ZOOM_LEVELS = [
   { label: ".5x", value: 0 },
   { label: "1x", value: 0.15 },
@@ -21,6 +22,7 @@ const ZOOM_LEVELS = [
 export default function MissionCameraScreen() {
   const { missionTitle } = useLocalSearchParams<{ missionTitle?: string }>();
   const insets = useSafeAreaInsets();
+  const { t } = useLocale();
   const [permission, requestPermission] = useCameraPermissions();
   const [flashOn, setFlashOn] = useState(false);
   const [zoomIndex, setZoomIndex] = useState(1);
@@ -35,9 +37,9 @@ export default function MissionCameraScreen() {
     return (
       <View style={[styles.root, styles.permissionWrap]}>
         <Ionicons name="camera-outline" size={40} color="#FFFFFF" />
-        <Text style={styles.permissionText}>Cần quyền camera để chụp ảnh minh chứng.</Text>
-        <Button title="Cấp quyền" onPress={requestPermission} />
-        <Button title="Quay lại" variant="ghost" onPress={() => router.back()} />
+        <Text style={styles.permissionText}>{t("capture.cameraPermission")}</Text>
+        <Button title={t("capture.grant")} onPress={requestPermission} />
+        <Button title={t("capture.back")} variant="ghost" onPress={() => router.back()} />
       </View>
     );
   }
@@ -45,6 +47,7 @@ export default function MissionCameraScreen() {
   async function onCapture() {
     if (capturing) return;
     setCapturing(true);
+    haptics.tap();
     try {
       const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7 });
       if (photo?.uri) {
@@ -71,7 +74,7 @@ export default function MissionCameraScreen() {
         <View style={styles.missionPill}>
           <Ionicons name="compass" size={14} color={colors.goldMuted} />
           <Text style={styles.missionPillText} numberOfLines={1}>
-            Mission: {missionTitle ?? "Evidence"}
+            {t("capture.missionPrefix", { title: missionTitle ?? t("capture.evidence") })}
           </Text>
         </View>
         <IconButton
@@ -81,7 +84,7 @@ export default function MissionCameraScreen() {
         />
       </View>
 
-      <View style={styles.bottomRow}>
+      <View style={[styles.bottomRow, { bottom: insets.bottom + spacing(4) }]}>
         <View style={styles.zoomRow}>
           {ZOOM_LEVELS.map((z, idx) => (
             <Pressable
@@ -99,11 +102,6 @@ export default function MissionCameraScreen() {
         <Pressable style={styles.shutterOuter} onPress={onCapture} disabled={capturing}>
           <View style={styles.shutterInner} />
         </Pressable>
-
-        <View style={styles.liveRow}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveText}>LIVE RECOGNITION ACTIVE</Text>
-        </View>
       </View>
     </View>
   );
@@ -135,7 +133,6 @@ const styles = StyleSheet.create({
   missionPillText: { color: "#FFFFFF", fontSize: 12, fontWeight: "600", flexShrink: 1 },
   bottomRow: {
     position: "absolute",
-    bottom: spacing(4),
     left: 0,
     right: 0,
     alignItems: "center",
@@ -161,7 +158,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   shutterInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: "#FFFFFF" },
-  liveRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#4ADE80" },
-  liveText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
 });

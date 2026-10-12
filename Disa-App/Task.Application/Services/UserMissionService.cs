@@ -26,6 +26,16 @@ public class UserMissionService : IUserMissionService
         if (template == null)
             throw new Exception("Mission template not found.");
 
+        // Idempotent: the same mission (template) at the same place of the same
+        // trip is only ever assigned once — re-swiping returns the existing one.
+        var existing = (await _userMissionRepository.GetByUserIdAsync(request.UserId))
+            .FirstOrDefault(x =>
+                x.TripId == request.TripId &&
+                x.PlaceId == request.PlaceId &&
+                x.TemplateId == template.Id);
+        if (existing != null)
+            return existing.Id;
+
         var mission = new UserMission
         {
             UserId = request.UserId,
@@ -61,6 +71,8 @@ public class UserMissionService : IUserMissionService
             return new UserMissionResponse
             {
                 Id = x.Id,
+                TripId = x.TripId,
+                PlaceId = x.PlaceId,
                 Title = x.Title,
                 Status = x.Status,
                 RewardXP = x.RewardXP,
@@ -92,6 +104,8 @@ public class UserMissionService : IUserMissionService
         return new UserMissionResponse
         {
             Id = mission.Id,
+            TripId = mission.TripId,
+            PlaceId = mission.PlaceId,
             Title = mission.Title,
             Status = mission.Status,
             RewardXP = mission.RewardXP,

@@ -1,13 +1,16 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
+import { remoteImage } from "@/data/regionImages";
+import { SkeletonCard } from "@/components/Skeleton";
+import { BackHeader } from "@/components/BackHeader";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { EmptyState } from "@/components/EmptyState";
 import * as eventsApi from "@/api/endpoints/events";
 import { ApiError } from "@/api/http";
 import type { DisaEvent } from "@/types/events";
@@ -59,26 +62,25 @@ export default function EventsScreen() {
 
   return (
     <ScreenContainer backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={goBack} />
-        <Text style={styles.title}>{t("events.title")}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BackHeader title={t("events.title")} onBack={goBack} />
       <Text style={styles.eyebrow}>{t("events.discoverVietnam")}</Text>
       <Text style={styles.subtitle}>{t("events.subtitle")}</Text>
 
       <ErrorBanner message={error} />
 
       {loading ? (
-        <ActivityIndicator color={colors.navy} style={{ marginTop: spacing(3) }} />
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
       ) : events.length === 0 ? (
-        <Text style={styles.emptyText}>{t("events.emptyTitle")}</Text>
+        <EmptyState icon="calendar-outline" title={t("events.emptyTitle")} />
       ) : (
         events.map((event) => (
           <Card
             key={event.id}
             variant="media"
-            imageSource={event.coverImageUrl ?? undefined}
+            imageSource={remoteImage(event.coverImageUrl)}
             overlay={<Badge label={event.tag} tone="gold" />}
           >
             <Text style={styles.eventTitle}>{event.title}</Text>
@@ -115,11 +117,8 @@ export default function EventsScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 18, fontWeight: "700", color: colors.navy },
   eyebrow: { fontSize: 11, fontWeight: "700", color: colors.link, letterSpacing: 0.5 },
   subtitle: { color: colors.textMuted, fontSize: 13 },
-  emptyText: { color: colors.textMuted, fontSize: 13, textAlign: "center", marginTop: spacing(3) },
   eventTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
   eventCity: { fontSize: 12, color: colors.navy, fontWeight: "600" },
   eventDescription: { fontSize: 12, color: colors.textMuted },

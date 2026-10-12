@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useRef, useState } from "react";
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Link, router } from "expo-router";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Input } from "@/components/Input";
@@ -11,14 +12,11 @@ import { LanguageSwitcherButton } from "@/components/LanguageSwitcher";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, spacing } from "@/theme/colors";
+import { colors, isDark, spacing } from "@/theme/colors";
 
 export default function RegisterScreen() {
   const { register, login } = useAuth();
   const { t } = useLocale();
-  // Full Name is collected for Figma fidelity but NOT sent — IAMService's
-  // RegisterRequest has no matching column today.
-  const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -29,11 +27,21 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
+  // Shared props that move the keyboard's "Next" key to the following field.
+  const next = (target: React.RefObject<TextInput | null>) => ({
+    returnKeyType: "next" as const,
+    submitBehavior: "submit" as const,
+    onSubmitEditing: () => target.current?.focus(),
+  });
 
   async function onSubmit() {
     setError(null);
     setSuccess(null);
-    if (!fullName || !username || !phone || !email || !password || !confirm) {
+    if (!username || !phone || !email || !password || !confirm) {
       setError(t("auth.registerFieldsRequired"));
       return;
     }
@@ -65,7 +73,15 @@ export default function RegisterScreen() {
   return (
     <ScreenContainer>
       <LanguageSwitcherButton style={styles.languageSwitcher} />
-      <Text style={styles.wordmark}>DISA Travel</Text>
+      <Image
+        source={
+          isDark
+            ? require("@/assets/images/brand/logo-horizontal-white.png")
+            : require("@/assets/images/brand/logo-horizontal.png")
+        }
+        style={styles.logoImage}
+        contentFit="contain"
+      />
 
       <Card variant="elevated" style={styles.card}>
         <Text style={styles.title}>{t("auth.createAccount")}</Text>
@@ -75,13 +91,7 @@ export default function RegisterScreen() {
         {success ? <Text style={{ color: colors.success }}>{success}</Text> : null}
 
         <Input
-          label={t("auth.fullName")}
-          icon="person-outline"
-          value={fullName}
-          onChangeText={setFullName}
-          placeholder={t("auth.fullNamePlaceholder")}
-        />
-        <Input
+          {...next(phoneRef)}
           label={t("auth.username")}
           icon="at-outline"
           autoCapitalize="none"
@@ -90,6 +100,8 @@ export default function RegisterScreen() {
           placeholder={t("auth.usernamePlaceholder")}
         />
         <Input
+          ref={phoneRef}
+          {...next(emailRef)}
           label={t("auth.phoneNumber")}
           icon="call-outline"
           keyboardType="phone-pad"
@@ -98,6 +110,8 @@ export default function RegisterScreen() {
           placeholder={t("auth.phoneNumberPlaceholder")}
         />
         <Input
+          ref={emailRef}
+          {...next(passwordRef)}
           label={t("auth.emailAddress")}
           icon="mail-outline"
           autoCapitalize="none"
@@ -107,6 +121,8 @@ export default function RegisterScreen() {
           placeholder={t("auth.emailAddressPlaceholder")}
         />
         <Input
+          ref={passwordRef}
+          {...next(confirmRef)}
           label={t("auth.password")}
           icon="lock-closed-outline"
           secureTextEntry={!showPassword}
@@ -123,6 +139,8 @@ export default function RegisterScreen() {
           }
         />
         <Input
+          ref={confirmRef}
+          returnKeyType="done"
           label={t("auth.confirmPassword")}
           icon="shield-checkmark-outline"
           secureTextEntry={!showPassword}
@@ -181,13 +199,8 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   languageSwitcher: { marginTop: spacing(1.5) },
-  wordmark: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: colors.navy,
-    textAlign: "center",
-    marginTop: spacing(2),
-  },
+  // Same logo treatment as the login screen (brand/logo-horizontal.png is 1200×180).
+  logoImage: { height: 30, aspectRatio: 1200 / 180, alignSelf: "center", marginTop: spacing(2) },
   card: { marginTop: spacing(2), gap: spacing(1.25) },
   title: { fontSize: 22, fontWeight: "800", color: colors.text },
   subtitle: { color: colors.textMuted, fontSize: 13, marginBottom: spacing(0.5) },

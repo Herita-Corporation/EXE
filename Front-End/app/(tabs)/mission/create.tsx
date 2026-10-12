@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   Platform,
@@ -8,6 +9,7 @@ import {
   SectionList,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -31,6 +33,7 @@ import { useSmartBack } from "@/utils/backNavigation";
 import { VIETNAM_PROVINCES, type ProvinceHighlight } from "@/data/vietnamProvinces";
 import { getRegionImage } from "@/data/regionImages";
 import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
+import { formatDate, fromIsoDate, toIsoDate } from "@/utils/date";
 import { colors, radius, spacing } from "@/theme/colors";
 
 const TRAVEL_STYLE_KEYS: Array<{ key: string; labelKey: TranslationKey; icon: keyof typeof Ionicons.glyphMap }> = [
@@ -54,7 +57,18 @@ function formatVndShort(n: number, unit: string): string {
 function todayPlus(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toIsoDate(d);
+}
+
+/** Accent-insensitive match so "da lat" finds "Đà Lạt". */
+function normalize(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim();
 }
 
 /** Large photo card for a featured area in the area picker sheet. */
@@ -107,10 +121,19 @@ function FeaturedAreaCard({
 export default function CreateItineraryScreen() {
   const insets = useSafeAreaInsets();
   const goBack = useSmartBack();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { user } = useAuth();
   const [province, setProvince] = useState<string | null>(null);
   const [provincePickerOpen, setProvincePickerOpen] = useState(false);
+  const [provinceQuery, setProvinceQuery] = useState("");
+  const provinceResults = provinceQuery.trim()
+    ? VIETNAM_PROVINCES.filter((p) => normalize(p.name).includes(normalize(provinceQuery)))
+    : VIETNAM_PROVINCES;
+
+  function closeProvincePicker() {
+    setProvincePickerOpen(false);
+    setProvinceQuery("");
+  }
   const [highlight, setHighlight] = useState<string | null>(null);
   const [highlightPickerOpen, setHighlightPickerOpen] = useState(false);
   const selectedProvince = VIETNAM_PROVINCES.find((p) => p.name === province) ?? null;
@@ -158,7 +181,9 @@ export default function CreateItineraryScreen() {
     try {
       const result = await generateItinerary({
         cities: [highlight ? `${highlight}, ${province}` : province],
-        budget: budgetVnd,
+        // The slider is per person; AI-Itinerary plans against the whole
+        // trip budget (schemas/request.py: "Total trip budget in VND").
+        budget: budgetVnd * travelers,
         start_date: startDate,
         end_date: endDate,
         preferences: styles_,
@@ -188,7 +213,7 @@ export default function CreateItineraryScreen() {
     <ScreenContainer scroll noPadding backgroundColor={colors.surface}>
       <View style={styles.hero}>
         <Image
-          source={{ uri: "https://picsum.photos/seed/disa-plan-trip/900/500" }}
+          source={getRegionImage(highlight, province)}
           style={styles.heroImage}
           contentFit="cover"
         />
@@ -221,7 +246,7 @@ export default function CreateItineraryScreen() {
         {selectedProvince && featuredAreas.length > 0 ? (
           <View style={styles.featuredBox}>
             <View style={styles.featuredHeader}>
-              <Ionicons name="star" size={14} color="#F59E0B" />
+              <Ionicons name="star" size={14} color={colors.warning} />
               <Text style={styles.featuredTitle}>{t("createItinerary.featuredAreasLabel")}</Text>
               <Pressable onPress={() => setHighlightPickerOpen(true)} hitSlop={8} style={styles.seeAllBtn}>
                 <Text style={styles.seeAllText}>
@@ -242,7 +267,7 @@ export default function CreateItineraryScreen() {
                   <Pressable
                     key={area.name}
                     style={[styles.featuredCard, selected && styles.featuredCardSelected]}
-                    onPress={() => setHighlightPickerOpen(true)}
+                    onPress={() => setHighlight(selected ? null : area.name)}
                   >
                     <Image
                       source={getRegionImage(area.name, province)}
@@ -293,37 +318,43 @@ export default function CreateItineraryScreen() {
             <Text style={styles.label}>{t("createItinerary.startDateLabel")}</Text>
             <Pressable style={styles.selectBox} onPress={() => setShowStartPicker(true)}>
               <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.selectText}>{startDate}</Text>
+              <Text style={styles.selectText}>{formatDate(startDate, locale)}</Text>
             </Pressable>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>{t("createItinerary.endDateLabel")}</Text>
             <Pressable style={styles.selectBox} onPress={() => setShowEndPicker(true)}>
               <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.selectText}>{endDate}</Text>
+              <Text style={styles.selectText}>{formatDate(endDate, locale)}</Text>
             </Pressable>
           </View>
         </View>
 
         {showStartPicker ? (
           <DateTimePicker
-            value={new Date(startDate)}
+            value={fromIsoDate(startDate)}
             mode="date"
+            minimumDate={new Date()}
             display={Platform.OS === "ios" ? "inline" : "default"}
             onChange={(_, date) => {
               setShowStartPicker(false);
-              if (date) setStartDate(date.toISOString().slice(0, 10));
+              if (!date) return;
+              const next = toIsoDate(date);
+              setStartDate(next);
+              // Keep the range valid instead of erroring on submit.
+              if (endDate < next) setEndDate(next);
             }}
           />
         ) : null}
         {showEndPicker ? (
           <DateTimePicker
-            value={new Date(endDate)}
+            value={fromIsoDate(endDate)}
             mode="date"
+            minimumDate={fromIsoDate(startDate)}
             display={Platform.OS === "ios" ? "inline" : "default"}
             onChange={(_, date) => {
               setShowEndPicker(false);
-              if (date) setEndDate(date.toISOString().slice(0, 10));
+              if (date) setEndDate(toIsoDate(date));
             }}
           />
         ) : null}
@@ -382,6 +413,11 @@ export default function CreateItineraryScreen() {
               {formatVndShort(MAX_BUDGET_VND, t("createItinerary.budgetUnitMillion"))}+
             </Text>
           </View>
+          {travelers > 1 ? (
+            <Text style={styles.budgetTotal}>
+              {t("extra.totalBudget", { count: travelers, amount: formatVnd(budgetVnd * travelers) })}
+            </Text>
+          ) : null}
         </View>
 
         <Text style={styles.label}>{t("createItinerary.travelStyleLabel")}</Text>
@@ -408,20 +444,46 @@ export default function CreateItineraryScreen() {
         />
       </View>
 
-      <Modal visible={provincePickerOpen} animationType="slide" transparent>
+      <Modal
+        visible={provincePickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={closeProvincePicker}
+      >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeProvincePicker} />
+          <View style={[styles.modalSheet, styles.provinceSheet]}>
             <Text style={styles.modalTitle}>{t("createItinerary.provincePickerTitle")}</Text>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={16} color={colors.textMuted} />
+              <TextInput
+                value={provinceQuery}
+                onChangeText={setProvinceQuery}
+                placeholder={t("extra.searchProvince")}
+                placeholderTextColor={colors.textMuted}
+                style={styles.searchInput}
+                autoCorrect={false}
+              />
+              {provinceQuery ? (
+                <Pressable onPress={() => setProvinceQuery("")} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
             <FlatList
-              data={VIETNAM_PROVINCES}
+              data={provinceResults}
               keyExtractor={(item) => item.name}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <Text style={styles.noResults}>{t("extra.noProvinceMatch")}</Text>
+              }
               renderItem={({ item }) => (
                 <Pressable
                   style={styles.modalRow}
                   onPress={() => {
                     if (item.name !== province) setHighlight(null);
                     setProvince(item.name);
-                    setProvincePickerOpen(false);
+                    closeProvincePicker();
                   }}
                 >
                   <Text style={styles.modalRowText}>{item.name}</Text>
@@ -431,7 +493,7 @@ export default function CreateItineraryScreen() {
                 </Pressable>
               )}
             />
-            <Button title={t("common.close")} variant="ghost" onPress={() => setProvincePickerOpen(false)} />
+            <Button title={t("common.close")} variant="ghost" onPress={closeProvincePicker} />
           </View>
         </View>
       </Modal>
@@ -443,6 +505,7 @@ export default function CreateItineraryScreen() {
         onRequestClose={() => setHighlightPickerOpen(false)}
       >
         <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setHighlightPickerOpen(false)} />
           <View style={[styles.modalSheet, styles.areaSheet]}>
             <View style={styles.areaSheetHeader}>
               <View style={{ flex: 1 }}>
@@ -481,7 +544,7 @@ export default function CreateItineraryScreen() {
               renderSectionHeader={({ section }) => (
                 <View style={styles.sectionHeader}>
                   {section.key === "featured" ? (
-                    <Ionicons name="star" size={14} color="#F59E0B" />
+                    <Ionicons name="star" size={14} color={colors.warning} />
                   ) : (
                     <Ionicons name="location-outline" size={14} color={colors.textMuted} />
                   )}
@@ -525,6 +588,21 @@ export default function CreateItineraryScreen() {
                 )
               }
             />
+          </View>
+        </View>
+      </Modal>
+
+      {/* AI generation can take up to a minute — a blocking, explained wait
+          instead of a tiny spinner inside the button. */}
+      <Modal visible={loading} transparent animationType="fade">
+        <View style={styles.generatingBackdrop}>
+          <View style={styles.generatingCard}>
+            <View style={styles.generatingIcon}>
+              <Ionicons name="sparkles" size={26} color={colors.gold} />
+            </View>
+            <Text style={styles.generatingTitle}>{t("extra.generatingTitle")}</Text>
+            <Text style={styles.generatingText}>{t("extra.generatingSubtitle")}</Text>
+            <ActivityIndicator color={colors.navy} style={{ marginTop: spacing(1) }} />
           </View>
         </View>
       </Modal>
@@ -600,6 +678,7 @@ const styles = StyleSheet.create({
   budgetValue: { fontSize: 16, fontWeight: "800", color: colors.navy },
   budgetRangeRow: { flexDirection: "row", justifyContent: "space-between" },
   budgetRangeText: { fontSize: 11, color: colors.textMuted },
+  budgetTotal: { fontSize: 12, fontWeight: "700", color: colors.navy, textAlign: "right" },
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing(1) },
   chipHalf: { flexBasis: "47%" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
@@ -612,6 +691,43 @@ const styles = StyleSheet.create({
     gap: spacing(1),
   },
   modalTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  provinceSheet: { height: "70%" },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(1),
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing(1.5),
+  },
+  searchInput: { flex: 1, paddingVertical: spacing(1.25), color: colors.text, fontSize: 14 },
+  noResults: { color: colors.textMuted, fontSize: 13, textAlign: "center", paddingVertical: spacing(3) },
+  generatingBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(8,29,64,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing(4),
+  },
+  generatingCard: {
+    width: "100%",
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing(3),
+    alignItems: "center",
+    gap: spacing(1),
+  },
+  generatingIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.brandNavy,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing(0.5),
+  },
+  generatingTitle: { fontSize: 17, fontWeight: "800", color: colors.navy },
+  generatingText: { fontSize: 13, color: colors.textMuted, textAlign: "center", lineHeight: 18 },
   modalSubtitle: { fontSize: 12, color: colors.textMuted, marginBottom: spacing(0.5) },
   // ── Featured areas strip (main form) ──
   featuredBox: {
@@ -706,7 +822,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#F59E0B",
+    backgroundColor: colors.warning,
     borderRadius: radius.pill,
     paddingHorizontal: 8,
     paddingVertical: 3,

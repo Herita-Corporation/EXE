@@ -14,7 +14,16 @@ export function OtpInput({ value, onChange, length = 6 }: Props) {
   const digits = Array.from({ length }, (_, i) => value[i] ?? "");
 
   function setDigit(index: number, char: string) {
-    const clean = char.replace(/[^0-9]/g, "").slice(-1);
+    const digitsOnly = char.replace(/[^0-9]/g, "");
+    // A paste or OS one-time-code autofill delivers the whole code at once —
+    // spread it across the boxes instead of keeping only its last digit.
+    if (digitsOnly.length > 1) {
+      const filled = (value.slice(0, index) + digitsOnly).slice(0, length);
+      onChange(filled);
+      refs.current[Math.min(filled.length, length - 1)]?.focus();
+      return;
+    }
+    const clean = digitsOnly.slice(-1);
     const next = digits.slice();
     next[index] = clean;
     onChange(next.join(""));
@@ -41,7 +50,10 @@ export function OtpInput({ value, onChange, length = 6 }: Props) {
           onChangeText={(t) => setDigit(i, t)}
           onKeyPress={({ nativeEvent }) => onKeyPress(i, nativeEvent.key)}
           keyboardType="number-pad"
-          maxLength={1}
+          // First box accepts the full code so iOS/Android autofill can land.
+          maxLength={i === 0 ? length : 1}
+          textContentType={i === 0 ? "oneTimeCode" : "none"}
+          autoComplete={i === 0 ? "one-time-code" : "off"}
           style={[styles.box, digit ? styles.boxFilled : null]}
         />
       ))}

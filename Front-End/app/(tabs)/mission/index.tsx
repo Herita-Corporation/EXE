@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
+  RefreshControl,
   Alert,
   Pressable,
   StyleSheet,
@@ -17,6 +17,8 @@ import { IconButton } from "@/components/IconButton";
 import { ProgressBar } from "@/components/ProgressBar";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { EmptyState } from "@/components/EmptyState";
+import { SkeletonRow } from "@/components/Skeleton";
+import { haptics } from "@/utils/haptics";
 import { MissionThumb } from "@/components/MissionThumb";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { GradientHero } from "@/components/GradientHero";
@@ -25,13 +27,14 @@ import { useToast } from "@/context/ToastContext";
 import { getLiveItineraryIds } from "@/utils/itineraryHistory";
 import { ApiError } from "@/api/http";
 import { useAuth } from "@/context/AuthContext";
-import { MISSION_STATUS_LABEL, MISSION_TYPE_LABEL, UserMission } from "@/types/missions";
+import { MISSION_STATUS_KEY, MISSION_TYPE_KEY, UserMission } from "@/types/missions";
+import { formatDate } from "@/utils/date";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
 import { FEATURED_MISSIONS } from "@/mocks/featuredMissions";
 import { colors, radius, shadow, spacing } from "@/theme/colors";
 
-// Active = not yet Completed/Rejected/Expired (see MISSION_STATUS_LABEL).
+// Active = not yet Completed/Rejected/Expired (see MISSION_STATUS_KEY).
 const ACTIVE_STATUSES = new Set([0, 1]);
 const COMPLETED_STATUS = 2;
 
@@ -54,6 +57,7 @@ export default function MissionHomeScreen() {
   const [tab, setTab] = useState<MissionTab>("active");
   const [missions, setMissions] = useState<UserMission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -69,11 +73,11 @@ export default function MissionHomeScreen() {
       const missionList = user ? await listUserMissions(user.id) : [];
       setMissions(missionList);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Không tải được nhiệm vụ.");
+      setError(err instanceof ApiError ? err.message : t("missionList.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -81,6 +85,12 @@ export default function MissionHomeScreen() {
       load();
     }, [load])
   );
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
 
   // Nhiệm vụ nhận từ itinerary (assignMission ở mission/itinerary/[id].tsx)
   // và mọi nhiệm vụ khác đều đi qua chung UserMissions này — chỉ khác nhau ở
@@ -97,20 +107,21 @@ export default function MissionHomeScreen() {
 
   function confirmDelete(m: UserMission) {
     Alert.alert(
-      "Xóa nhiệm vụ",
-      `Xóa "${m.title}"?`,
+      t("missionList.deleteTitle"),
+      t("missionList.deleteMessage", { title: m.title }),
       [
-        { text: "Hủy", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Xóa",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await deleteMission(m.id);
+              haptics.warning();
               setMissions((prev) => prev.filter((x) => x.id !== m.id));
-              showToast("Đã xóa nhiệm vụ.", "success");
+              showToast(t("missionList.deleted"), "success");
             } catch (err) {
-              showToast(err instanceof ApiError ? err.message : "Không thể xóa nhiệm vụ.", "error");
+              showToast(err instanceof ApiError ? err.message : t("missionList.deleteFailed"), "error");
             }
           },
         },
@@ -121,12 +132,12 @@ export default function MissionHomeScreen() {
   function confirmDeleteAll() {
     if (!user || activeMissions.length === 0) return;
     Alert.alert(
-      "Xóa tất cả nhiệm vụ",
-      `Xóa ${activeMissions.length} nhiệm vụ chưa hoàn thành? Nhiệm vụ đã hoàn thành và điểm đã nhận được giữ nguyên.`,
+      t("missionList.deleteAllTitle"),
+      t("missionList.deleteAllMessage", { count: activeMissions.length }),
       [
-        { text: "Hủy", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Xóa tất cả",
+          text: t("missionList.deleteAllConfirm"),
           style: "destructive",
           onPress: async () => {
             try {
@@ -134,9 +145,9 @@ export default function MissionHomeScreen() {
               // the server never deletes Completed ones here.
               await pruneMissions(user.id, []);
               setMissions((prev) => prev.filter((m) => m.status === COMPLETED_STATUS));
-              showToast("Đã xóa các nhiệm vụ chưa hoàn thành.", "success");
+              showToast(t("missionList.deletedAll"), "success");
             } catch (err) {
-              showToast(err instanceof ApiError ? err.message : "Không thể xóa nhiệm vụ.", "error");
+              showToast(err instanceof ApiError ? err.message : t("missionList.deleteFailed"), "error");
             }
           },
         },
@@ -152,7 +163,12 @@ export default function MissionHomeScreen() {
   }
 
   return (
-    <ScreenContainer avoidTabBar>
+    <ScreenContainer
+      avoidTabBar
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.navy} />
+      }
+    >
       <ScreenHeader
         title={t("tabs.mission")}
         subtitle={t("mission.headerSub")}
@@ -229,17 +245,22 @@ export default function MissionHomeScreen() {
       {tab === "active" && activeMissions.length > 0 ? (
         <Pressable
           onPress={confirmDeleteAll}
-          style={({ pressed }) => [styles.deleteAllBtn, pressed && { opacity: 0.7 }]}
+          hitSlop={8}
+          style={({ pressed }) => [styles.deleteAllBtn, pressed && { opacity: 0.6 }]}
         >
-          <Ionicons name="trash-outline" size={15} color={colors.danger} />
-          <Text style={styles.deleteAllText}>Xóa tất cả nhiệm vụ</Text>
+          <Ionicons name="trash-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.deleteAllText}>{t("missionList.deleteAll")}</Text>
         </Pressable>
       ) : null}
 
       <ErrorBanner message={error} />
 
       {loading ? (
-        <ActivityIndicator color={colors.blue} style={{ marginTop: spacing(2) }} />
+        <>
+          <SkeletonRow thumbSize={64} />
+          <SkeletonRow thumbSize={64} />
+          <SkeletonRow thumbSize={64} />
+        </>
       ) : tab === "active" ? (
         activeMissions.length === 0 ? (
           <>
@@ -277,7 +298,7 @@ function MissionRow({
   /** Omitted for completed missions — those are kept, never deleted. */
   onDelete?: () => void;
 }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const tone = STATUS_TONE[m.status] ?? STATUS_TONE[4];
 
   return (
@@ -291,18 +312,18 @@ function MissionRow({
           <View style={styles.missionTopRow}>
             <View style={[styles.statusPill, { backgroundColor: tone.bg }]}>
               <Text style={[styles.statusText, { color: tone.fg }]}>
-                {MISSION_STATUS_LABEL[m.status] ?? "—"}
+                {MISSION_STATUS_KEY[m.status] ? t(MISSION_STATUS_KEY[m.status]) : "—"}
               </Text>
             </View>
-            {MISSION_TYPE_LABEL[m.type] ? (
-              <Text style={styles.typeText}>{MISSION_TYPE_LABEL[m.type]}</Text>
+            {MISSION_TYPE_KEY[m.type] ? (
+              <Text style={styles.typeText}>{t(MISSION_TYPE_KEY[m.type])}</Text>
             ) : null}
           </View>
           <Text style={styles.missionTitle} numberOfLines={2}>{m.title}</Text>
           {completed ? (
             <Text style={styles.completedDate}>
               {t("completed.completedPrefix")}{" "}
-              {m.completedAt ? new Date(m.completedAt).toLocaleDateString("vi-VN") : "—"}
+              {formatDate(m.completedAt, locale)}
             </Text>
           ) : null}
           <View style={styles.rewardRow}>
@@ -317,8 +338,13 @@ function MissionRow({
           </View>
         </View>
         {onDelete ? (
-          <Pressable onPress={onDelete} hitSlop={10} style={styles.deleteBtn}>
-            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          <Pressable
+            onPress={onDelete}
+            hitSlop={10}
+            style={styles.moreBtn}
+            accessibilityLabel={t("extra.missionActions")}
+          >
+            <Ionicons name="ellipsis-vertical" size={18} color={colors.textMuted} />
           </Pressable>
         ) : null}
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -355,7 +381,7 @@ const styles = StyleSheet.create({
   },
   statItem: { flex: 1, alignItems: "center", gap: 2 },
   statValue: { color: "#FFFFFF", fontSize: 17, fontWeight: "800" },
-  statLabel: { color: "rgba(255,255,255,0.65)", fontSize: 10.5, textAlign: "center" },
+  statLabel: { color: "rgba(255,255,255,0.65)", fontSize: 11, textAlign: "center" },
   statDivider: { width: 1, height: 28, backgroundColor: "rgba(255,255,255,0.12)" },
 
   tabRow: {
@@ -375,7 +401,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   tabButtonActive: { backgroundColor: colors.surface, ...shadow, shadowOpacity: 0.1 },
-  tabButtonText: { fontSize: 12.5, fontWeight: "700", color: colors.textMuted },
+  tabButtonText: { fontSize: 13, fontWeight: "700", color: colors.textMuted },
   tabButtonTextActive: { color: colors.navy },
   countBubble: {
     minWidth: 20,
@@ -397,17 +423,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     alignSelf: "flex-end",
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.pill,
-    paddingVertical: spacing(0.75),
-    paddingHorizontal: spacing(1.5),
+    paddingVertical: spacing(0.25),
   },
-  deleteAllText: { fontSize: 12.5, fontWeight: "700", color: colors.danger },
-  deleteBtn: {
-    width: 34,
+  deleteAllText: { fontSize: 13, fontWeight: "600", color: colors.textMuted },
+  moreBtn: {
+    width: 28,
     height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.dangerSoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -416,7 +437,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: "800" },
   typeText: { fontSize: 11, color: colors.textMuted, fontWeight: "600" },
   missionTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
-  completedDate: { fontSize: 11.5, color: colors.textMuted },
+  completedDate: { fontSize: 12, color: colors.textMuted },
   rewardRow: { flexDirection: "row", gap: spacing(0.75) },
   rewardPill: {
     flexDirection: "row",

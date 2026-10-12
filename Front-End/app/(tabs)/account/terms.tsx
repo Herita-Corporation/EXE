@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
+import { BackHeader } from "@/components/BackHeader";
 import { useLocale } from "@/i18n/LocaleContext";
 import { colors, spacing } from "@/theme/colors";
 
@@ -66,11 +66,7 @@ export default function TermsOfServiceScreen() {
 
   return (
     <ScreenContainer scroll backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={() => router.back()} />
-        <Text style={styles.title}>{t("settings.termsOfService")}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BackHeader title={t("settings.termsOfService")} onBack={() => router.back()} />
 
       {sections.map((section) => (
         <View key={section.title} style={styles.section}>
@@ -83,8 +79,6 @@ export default function TermsOfServiceScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 18, fontWeight: "700", color: colors.navy },
   section: { marginTop: spacing(2), gap: spacing(0.5) },
   sectionTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
   sectionBody: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },

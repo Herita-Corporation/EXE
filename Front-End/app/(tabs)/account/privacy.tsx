@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
+import { BackHeader } from "@/components/BackHeader";
 import { useLocale } from "@/i18n/LocaleContext";
 import { colors, spacing } from "@/theme/colors";
 
@@ -21,7 +21,7 @@ const SECTIONS_EN = [
   },
   {
     title: "4. Storage",
-    body: "Photos/videos you submit as mission evidence and event/avatar images are stored on Disa Travel's own servers, not shared with third parties beyond what's needed to operate the app.",
+    body: "Photos/videos you submit as mission evidence and event/avatar images are stored on DISA Travel's own servers, not shared with third parties beyond what's needed to operate the app.",
   },
   {
     title: "5. Your Choices",
@@ -48,7 +48,7 @@ const SECTIONS_VI = [
   },
   {
     title: "4. Lưu trữ",
-    body: "Ảnh/video minh chứng nhiệm vụ và ảnh sự kiện/đại diện được lưu trên máy chủ riêng của Disa Travel, không chia sẻ cho bên thứ ba ngoài phạm vi cần thiết để vận hành ứng dụng.",
+    body: "Ảnh/video minh chứng nhiệm vụ và ảnh sự kiện/đại diện được lưu trên máy chủ riêng của DISA Travel, không chia sẻ cho bên thứ ba ngoài phạm vi cần thiết để vận hành ứng dụng.",
   },
   {
     title: "5. Lựa chọn của bạn",
@@ -66,11 +66,7 @@ export default function PrivacyPolicyScreen() {
 
   return (
     <ScreenContainer scroll backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={() => router.back()} />
-        <Text style={styles.title}>{t("settings.privacyPolicy")}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BackHeader title={t("settings.privacyPolicy")} onBack={() => router.back()} />
 
       {sections.map((section) => (
         <View key={section.title} style={styles.section}>
@@ -83,8 +79,6 @@ export default function PrivacyPolicyScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 18, fontWeight: "700", color: colors.navy },
   section: { marginTop: spacing(2), gap: spacing(0.5) },
   sectionTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
   sectionBody: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },

@@ -2,14 +2,14 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
+import { BackHeader } from "@/components/BackHeader";
 import { useLocale } from "@/i18n/LocaleContext";
 import { colors, spacing } from "@/theme/colors";
 
 const SECTIONS_EN = [
   {
     title: "1. Acceptance of Terms",
-    body: "By creating an account or using Disa Travel, you agree to these Terms of Service. If you do not agree, please do not use the app.",
+    body: "By creating an account or using DISA Travel, you agree to these Terms of Service. If you do not agree, please do not use the app.",
   },
   {
     title: "2. Your Account",
@@ -25,7 +25,7 @@ const SECTIONS_EN = [
   },
   {
     title: "5. User Content",
-    body: "Photos and videos you submit as mission evidence remain yours, but you grant Disa Travel a license to store and display them within the app (e.g. your Collection).",
+    body: "Photos and videos you submit as mission evidence remain yours, but you grant DISA Travel a license to store and display them within the app (e.g. your Collection).",
   },
   {
     title: "6. Changes",
@@ -36,7 +36,7 @@ const SECTIONS_EN = [
 const SECTIONS_VI = [
   {
     title: "1. Chấp nhận điều khoản",
-    body: "Khi tạo tài khoản hoặc sử dụng Disa Travel, bạn đồng ý với các Điều khoản dịch vụ này. Nếu không đồng ý, vui lòng không sử dụng ứng dụng.",
+    body: "Khi tạo tài khoản hoặc sử dụng DISA Travel, bạn đồng ý với các Điều khoản dịch vụ này. Nếu không đồng ý, vui lòng không sử dụng ứng dụng.",
   },
   {
     title: "2. Tài khoản của bạn",
@@ -52,7 +52,7 @@ const SECTIONS_VI = [
   },
   {
     title: "5. Nội dung do người dùng tạo",
-    body: "Ảnh và video bạn gửi làm minh chứng nhiệm vụ vẫn thuộc về bạn, nhưng bạn cấp cho Disa Travel quyền lưu trữ và hiển thị chúng trong ứng dụng (vd: mục Bộ sưu tập).",
+    body: "Ảnh và video bạn gửi làm minh chứng nhiệm vụ vẫn thuộc về bạn, nhưng bạn cấp cho DISA Travel quyền lưu trữ và hiển thị chúng trong ứng dụng (vd: mục Bộ sưu tập).",
   },
   {
     title: "6. Thay đổi",
@@ -66,11 +66,7 @@ export default function TermsOfServiceScreen() {
 
   return (
     <ScreenContainer scroll backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={() => router.back()} />
-        <Text style={styles.title}>{t("settings.termsOfService")}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BackHeader title={t("settings.termsOfService")} onBack={() => router.back()} />
 
       {sections.map((section) => (
         <View key={section.title} style={styles.section}>
@@ -83,8 +79,6 @@ export default function TermsOfServiceScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 18, fontWeight: "700", color: colors.navy },
   section: { marginTop: spacing(2), gap: spacing(0.5) },
   sectionTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
   sectionBody: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },

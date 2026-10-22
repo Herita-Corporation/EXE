@@ -40,7 +40,7 @@ export function Avatar({ source, name, size = 44 }: Props) {
 
 const styles = StyleSheet.create({
   fallback: {
-    backgroundColor: colors.navy,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -1,43 +1,40 @@
 import React, { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import Constants from "expo-constants";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
+import { BackHeader } from "@/components/BackHeader";
 import { Card } from "@/components/Card";
 import { Toggle } from "@/components/Toggle";
 import { SettingsRow } from "@/components/SettingsRow";
 import { Badge } from "@/components/Badge";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
+import { LanguagePickerModal } from "@/components/LanguageSwitcher";
 import { useAuth } from "@/context/AuthContext";
 import * as authApi from "@/api/endpoints/auth";
 import { ApiError } from "@/api/http";
 import { enablePushNotifications } from "@/utils/pushNotifications";
 import { useLocale } from "@/i18n/LocaleContext";
+import { useToast } from "@/context/ToastContext";
 import { colors, spacing } from "@/theme/colors";
 
 export default function AccountSettingsScreen() {
   const { user, refreshMe } = useAuth();
-  const { t, locale, setLocale } = useLocale();
-  // Email/Location/Biometric remain cosmetic/local-only — no backend for
-  // those exists. Push is wired to the real Expo push token registration
-  // (see onTogglePush below).
+  const { t, locale } = useLocale();
+  const { showToast } = useToast();
+  // Only settings with a real effect are shown — push is wired to the Expo
+  // push token registration (see onTogglePush below). Email digests,
+  // location/biometric toggles, currency and theme had no backend or app
+  // behavior behind them, so they were removed rather than faked.
   const [pushEnabled, setPushEnabled] = useState(false);
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [locationEnabled, setLocationEnabled] = useState(true);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   const [editingField, setEditingField] = useState<"email" | "phone" | null>(null);
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [savingField, setSavingField] = useState(false);
   const [verifyingEmail, setVerifyingEmail] = useState(false);
-  const [verifyingPhone, setVerifyingPhone] = useState(false);
-
-  function stub(feature: string) {
-    Alert.alert(feature, "Tính năng này chưa được hỗ trợ.");
-  }
+  const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
 
   async function onTogglePush(next: boolean) {
     if (!next) {
@@ -48,61 +45,26 @@ export default function AccountSettingsScreen() {
     const enabled = await enablePushNotifications();
     setPushEnabled(enabled);
     if (!enabled) {
-      Alert.alert(t("settings.error"), t("settings.pushNotificationsFailed"));
+      showToast(t("settings.pushNotificationsFailed"), "error");
     }
   }
 
   function onSelectLanguage() {
-    Alert.alert(t("settings.selectLanguage"), undefined, [
-      { text: t("settings.languageEnglish"), onPress: () => setLocale("en") },
-      { text: t("settings.languageVietnamese"), onPress: () => setLocale("vi") },
-      { text: t("common.cancel"), style: "cancel" },
-    ]);
+    setLanguagePickerOpen(true);
   }
 
   async function onVerifyEmail() {
     setVerifyingEmail(true);
     try {
       const res = await authApi.sendEmailVerification();
-      Alert.alert(
-        t("settings.confirmEmailSentTitle"),
-        t("settings.confirmEmailSentBody", { code: res.verificationToken }),
-        [
-          { text: t("common.cancel"), style: "cancel" },
-          {
-            text: t("settings.confirm"),
-            onPress: async () => {
-              try {
-                await authApi.verifyEmail({ token: res.verificationToken });
-                await refreshMe();
-                Alert.alert(t("settings.success"), t("settings.emailVerifiedMessage"));
-              } catch (err) {
-                Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.emailVerifyFailed"));
-              }
-            },
-          },
-        ]
-      );
-    } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.sendEmailVerificationFailed"));
-    } finally {
-      setVerifyingEmail(false);
-    }
-  }
-
-  async function onVerifyPhone() {
-    if (!user?.phoneNumber) return;
-    setVerifyingPhone(true);
-    try {
-      const res = await authApi.resendPhoneOtp({ phoneNumber: user.phoneNumber });
       router.push({
         pathname: "/(auth)/otp",
-        params: { phoneNumber: user.phoneNumber, devOtpCode: res.otpCode, purpose: "settings" },
+        params: { email: res.email, purpose: "settings" },
       });
     } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.sendOtpFailed"));
+      showToast(err instanceof ApiError ? err.message : t("settings.sendEmailVerificationFailed"), "error");
     } finally {
-      setVerifyingPhone(false);
+      setVerifyingEmail(false);
     }
   }
 
@@ -113,9 +75,9 @@ export default function AccountSettingsScreen() {
       await authApi.changeEmail({ newEmail: newEmail.trim() });
       await refreshMe();
       setEditingField(null);
-      Alert.alert(t("settings.success"), t("settings.emailUpdatedMessage"));
+      showToast(t("settings.emailUpdatedMessage"), "success");
     } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.changeEmailFailed"));
+      showToast(err instanceof ApiError ? err.message : t("settings.changeEmailFailed"), "error");
     } finally {
       setSavingField(false);
     }
@@ -125,15 +87,11 @@ export default function AccountSettingsScreen() {
     if (!newPhone.trim()) return;
     setSavingField(true);
     try {
-      const res = await authApi.changePhone({ newPhoneNumber: newPhone.trim() });
+      await authApi.changePhone({ newPhoneNumber: newPhone.trim() });
       await refreshMe();
       setEditingField(null);
-      router.push({
-        pathname: "/(auth)/otp",
-        params: { phoneNumber: res.phoneNumber, devOtpCode: res.otpCode, purpose: "settings" },
-      });
     } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("settings.changePhoneFailed"));
+      showToast(err instanceof ApiError ? err.message : t("settings.changePhoneFailed"), "error");
     } finally {
       setSavingField(false);
     }
@@ -141,11 +99,7 @@ export default function AccountSettingsScreen() {
 
   return (
     <ScreenContainer backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={() => router.back()} />
-        <Text style={styles.title}>{t("settings.title")}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BackHeader title={t("settings.title")} onBack={() => router.back()} />
 
       <Text style={styles.sectionLabel}>{t("settings.verification")}</Text>
       <Card style={styles.sectionCard}>
@@ -162,7 +116,11 @@ export default function AccountSettingsScreen() {
               <Badge label={t("settings.verified")} tone="success" />
             ) : (
               <Pressable onPress={onVerifyEmail} hitSlop={8} disabled={verifyingEmail}>
-                <Text style={styles.verifyLink}>{verifyingEmail ? "..." : t("settings.verify")}</Text>
+                {verifyingEmail ? (
+                  <ActivityIndicator size="small" color={colors.navy} />
+                ) : (
+                  <Text style={styles.verifyLink}>{t("settings.verify")}</Text>
+                )}
               </Pressable>
             )
           }
@@ -193,15 +151,6 @@ export default function AccountSettingsScreen() {
             setEditingField(editingField === "phone" ? null : "phone");
             setNewPhone(user?.phoneNumber ?? "");
           }}
-          right={
-            user?.isPhoneVerified ? (
-              <Badge label={t("settings.verified")} tone="success" />
-            ) : (
-              <Pressable onPress={onVerifyPhone} hitSlop={8} disabled={verifyingPhone}>
-                <Text style={styles.verifyLink}>{verifyingPhone ? "..." : t("settings.verify")}</Text>
-              </Pressable>
-            )
-          }
         />
         {editingField === "phone" ? (
           <View style={styles.editRow}>
@@ -227,20 +176,6 @@ export default function AccountSettingsScreen() {
           description={locale === "en" ? t("settings.languageEnglish") : t("settings.languageVietnamese")}
           onPress={onSelectLanguage}
         />
-        <View style={styles.divider} />
-        <SettingsRow
-          icon="cash-outline"
-          label={t("settings.currency")}
-          description="USD"
-          onPress={() => stub(t("settings.currency"))}
-        />
-        <View style={styles.divider} />
-        <SettingsRow
-          icon="moon-outline"
-          label={t("settings.theme")}
-          description={t("settings.themeComingSoon")}
-          right={<View />}
-        />
       </Card>
 
       <Text style={styles.sectionLabel}>{t("settings.notifications")}</Text>
@@ -250,30 +185,6 @@ export default function AccountSettingsScreen() {
           description={t("settings.pushNotificationsDesc")}
           value={pushEnabled}
           onValueChange={onTogglePush}
-        />
-        <View style={styles.divider} />
-        <Toggle
-          label={t("settings.emailUpdates")}
-          description={t("settings.emailUpdatesDesc")}
-          value={emailEnabled}
-          onValueChange={setEmailEnabled}
-        />
-      </Card>
-
-      <Text style={styles.sectionLabel}>{t("settings.privacySecurity")}</Text>
-      <Card style={styles.sectionCard}>
-        <Toggle
-          label={t("settings.locationServices")}
-          description={t("settings.locationServicesDesc")}
-          value={locationEnabled}
-          onValueChange={setLocationEnabled}
-        />
-        <View style={styles.divider} />
-        <Toggle
-          label={t("settings.biometricLogin")}
-          description={t("settings.biometricLoginDesc")}
-          value={biometricEnabled}
-          onValueChange={setBiometricEnabled}
         />
       </Card>
 
@@ -299,21 +210,15 @@ export default function AccountSettingsScreen() {
         />
       </Card>
 
-      <Text style={styles.sectionLabel}>{t("settings.developer")}</Text>
-      <Card style={styles.sectionCard}>
-        <SettingsRow
-          icon="construct-outline"
-          label="Cấu hình địa chỉ API (Expo Go)"
-          onPress={() => router.push("/settings")}
-        />
-      </Card>
+      <LanguagePickerModal
+        visible={languagePickerOpen}
+        onClose={() => setLanguagePickerOpen(false)}
+      />
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 20, fontWeight: "700", color: colors.navy },
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",

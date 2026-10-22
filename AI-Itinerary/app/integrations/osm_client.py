@@ -1,8 +1,13 @@
 """
 OSM / Nominatim Client — geocoding city names to bounding boxes.
 Used by crawlers to derive bounding boxes for Overpass API queries.
+Also used live by ItineraryOrchestrator (get_place_coordinates) to attach
+GPS coordinates to fixed-anchor activities for the app's map/navigation
+feature — Activity.location from GPT is free-text only, never real GPS.
 """
 
+import asyncio
+import time
 from typing import Dict, Optional, Tuple
 
 import httpx
@@ -35,9 +40,72 @@ CITY_BBOX_CACHE: Dict[str, Tuple[float, float, float, float]] = {
 
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
+# Point-geocode results (place+city query -> lat/lng), process-lifetime.
+# Cheap and meaningful: popular places (hotels, landmarks) repeat a lot
+# across different users' itineraries for the same city.
+_PLACE_COORDS_CACHE: Dict[str, Optional[Tuple[float, float]]] = {}
+
+# Nominatim's usage policy caps anonymous use at 1 request/second — shared
+# across all callers in this process, since ItineraryOrchestrator may geocode
+# several activities per itinerary.
+_last_nominatim_call = 0.0
+_nominatim_lock = asyncio.Lock()
+
 
 class OSMClient:
-    """Geocoding client — city name → bounding box."""
+    """Geocoding client — city name → bounding box; place name → lat/lng."""
+
+    async def get_place_coordinates(
+        self, query: str
+    ) -> Optional[Tuple[float, float]]:
+        """
+        Point-geocode a free-text place query (e.g. "Hồ Gươm, Hà Nội") to
+        (lat, lng). Cached per process; returns None (never raises) on any
+        failure — a missing coordinate just disables auto-navigation for
+        that one activity, it must never fail itinerary generation.
+        """
+        key = query.strip().lower()
+        if not key:
+            return None
+        if key in _PLACE_COORDS_CACHE:
+            return _PLACE_COORDS_CACHE[key]
+
+        try:
+            result = await self._nominatim_point_lookup(query)
+        except Exception as exc:
+            logger.warning(
+                "nominatim_place_lookup_failed",
+                extra={"query": query, "error": str(exc)},
+            )
+            result = None
+
+        _PLACE_COORDS_CACHE[key] = result
+        return result
+
+    async def _nominatim_point_lookup(
+        self, query: str
+    ) -> Optional[Tuple[float, float]]:
+        global _last_nominatim_call
+        async with _nominatim_lock:
+            wait = (_last_nominatim_call + 1.0) - time.monotonic()
+            if wait > 0:
+                await asyncio.sleep(wait)
+            _last_nominatim_call = time.monotonic()
+
+            async with httpx.AsyncClient(
+                timeout=3.0,
+                headers={"User-Agent": "DISA-Travel-AI-Itinerary/1.0 (educational project)"},
+            ) as client:
+                response = await client.get(
+                    _NOMINATIM_URL,
+                    params={"q": query, "format": "json", "limit": 1},
+                )
+                response.raise_for_status()
+                results = response.json()
+
+        if not results:
+            return None
+        return float(results[0]["lat"]), float(results[0]["lon"])
 
     async def get_city_bbox(
         self, city: str

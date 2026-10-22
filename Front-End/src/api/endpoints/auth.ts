@@ -13,13 +13,12 @@ import type {
   RegisterPushTokenRequest,
   RegisterRequest,
   RegisterResponse,
-  ResendPhoneOtpRequest,
-  ResendPhoneOtpResponse,
+  ResendEmailVerificationRequest,
+  ResendEmailVerificationResponse,
   ResetPasswordRequest,
   SendEmailVerificationResponse,
   UploadAvatarResponse,
   VerifyEmailRequest,
-  VerifyPhoneOtpRequest,
 } from "@/types/auth";
 
 // Base: <EXPO_PUBLIC_IAM_API_URL>/api/auth  (IAMService/Controllers/AuthController.cs)
@@ -74,22 +73,6 @@ export function logout(payload: LogoutRequest) {
   });
 }
 
-export function verifyPhoneOtp(payload: VerifyPhoneOtpRequest) {
-  return request<string>("iam", "/api/auth/verify-phone-otp", {
-    method: "POST",
-    data: payload,
-    auth: false,
-  });
-}
-
-export function resendPhoneOtp(payload: ResendPhoneOtpRequest) {
-  return request<ResendPhoneOtpResponse>("iam", "/api/auth/resend-phone-otp", {
-    method: "POST",
-    data: payload,
-    auth: false,
-  });
-}
-
 export function sendEmailVerification() {
   return request<SendEmailVerificationResponse>("iam", "/api/auth/send-email-verification", {
     method: "POST",
@@ -98,6 +81,14 @@ export function sendEmailVerification() {
 
 export function verifyEmail(payload: VerifyEmailRequest) {
   return request<string>("iam", "/api/auth/verify-email", {
+    method: "POST",
+    data: payload,
+    auth: false,
+  });
+}
+
+export function resendEmailVerification(payload: ResendEmailVerificationRequest) {
+  return request<ResendEmailVerificationResponse>("iam", "/api/auth/resend-email-verification", {
     method: "POST",
     data: payload,
     auth: false,

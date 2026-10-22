@@ -14,7 +14,7 @@ export function generateItinerary(payload: GenerateItineraryRequest) {
   return request<ItineraryResponse>("aiTour", "/api/v1/itinerary/generate", {
     method: "POST",
     data: payload,
-    timeoutMs: 45000, // GPT-4o-mini generation: target <15s, hard cap <30s server-side
+    timeoutMs: 90000, // GPT-4o-mini generation: longer multi-day trips can take ~50-60s
   });
 }
 
@@ -37,7 +37,7 @@ export function getActivityAlternatives(itineraryId: string, activityId: string)
   return request<ActivityAlternativesResponse>(
     "aiTour",
     `/api/v1/itinerary/${itineraryId}/activities/${activityId}/alternatives`,
-    { timeoutMs: 30000 } // GPT call — same generous cap style as generate
+    { timeoutMs: 60000 } // GPT call — same generous cap style as generate
   );
 }
 

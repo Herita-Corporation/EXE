@@ -17,6 +17,10 @@ export interface ItineraryHistoryEntry {
    * screen — absent/null means the itinerary is just saved, not under way.
    * Generating/confirming an itinerary no longer auto-marks it as ongoing. */
   startedAt?: string | null;
+  /** Index into the flattened list of geocoded activities (coordinates !=
+   * null) across all days — which waypoint GPS navigation is currently
+   * headed to. Survives app restarts. */
+  currentWaypointIndex?: number;
 }
 
 function storageKey(userId: string) {
@@ -55,6 +59,39 @@ export async function markItineraryStarted(
     e.id === id ? { ...e, startedAt: new Date().toISOString() } : e
   );
   await AsyncStorage.setItem(storageKey(userId), JSON.stringify(next));
+}
+
+export async function setItineraryWaypointIndex(
+  userId: string,
+  id: string,
+  index: number
+): Promise<void> {
+  const current = await getItineraryHistory(userId);
+  const next = current.map((e) =>
+    e.id === id ? { ...e, currentWaypointIndex: index } : e
+  );
+  await AsyncStorage.setItem(storageKey(userId), JSON.stringify(next));
+}
+
+// The most recently generated itinerary, saved or not — its missions must
+// survive pruning while the user is still reviewing it before saving.
+function lastGeneratedKey(userId: string) {
+  return `disa.lastGeneratedItinerary.v1.${userId}`;
+}
+
+export async function setLastGeneratedItinerary(userId: string, id: string): Promise<void> {
+  await AsyncStorage.setItem(lastGeneratedKey(userId), id);
+}
+
+/** Itinerary ids whose missions should be kept: saved ones + the latest generated one. */
+export async function getLiveItineraryIds(userId: string): Promise<string[]> {
+  const history = await getItineraryHistory(userId);
+  const ids = history.map((h) => h.id);
+  try {
+    const last = await AsyncStorage.getItem(lastGeneratedKey(userId));
+    if (last && !ids.includes(last)) ids.push(last);
+  } catch {}
+  return ids;
 }
 
 export async function removeItineraryFromHistory(

@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View, ViewStyle } from "react-native";
-import { colors, radius, spacing } from "@/theme/colors";
+import { brand, colors, radius, spacing } from "@/theme/colors";
 
 export type BadgeTone =
   | "neutral"
@@ -9,6 +9,7 @@ export type BadgeTone =
   | "warning"
   | "primary"
   | "gold"
+  | "tint"
   | "outline";
 
 const TONE_BG: Record<BadgeTone, string> = {
@@ -18,6 +19,7 @@ const TONE_BG: Record<BadgeTone, string> = {
   warning: colors.warning,
   primary: colors.primary,
   gold: colors.gold,
+  tint: brand.tint,
   outline: "transparent",
 };
 
@@ -28,6 +30,7 @@ const TONE_TEXT: Record<BadgeTone, string> = {
   warning: colors.text,
   primary: colors.primaryText,
   gold: colors.navyDeep,
+  tint: brand.blueDark,
   outline: colors.navy,
 };
 

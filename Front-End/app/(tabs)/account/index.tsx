@@ -1,26 +1,28 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { Avatar } from "@/components/Avatar";
-import { Badge } from "@/components/Badge";
 import { Card } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { SettingsRow } from "@/components/SettingsRow";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { changePassword, uploadAvatar } from "@/api/endpoints/auth";
 import { ApiError } from "@/api/http";
 import { getItineraryHistory } from "@/utils/itineraryHistory";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, spacing } from "@/theme/colors";
+import { colors, radius, shadow, spacing } from "@/theme/colors";
 
 export default function AccountScreen() {
   const { user, logout, refreshMe } = useAuth();
+  const { showToast } = useToast();
   const gamification = useGamification();
   const { t } = useLocale();
   const [tripCount, setTripCount] = useState(0);
@@ -40,7 +42,6 @@ export default function AccountScreen() {
   );
 
   const displayName = user?.username ?? t("common.voyager");
-  const canAccessAdmin = !!user?.roles?.some((r) => r === "Admin" || r === "Manager");
 
   async function onChangePassword() {
     setPwError(null);
@@ -62,6 +63,13 @@ export default function AccountScreen() {
     }
   }
 
+  function confirmLogout() {
+    Alert.alert(t("extra.logoutConfirmTitle"), t("extra.logoutConfirmMessage"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("account.logout"), style: "destructive", onPress: onLogout },
+    ]);
+  }
+
   async function onLogout() {
     setLoggingOut(true);
     try {
@@ -72,14 +80,10 @@ export default function AccountScreen() {
     }
   }
 
-  function stub(feature: string) {
-    Alert.alert(feature, "Tính năng này chưa có backend hỗ trợ.");
-  }
-
   async function onChangeAvatar() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert(t("admin.missingPermission"), t("admin.missingPermissionMessage"));
+      showToast(t("memories.library"), "error");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -95,19 +99,18 @@ export default function AccountScreen() {
       await uploadAvatar(result.assets[0].uri);
       await refreshMe();
     } catch (err) {
-      Alert.alert(t("settings.error"), err instanceof ApiError ? err.message : t("account.avatarUploadFailed"));
+      showToast(err instanceof ApiError ? err.message : t("account.avatarUploadFailed"), "error");
     } finally {
       setUploadingAvatar(false);
     }
   }
 
   return (
-    <ScreenContainer avoidTabBar backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>{t("account.myAccount")}</Text>
-      </View>
+    <ScreenContainer avoidTabBar>
+      <ScreenHeader title={t("account.myAccount")} />
 
-      <View style={styles.avatarSection}>
+      <View style={styles.profileCard}>
+        <View style={styles.avatarSection}>
         <View>
           <Avatar source={user?.avatarUrl} name={displayName} size={90} />
           <Pressable style={styles.avatarEditBadge} onPress={onChangeAvatar} disabled={uploadingAvatar}>
@@ -120,8 +123,7 @@ export default function AccountScreen() {
         </View>
         <Text style={styles.name}>{displayName}</Text>
         {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
-        <Badge label={t("account.premiumMember")} tone="gold" />
-      </View>
+        </View>
 
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
@@ -137,12 +139,13 @@ export default function AccountScreen() {
           <Text style={styles.statLabel}>{t("account.level")}</Text>
         </View>
       </View>
+      </View>
 
       <Text style={styles.sectionLabel}>{t("account.personalInfo")}</Text>
       <Card style={styles.sectionCard}>
         <SettingsRow
-          icon="person-outline"
-          label={t("account.profileDetails")}
+          icon="lock-closed-outline"
+          label={t("extra.changePassword")}
           onPress={() => setShowProfileDetails((s) => !s)}
           right={
             <Ionicons
@@ -184,19 +187,6 @@ export default function AccountScreen() {
         />
       </Card>
 
-      {canAccessAdmin ? (
-        <>
-          <Text style={styles.sectionLabel}>{t("admin.adminSection")}</Text>
-          <Card style={styles.sectionCard}>
-            <SettingsRow
-              icon="shield-checkmark-outline"
-              label={t("admin.title")}
-              onPress={() => router.push("/(tabs)/admin")}
-            />
-          </Card>
-        </>
-      ) : null}
-
       <Text style={styles.sectionLabel}>{t("account.appSettings")}</Text>
       <Card style={styles.sectionCard}>
         <SettingsRow
@@ -205,7 +195,7 @@ export default function AccountScreen() {
           onPress={() => router.push("/(tabs)/account/settings")}
         />
         <View style={styles.rowDivider} />
-        <SettingsRow icon="help-circle-outline" label={t("account.helpSupport")} onPress={() => stub(t("account.helpSupport"))} />
+        <SettingsRow icon="help-circle-outline" label={t("account.helpSupport")} onPress={() => Linking.openURL("mailto:disatravel.support@gmail.com")} />
       </Card>
 
       <Text style={styles.sectionLabel}>{t("account.dangerZone")}</Text>
@@ -214,7 +204,7 @@ export default function AccountScreen() {
           icon="log-out-outline"
           label={t("account.logout")}
           danger
-          onPress={onLogout}
+          onPress={confirmLogout}
           right={loggingOut ? <ActivityIndicator color={colors.danger} /> : <View />}
         />
       </Card>
@@ -223,9 +213,14 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 20, fontWeight: "700", color: colors.navy },
-  avatarSection: { alignItems: "center", gap: spacing(0.5), marginTop: spacing(1) },
+  profileCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing(2.5),
+    gap: spacing(2),
+    ...shadow,
+  },
+  avatarSection: { alignItems: "center", gap: spacing(0.5) },
   avatarEditBadge: {
     position: "absolute",
     bottom: -2,
@@ -233,7 +228,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
@@ -245,11 +240,9 @@ const styles = StyleSheet.create({
   statBox: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: spacing(1.25),
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: spacing(1.5),
+    borderRadius: radius.md,
+    backgroundColor: colors.blueSoft,
   },
   statValue: { fontSize: 18, fontWeight: "800", color: colors.navy },
   statLabel: { fontSize: 11, color: colors.textMuted },
@@ -260,7 +253,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: spacing(1),
   },
-  sectionCard: { gap: 0 },
+  sectionCard: { gap: 0, paddingVertical: spacing(0.5) },
   rowDivider: { height: 1, backgroundColor: colors.border },
   passwordForm: { gap: spacing(1), paddingBottom: spacing(1) },
 });

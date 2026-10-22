@@ -5,7 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, radius, spacing, TAB_BAR_HEIGHT } from "@/theme/colors";
+import { haptics } from "@/utils/haptics";
+import { colors, radius, shadow, spacing, TAB_BAR_HEIGHT } from "@/theme/colors";
 
 // A fully custom tabBar, not screenOptions.tabBarIcon — React Navigation's
 // built-in tabBarIcon slot renders inside a fixed-size icon box that clips
@@ -73,6 +74,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
         const onPress = () => {
           const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
           if (event.defaultPrevented) return;
+          if (!isFocused) haptics.tap();
           // Always land on that tab's own root screen, not whatever it was
           // last showing — a tab can be left mid-stack by a one-off deep
           // link (e.g. Home's quick actions push straight into
@@ -140,17 +142,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing(1.75),
-    shadowColor: "#000",
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow,
     shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
   activePill: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing(0.75),
-    backgroundColor: colors.navy,
+    backgroundColor: colors.primary,
     borderRadius: radius.pill,
     paddingVertical: spacing(1),
     paddingHorizontal: spacing(1.75),

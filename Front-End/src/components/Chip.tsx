@@ -8,11 +8,13 @@ interface Props {
   selected?: boolean;
   onPress?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
+  /** Icon color when not selected (defaults to navy). */
+  iconColor?: string;
   style?: ViewStyle;
 }
 
 /** Single/multi-select filter pill (travel-style, transportation, voucher category...). */
-export function Chip({ label, selected = false, onPress, icon, style }: Props) {
+export function Chip({ label, selected = false, onPress, icon, iconColor, style }: Props) {
   return (
     <Pressable
       onPress={onPress}
@@ -22,7 +24,7 @@ export function Chip({ label, selected = false, onPress, icon, style }: Props) {
         <Ionicons
           name={icon}
           size={15}
-          color={selected ? colors.primaryText : colors.navy}
+          color={selected ? colors.primaryText : iconColor ?? colors.navy}
           style={styles.icon}
         />
       ) : null}
@@ -43,8 +45,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   chipSelected: {
-    backgroundColor: colors.navy,
-    borderColor: colors.navy,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   icon: { marginRight: spacing(0.5) },
   text: { fontSize: 13, fontWeight: "600", color: colors.navy },

@@ -32,7 +32,7 @@ interface RequestOptions {
   headers?: Record<string, string>;
   /** Attach the Bearer token. Default true. */
   auth?: boolean;
-  /** ms. Itinerary generation calls GPT and can take up to ~30s. */
+  /** ms. Itinerary generation calls GPT and can take up to ~60s for longer trips. */
   timeoutMs?: number;
 }
 
@@ -49,7 +49,7 @@ async function doRequest<T>(
     method: opts.method ?? "GET",
     data: opts.data,
     params: opts.params,
-    timeout: opts.timeoutMs ?? (service === "aiTour" ? 45000 : 15000),
+    timeout: opts.timeoutMs ?? (service === "aiTour" ? 90000 : 15000),
     headers: {
       Accept: "application/json",
       ...opts.headers,

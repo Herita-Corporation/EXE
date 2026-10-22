@@ -1,45 +1,46 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
+  SectionList,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Slider from "@react-native-community/slider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { IconButton } from "@/components/IconButton";
-import { Card } from "@/components/Card";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { generateItinerary } from "@/api/endpoints/itinerary";
+import { pruneMissions } from "@/api/endpoints/missions";
 import { ApiError } from "@/api/http";
+import { useAuth } from "@/context/AuthContext";
+import { getLiveItineraryIds, setLastGeneratedItinerary } from "@/utils/itineraryHistory";
 import { useSmartBack } from "@/utils/backNavigation";
-import { VIETNAM_PROVINCES } from "@/data/vietnamProvinces";
+import { VIETNAM_PROVINCES, type ProvinceHighlight } from "@/data/vietnamProvinces";
+import { getRegionImage } from "@/data/regionImages";
+import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
+import { formatDate, fromIsoDate, toIsoDate } from "@/utils/date";
 import { colors, radius, spacing } from "@/theme/colors";
 
-const TRAVEL_STYLES: Array<{ key: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { key: "food", label: "Ẩm thực", icon: "restaurant-outline" },
-  { key: "culture", label: "Văn hóa", icon: "library-outline" },
-  { key: "adventure", label: "Phiêu lưu", icon: "walk-outline" },
-  { key: "explore", label: "Khám phá", icon: "compass-outline" },
-];
-
-// UI-only — GenerateItineraryRequest has no transportation field; the
-// selection is never sent to the API, kept only for Figma fidelity.
-const TRANSPORT_OPTIONS: Array<{ key: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { key: "bus", label: "Xe buýt", icon: "bus-outline" },
-  { key: "train", label: "Tàu hỏa", icon: "train-outline" },
-  { key: "flight", label: "Máy bay", icon: "airplane-outline" },
-  { key: "car", label: "Ô tô", icon: "car-outline" },
+const TRAVEL_STYLE_KEYS: Array<{ key: string; labelKey: TranslationKey; icon: keyof typeof Ionicons.glyphMap }> = [
+  { key: "food", labelKey: "createItinerary.styleFood", icon: "restaurant-outline" },
+  { key: "culture", labelKey: "createItinerary.styleCulture", icon: "library-outline" },
+  { key: "adventure", labelKey: "createItinerary.styleAdventure", icon: "walk-outline" },
+  { key: "explore", labelKey: "createItinerary.styleExplore", icon: "compass-outline" },
 ];
 
 const MIN_BUDGET_VND = 2_000_000;
@@ -49,24 +50,104 @@ function formatVnd(n: number): string {
   return `${Math.round(n).toLocaleString("vi-VN")} VND`;
 }
 
-function formatVndShort(n: number): string {
-  return `${(n / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} triệu`;
+function formatVndShort(n: number, unit: string): string {
+  return `${(n / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${unit}`;
 }
 
 function todayPlus(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toIsoDate(d);
+}
+
+/** Accent-insensitive match so "da lat" finds "Đà Lạt". */
+function normalize(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim();
+}
+
+/** Large photo card for a featured area in the area picker sheet. */
+function FeaturedAreaCard({
+  area,
+  province,
+  selected,
+  badge,
+  onPress,
+}: {
+  area: ProvinceHighlight;
+  province: string | null;
+  selected: boolean;
+  badge: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={[styles.bigAreaCard, selected && styles.bigAreaCardSelected]}
+      onPress={onPress}
+    >
+      <Image
+        source={getRegionImage(area.name, province)}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        transition={200}
+      />
+      <LinearGradient colors={["transparent", "rgba(0,0,0,0.8)"]} style={styles.bigAreaScrim} />
+      <View style={styles.bigAreaBadge}>
+        <Ionicons name="star" size={11} color="#FFFFFF" />
+        <Text style={styles.bigAreaBadgeText}>{badge}</Text>
+      </View>
+      {selected ? (
+        <View style={styles.bigAreaCheck}>
+          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+        </View>
+      ) : null}
+      <View style={styles.bigAreaTextWrap}>
+        <Text style={styles.bigAreaName} numberOfLines={1}>
+          {area.name}
+        </Text>
+        <Text style={styles.bigAreaNote} numberOfLines={2}>
+          {area.note}
+        </Text>
+      </View>
+    </Pressable>
+  );
 }
 
 export default function CreateItineraryScreen() {
   const insets = useSafeAreaInsets();
   const goBack = useSmartBack();
+  const { t, locale } = useLocale();
+  const { user } = useAuth();
   const [province, setProvince] = useState<string | null>(null);
   const [provincePickerOpen, setProvincePickerOpen] = useState(false);
+  const [provinceQuery, setProvinceQuery] = useState("");
+  const provinceResults = provinceQuery.trim()
+    ? VIETNAM_PROVINCES.filter((p) => normalize(p.name).includes(normalize(provinceQuery)))
+    : VIETNAM_PROVINCES;
+
+  function closeProvincePicker() {
+    setProvincePickerOpen(false);
+    setProvinceQuery("");
+  }
   const [highlight, setHighlight] = useState<string | null>(null);
   const [highlightPickerOpen, setHighlightPickerOpen] = useState(false);
   const selectedProvince = VIETNAM_PROVINCES.find((p) => p.name === province) ?? null;
+  const featuredAreas = selectedProvince?.highlights.filter((h) => h.featured) ?? [];
+  const otherAreas = selectedProvince?.highlights.filter((h) => !h.featured) ?? [];
+  const areaSections = [
+    { key: "featured", title: t("createItinerary.featuredSection"), data: featuredAreas },
+    { key: "other", title: t("createItinerary.otherAreasSection"), data: otherAreas },
+  ].filter((s) => s.data.length > 0);
+
+  function pickArea(name: string | null) {
+    setHighlight(name);
+    setHighlightPickerOpen(false);
+  }
   const [startDate, setStartDate] = useState(todayPlus(14));
   const [endDate, setEndDate] = useState(todayPlus(18));
   const [showStartPicker, setShowStartPicker] = useState(false);
@@ -74,7 +155,6 @@ export default function CreateItineraryScreen() {
   const [travelers, setTravelers] = useState(2);
   const [budgetVnd, setBudgetVnd] = useState(30_000_000);
   const [styles_, setStyles_] = useState<string[]>(["food"]);
-  const [transport, setTransport] = useState<string[]>(["flight"]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,15 +165,15 @@ export default function CreateItineraryScreen() {
   async function onGenerate() {
     setError(null);
     if (!province) {
-      setError("Vui lòng chọn tỉnh/thành muốn đến.");
+      setError(t("createItinerary.errorSelectProvince"));
       return;
     }
     if (startDate > endDate) {
-      setError("Ngày bắt đầu phải trước ngày kết thúc.");
+      setError(t("createItinerary.errorDateOrder"));
       return;
     }
     if (styles_.length === 0) {
-      setError("Chọn ít nhất một phong cách du lịch.");
+      setError(t("createItinerary.errorSelectStyle"));
       return;
     }
 
@@ -101,17 +181,28 @@ export default function CreateItineraryScreen() {
     try {
       const result = await generateItinerary({
         cities: [highlight ? `${highlight}, ${province}` : province],
-        budget: budgetVnd,
+        // The slider is per person; AI-Itinerary plans against the whole
+        // trip budget (schemas/request.py: "Total trip budget in VND").
+        budget: budgetVnd * travelers,
         start_date: startDate,
         end_date: endDate,
         preferences: styles_,
       });
+      // Drop missions left over from itineraries that no longer exist — only
+      // saved ones ("Lộ trình của tôi") and this new one keep theirs.
+      // Best-effort: a failure here must not block opening the new itinerary.
+      if (user) {
+        try {
+          await setLastGeneratedItinerary(user.id, result.itinerary_id);
+          await pruneMissions(user.id, await getLiveItineraryIds(user.id));
+        } catch {}
+      }
       // Not saved to "My Itineraries" yet — only once the user reviews and
       // taps "Xác nhận tạo lộ trình" on the detail screen (see [id].tsx).
       router.replace(`/(tabs)/mission/itinerary/${result.itinerary_id}`);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Không thể tạo lịch trình. Vui lòng thử lại."
+        err instanceof ApiError ? err.message : t("createItinerary.errorGenerateFailed")
       );
     } finally {
       setLoading(false);
@@ -122,77 +213,148 @@ export default function CreateItineraryScreen() {
     <ScreenContainer scroll noPadding backgroundColor={colors.surface}>
       <View style={styles.hero}>
         <Image
-          source={{ uri: "https://picsum.photos/seed/disa-plan-trip/900/500" }}
+          source={getRegionImage(highlight, province)}
           style={styles.heroImage}
           contentFit="cover"
         />
-        <View style={[styles.heroOverlay, { top: insets.top + spacing(1.5) }]}>
-          <IconButton icon="arrow-back" variant="glass" onPress={goBack} />
+        {/* Bottom scrim for text legibility */}
+        <LinearGradient
+          colors={["transparent", "rgba(0,0,0,0.55)"]}
+          style={styles.heroScrim}
+        />
+        <View style={[styles.backBtn, { top: insets.top + spacing(1.5) }]}>
+          <IconButton icon="arrow-back" variant="solid" onPress={goBack} />
         </View>
         <View style={styles.heroText}>
-          <Text style={styles.heroStep}>BƯỚC 1/3</Text>
-          <Text style={styles.heroTitle}>Tạo lịch trình</Text>
+          <Text style={styles.heroStep}>{t("createItinerary.heroStep")}</Text>
+          <Text style={styles.heroTitle}>{t("createItinerary.heroTitle")}</Text>
         </View>
       </View>
 
       <View style={styles.body}>
         <ErrorBanner message={error} />
 
-        <Text style={styles.label}>Bạn muốn đi đâu?</Text>
+        <Text style={styles.label}>{t("createItinerary.whereLabel")}</Text>
         <Pressable style={styles.selectBox} onPress={() => setProvincePickerOpen(true)}>
           <Ionicons name="location-outline" size={18} color={colors.textMuted} />
           <Text style={[styles.selectText, !province && styles.placeholderText]}>
-            {province ?? "Chọn tỉnh/thành"}
+            {province ?? t("createItinerary.provincePlaceholder")}
           </Text>
           <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
         </Pressable>
 
-        {selectedProvince && selectedProvince.highlights.length > 0 ? (
-          <Pressable style={styles.selectBox} onPress={() => setHighlightPickerOpen(true)}>
-            <Ionicons name="image-outline" size={18} color={colors.textMuted} />
-            <Text style={[styles.selectText, !highlight && styles.placeholderText]}>
-              {highlight ?? "Khu vực cụ thể (tùy chọn)"}
-            </Text>
-            <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
-          </Pressable>
+        {selectedProvince && featuredAreas.length > 0 ? (
+          <View style={styles.featuredBox}>
+            <View style={styles.featuredHeader}>
+              <Ionicons name="star" size={14} color={colors.warning} />
+              <Text style={styles.featuredTitle}>{t("createItinerary.featuredAreasLabel")}</Text>
+              <Pressable onPress={() => setHighlightPickerOpen(true)} hitSlop={8} style={styles.seeAllBtn}>
+                <Text style={styles.seeAllText}>
+                  {t("createItinerary.seeAllAreas")} ({selectedProvince.highlights.length})
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.navy} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.featuredStrip}
+            >
+              {featuredAreas.map((area) => {
+                const selected = highlight === area.name;
+                return (
+                  <Pressable
+                    key={area.name}
+                    style={[styles.featuredCard, selected && styles.featuredCardSelected]}
+                    onPress={() => setHighlight(selected ? null : area.name)}
+                  >
+                    <Image
+                      source={getRegionImage(area.name, province)}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                    <LinearGradient
+                      colors={["transparent", "rgba(0,0,0,0.75)"]}
+                      style={styles.featuredScrim}
+                    />
+                    {selected ? (
+                      <View style={styles.featuredCheck}>
+                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                      </View>
+                    ) : null}
+                    <View style={styles.featuredTextWrap}>
+                      <Text style={styles.featuredName} numberOfLines={1}>
+                        {area.name}
+                      </Text>
+                      <Text style={styles.featuredNote} numberOfLines={1}>
+                        {area.note}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {highlight ? (
+              <View style={styles.selectedAreaRow}>
+                <Ionicons name="location" size={16} color={colors.navy} />
+                <Text style={styles.selectedAreaText} numberOfLines={1}>
+                  {highlight}, {province}
+                </Text>
+                <Pressable onPress={() => setHighlight(null)} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ) : (
+              <Text style={styles.featuredHint}>{t("createItinerary.areaPlaceholder")}</Text>
+            )}
+          </View>
         ) : null}
 
         <View style={styles.dateRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Ngày bắt đầu</Text>
+            <Text style={styles.label}>{t("createItinerary.startDateLabel")}</Text>
             <Pressable style={styles.selectBox} onPress={() => setShowStartPicker(true)}>
               <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.selectText}>{startDate}</Text>
+              <Text style={styles.selectText}>{formatDate(startDate, locale)}</Text>
             </Pressable>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Ngày kết thúc</Text>
+            <Text style={styles.label}>{t("createItinerary.endDateLabel")}</Text>
             <Pressable style={styles.selectBox} onPress={() => setShowEndPicker(true)}>
               <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
-              <Text style={styles.selectText}>{endDate}</Text>
+              <Text style={styles.selectText}>{formatDate(endDate, locale)}</Text>
             </Pressable>
           </View>
         </View>
 
         {showStartPicker ? (
           <DateTimePicker
-            value={new Date(startDate)}
+            value={fromIsoDate(startDate)}
             mode="date"
+            minimumDate={new Date()}
             display={Platform.OS === "ios" ? "inline" : "default"}
             onChange={(_, date) => {
               setShowStartPicker(false);
-              if (date) setStartDate(date.toISOString().slice(0, 10));
+              if (!date) return;
+              const next = toIsoDate(date);
+              setStartDate(next);
+              // Keep the range valid instead of erroring on submit.
+              if (endDate < next) setEndDate(next);
             }}
           />
         ) : null}
         {showEndPicker ? (
           <DateTimePicker
-            value={new Date(endDate)}
+            value={fromIsoDate(endDate)}
             mode="date"
+            minimumDate={fromIsoDate(startDate)}
             display={Platform.OS === "ios" ? "inline" : "default"}
             onChange={(_, date) => {
               setShowEndPicker(false);
-              if (date) setEndDate(date.toISOString().slice(0, 10));
+              if (date) setEndDate(toIsoDate(date));
             }}
           />
         ) : null}
@@ -203,8 +365,8 @@ export default function CreateItineraryScreen() {
               <Ionicons name="people-outline" size={18} color={colors.navy} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.stepperTitle}>Số người</Text>
-              <Text style={styles.stepperSubtitle}>Bao nhiêu người?</Text>
+              <Text style={styles.stepperTitle}>{t("createItinerary.travelersTitle")}</Text>
+              <Text style={styles.stepperSubtitle}>{t("createItinerary.travelersSubtitle")}</Text>
             </View>
             <Pressable
               style={styles.stepperButton}
@@ -228,8 +390,8 @@ export default function CreateItineraryScreen() {
               <Ionicons name="cash-outline" size={18} color={colors.navy} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.stepperTitle}>Ngân sách dự kiến</Text>
-              <Text style={styles.stepperSubtitle}>Mỗi người</Text>
+              <Text style={styles.stepperTitle}>{t("createItinerary.budgetTitle")}</Text>
+              <Text style={styles.stepperSubtitle}>{t("createItinerary.budgetSubtitle")}</Text>
             </View>
             <Text style={styles.budgetValue}>{formatVnd(budgetVnd)}</Text>
           </View>
@@ -244,17 +406,26 @@ export default function CreateItineraryScreen() {
             thumbTintColor={colors.navy}
           />
           <View style={styles.budgetRangeRow}>
-            <Text style={styles.budgetRangeText}>{formatVndShort(MIN_BUDGET_VND)}</Text>
-            <Text style={styles.budgetRangeText}>{formatVndShort(MAX_BUDGET_VND)}+</Text>
+            <Text style={styles.budgetRangeText}>
+              {formatVndShort(MIN_BUDGET_VND, t("createItinerary.budgetUnitMillion"))}
+            </Text>
+            <Text style={styles.budgetRangeText}>
+              {formatVndShort(MAX_BUDGET_VND, t("createItinerary.budgetUnitMillion"))}+
+            </Text>
           </View>
+          {travelers > 1 ? (
+            <Text style={styles.budgetTotal}>
+              {t("extra.totalBudget", { count: travelers, amount: formatVnd(budgetVnd * travelers) })}
+            </Text>
+          ) : null}
         </View>
 
-        <Text style={styles.label}>Phong cách du lịch</Text>
+        <Text style={styles.label}>{t("createItinerary.travelStyleLabel")}</Text>
         <View style={styles.chipGrid}>
-          {TRAVEL_STYLES.map((s) => (
+          {TRAVEL_STYLE_KEYS.map((s) => (
             <Chip
               key={s.key}
-              label={s.label}
+              label={t(s.labelKey)}
               icon={s.icon}
               selected={styles_.includes(s.key)}
               onPress={() => toggle(styles_, s.key, setStyles_)}
@@ -263,22 +434,8 @@ export default function CreateItineraryScreen() {
           ))}
         </View>
 
-        <Text style={styles.label}>Phương tiện ưa thích</Text>
-        <View style={styles.chipGrid}>
-          {TRANSPORT_OPTIONS.map((t) => (
-            <Chip
-              key={t.key}
-              label={t.label}
-              icon={t.icon}
-              selected={transport.includes(t.key)}
-              onPress={() => toggle(transport, t.key, setTransport)}
-              style={styles.chipHalf}
-            />
-          ))}
-        </View>
-
         <Button
-          title="Tạo lịch trình"
+          title={t("createItinerary.generateButton")}
           icon="sparkles"
           iconPosition="right"
           onPress={onGenerate}
@@ -287,20 +444,46 @@ export default function CreateItineraryScreen() {
         />
       </View>
 
-      <Modal visible={provincePickerOpen} animationType="slide" transparent>
+      <Modal
+        visible={provincePickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={closeProvincePicker}
+      >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Chọn tỉnh/thành</Text>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeProvincePicker} />
+          <View style={[styles.modalSheet, styles.provinceSheet]}>
+            <Text style={styles.modalTitle}>{t("createItinerary.provincePickerTitle")}</Text>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={16} color={colors.textMuted} />
+              <TextInput
+                value={provinceQuery}
+                onChangeText={setProvinceQuery}
+                placeholder={t("extra.searchProvince")}
+                placeholderTextColor={colors.textMuted}
+                style={styles.searchInput}
+                autoCorrect={false}
+              />
+              {provinceQuery ? (
+                <Pressable onPress={() => setProvinceQuery("")} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
             <FlatList
-              data={VIETNAM_PROVINCES}
+              data={provinceResults}
               keyExtractor={(item) => item.name}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <Text style={styles.noResults}>{t("extra.noProvinceMatch")}</Text>
+              }
               renderItem={({ item }) => (
                 <Pressable
                   style={styles.modalRow}
                   onPress={() => {
                     if (item.name !== province) setHighlight(null);
                     setProvince(item.name);
-                    setProvincePickerOpen(false);
+                    closeProvincePicker();
                   }}
                 >
                   <Text style={styles.modalRowText}>{item.name}</Text>
@@ -310,61 +493,116 @@ export default function CreateItineraryScreen() {
                 </Pressable>
               )}
             />
-            <Button title="Đóng" variant="ghost" onPress={() => setProvincePickerOpen(false)} />
+            <Button title={t("common.close")} variant="ghost" onPress={closeProvincePicker} />
           </View>
         </View>
       </Modal>
 
-      <Modal visible={highlightPickerOpen} animationType="slide" transparent>
+      <Modal
+        visible={highlightPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setHighlightPickerOpen(false)}
+      >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>
-              Khu vực nổi bật ở {province}
-            </Text>
-            <Text style={styles.modalSubtitle}>
-              Chọn một khu vực cụ thể để lịch trình tập trung vào đó, hoặc bỏ qua để AI lên kế hoạch cho cả tỉnh/thành.
-            </Text>
-            <FlatList
-              data={selectedProvince?.highlights ?? []}
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setHighlightPickerOpen(false)} />
+          <View style={[styles.modalSheet, styles.areaSheet]}>
+            <View style={styles.areaSheetHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>
+                  {t("createItinerary.areaListTitle", { province: province ?? "" })}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  {t("createItinerary.highlightPickerSubtitle")}
+                </Text>
+              </View>
+              <Pressable onPress={() => setHighlightPickerOpen(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <SectionList
+              sections={areaSections}
               keyExtractor={(item) => item.name}
-              numColumns={2}
-              columnWrapperStyle={styles.highlightRow}
-              renderItem={({ item }) => (
+              stickySectionHeadersEnabled={false}
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={
                 <Pressable
-                  style={styles.highlightTile}
-                  onPress={() => {
-                    setHighlight(item.name);
-                    setHighlightPickerOpen(false);
-                  }}
+                  style={[styles.wholeProvinceRow, !highlight && styles.areaRowSelected]}
+                  onPress={() => pickArea(null)}
                 >
-                  <Card
-                    variant="media"
-                    imageHeight={90}
-                    imageSource={`https://picsum.photos/seed/disa-highlight-${encodeURIComponent(
-                      `${province}-${item.name}`
-                    )}/300/200`}
-                    overlay={
-                      highlight === item.name ? (
-                        <Ionicons name="checkmark-circle" size={20} color={colors.navy} />
-                      ) : undefined
-                    }
-                  >
-                    <Text style={styles.highlightName} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                  </Card>
+                  <View style={styles.wholeProvinceIcon}>
+                    <Ionicons name="map-outline" size={20} color={colors.navy} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.areaRowName}>{t("createItinerary.noAreaSelection")}</Text>
+                    <Text style={styles.areaRowNote}>{t("createItinerary.wholeProvinceSubtitle")}</Text>
+                  </View>
+                  {!highlight ? <Ionicons name="checkmark-circle" size={20} color={colors.navy} /> : null}
                 </Pressable>
+              }
+              renderSectionHeader={({ section }) => (
+                <View style={styles.sectionHeader}>
+                  {section.key === "featured" ? (
+                    <Ionicons name="star" size={14} color={colors.warning} />
+                  ) : (
+                    <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+                  )}
+                  <Text style={styles.sectionHeaderText}>{section.title}</Text>
+                </View>
               )}
+              renderItem={({ item, section }) =>
+                section.key === "featured" ? (
+                  <FeaturedAreaCard
+                    area={item}
+                    province={province}
+                    selected={highlight === item.name}
+                    badge={t("createItinerary.featuredBadge")}
+                    onPress={() => pickArea(item.name)}
+                  />
+                ) : (
+                  <Pressable
+                    style={[styles.areaRow, highlight === item.name && styles.areaRowSelected]}
+                    onPress={() => pickArea(item.name)}
+                  >
+                    <Image
+                      source={getRegionImage(item.name, province)}
+                      style={styles.areaThumb}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.areaRowName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.areaRowNote} numberOfLines={2}>
+                        {item.note}
+                      </Text>
+                    </View>
+                    {highlight === item.name ? (
+                      <Ionicons name="checkmark-circle" size={20} color={colors.navy} />
+                    ) : (
+                      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                    )}
+                  </Pressable>
+                )
+              }
             />
-            <Button
-              title="Không chọn (cả tỉnh/thành)"
-              variant="outline"
-              onPress={() => {
-                setHighlight(null);
-                setHighlightPickerOpen(false);
-              }}
-            />
-            <Button title="Đóng" variant="ghost" onPress={() => setHighlightPickerOpen(false)} />
+          </View>
+        </View>
+      </Modal>
+
+      {/* AI generation can take up to a minute — a blocking, explained wait
+          instead of a tiny spinner inside the button. */}
+      <Modal visible={loading} transparent animationType="fade">
+        <View style={styles.generatingBackdrop}>
+          <View style={styles.generatingCard}>
+            <View style={styles.generatingIcon}>
+              <Ionicons name="sparkles" size={26} color={colors.gold} />
+            </View>
+            <Text style={styles.generatingTitle}>{t("extra.generatingTitle")}</Text>
+            <Text style={styles.generatingText}>{t("extra.generatingSubtitle")}</Text>
+            <ActivityIndicator color={colors.navy} style={{ marginTop: spacing(1) }} />
           </View>
         </View>
       </Modal>
@@ -373,12 +611,22 @@ export default function CreateItineraryScreen() {
 }
 
 const styles = StyleSheet.create({
-  hero: { height: 180 },
+  hero: { height: 200 },
   heroImage: StyleSheet.absoluteFill,
-  heroOverlay: { position: "absolute", left: spacing(2.5) },
+  heroScrim: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+  },
+  backBtn: {
+    position: "absolute",
+    left: spacing(2),
+  },
   heroText: { position: "absolute", bottom: spacing(2), left: spacing(2.5) },
-  heroStep: { color: "rgba(255,255,255,0.8)", fontSize: 11, fontWeight: "700", letterSpacing: 1 },
-  heroTitle: { fontSize: 24, fontWeight: "700", color: "#FFFFFF" },
+  heroStep: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontWeight: "700", letterSpacing: 1.5, textTransform: "uppercase" },
+  heroTitle: { fontSize: 26, fontWeight: "800", color: "#FFFFFF" },
   body: { padding: spacing(2.5), gap: spacing(1.25) },
   label: { fontSize: 13, fontWeight: "600", color: colors.textMuted },
   selectBox: {
@@ -423,13 +671,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stepperButtonActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  stepperButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   stepperValue: { fontSize: 16, fontWeight: "700", color: colors.text, minWidth: 24, textAlign: "center" },
   divider: { height: 1, backgroundColor: colors.border },
   budgetHeaderRow: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
   budgetValue: { fontSize: 16, fontWeight: "800", color: colors.navy },
   budgetRangeRow: { flexDirection: "row", justifyContent: "space-between" },
   budgetRangeText: { fontSize: 11, color: colors.textMuted },
+  budgetTotal: { fontSize: 12, fontWeight: "700", color: colors.navy, textAlign: "right" },
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing(1) },
   chipHalf: { flexBasis: "47%" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
@@ -442,10 +691,189 @@ const styles = StyleSheet.create({
     gap: spacing(1),
   },
   modalTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
+  provinceSheet: { height: "70%" },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(1),
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing(1.5),
+  },
+  searchInput: { flex: 1, paddingVertical: spacing(1.25), color: colors.text, fontSize: 14 },
+  noResults: { color: colors.textMuted, fontSize: 13, textAlign: "center", paddingVertical: spacing(3) },
+  generatingBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(8,29,64,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing(4),
+  },
+  generatingCard: {
+    width: "100%",
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing(3),
+    alignItems: "center",
+    gap: spacing(1),
+  },
+  generatingIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.brandNavy,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing(0.5),
+  },
+  generatingTitle: { fontSize: 17, fontWeight: "800", color: colors.navy },
+  generatingText: { fontSize: 13, color: colors.textMuted, textAlign: "center", lineHeight: 18 },
   modalSubtitle: { fontSize: 12, color: colors.textMuted, marginBottom: spacing(0.5) },
-  highlightRow: { gap: spacing(1) },
-  highlightTile: { flex: 1, marginBottom: spacing(1) },
-  highlightName: { fontSize: 12, fontWeight: "700", color: colors.text },
+  // ── Featured areas strip (main form) ──
+  featuredBox: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing(1.25),
+    gap: spacing(1),
+  },
+  featuredHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing(1.5),
+  },
+  featuredTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.text },
+  seeAllBtn: { flexDirection: "row", alignItems: "center", gap: 2 },
+  seeAllText: { fontSize: 13, fontWeight: "600", color: colors.navy },
+  featuredStrip: { paddingHorizontal: spacing(1.5), gap: spacing(1) },
+  featuredCard: {
+    width: 140,
+    height: 100,
+    borderRadius: radius.md,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  featuredCardSelected: { borderColor: colors.navy },
+  featuredScrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: 64 },
+  featuredCheck: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.navy,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  featuredTextWrap: { position: "absolute", left: 8, right: 8, bottom: 6 },
+  featuredName: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  featuredNote: { color: "rgba(255,255,255,0.85)", fontSize: 10 },
+  featuredHint: { fontSize: 12, color: colors.textMuted, paddingHorizontal: spacing(1.5) },
+  selectedAreaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginHorizontal: spacing(1.5),
+    paddingHorizontal: spacing(1),
+    paddingVertical: spacing(0.75),
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
+  },
+  selectedAreaText: { flex: 1, fontSize: 13, fontWeight: "600", color: colors.text },
+
+  // ── Area picker sheet ──
+  areaSheet: { maxHeight: "88%", paddingBottom: spacing(3) },
+  areaSheetHeader: { flexDirection: "row", alignItems: "flex-start", gap: spacing(1) },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingTop: spacing(1.5),
+    paddingBottom: spacing(1),
+    backgroundColor: colors.surface,
+  },
+  sectionHeaderText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  bigAreaCard: {
+    height: 150,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    marginBottom: spacing(1.25),
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  bigAreaCardSelected: { borderColor: colors.navy },
+  bigAreaScrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: 100 },
+  bigAreaBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.warning,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  bigAreaBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
+  bigAreaCheck: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.navy,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bigAreaTextWrap: { position: "absolute", left: 14, right: 14, bottom: 12 },
+  bigAreaName: { color: "#FFFFFF", fontSize: 18, fontWeight: "800" },
+  bigAreaNote: { color: "rgba(255,255,255,0.9)", fontSize: 13, marginTop: 2 },
+  areaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(1.5),
+    padding: spacing(1),
+    marginBottom: spacing(0.75),
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  areaRowSelected: { borderColor: colors.navy, backgroundColor: colors.surfaceAlt },
+  areaThumb: { width: 64, height: 64, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+  areaRowName: { fontSize: 15, fontWeight: "700", color: colors.text },
+  areaRowNote: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  wholeProvinceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(1.5),
+    padding: spacing(1),
+    marginTop: spacing(1),
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  wholeProvinceIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   modalRow: {
     flexDirection: "row",
     justifyContent: "space-between",

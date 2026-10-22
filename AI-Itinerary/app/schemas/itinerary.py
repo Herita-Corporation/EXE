@@ -153,6 +153,11 @@ class Activity(BaseModel):
     cost: float = Field(default=0.0, ge=0, description="Approx cost in VND")
     rating: Optional[float] = Field(default=None, ge=0, le=5)
     notes: Optional[str] = None
+    coordinates: Optional[LocationCoords] = Field(
+        default=None,
+        description="GPS coordinates geocoded server-side from name+location "
+        "(Nominatim), for map/navigation — null if geocoding missed.",
+    )
 
     @model_validator(mode="after")
     def validate_times(self) -> "Activity":

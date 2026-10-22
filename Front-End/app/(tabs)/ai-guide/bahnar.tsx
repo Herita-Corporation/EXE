@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,6 +22,7 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import * as Speech from "expo-speech";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconButton } from "@/components/IconButton";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -32,7 +35,7 @@ import {
 } from "@/api/endpoints/translate";
 import type { SpeechTranslationResult, TextTranslationResult } from "@/types/translate";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, radius, spacing, TAB_BAR_CLEARANCE } from "@/theme/colors";
+import { colors, radius, spacing } from "@/theme/colors";
 
 // Ba Na → Vietnamese (the direction the model was trained for). Speech is recorded on-device with
 // expo-audio (.m4a), uploaded to AITourService (/api/v1/translate/speech, JWT) which forwards it to the
@@ -56,6 +59,8 @@ function audioFileInfo(uri: string) {
 
 export default function BahnarTranslateScreen() {
   const { t } = useLocale();
+  const insets = useSafeAreaInsets();
+  const pulse = useRef(new Animated.Value(0)).current;
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 250);
   const stoppingRef = useRef(false);
@@ -119,6 +124,21 @@ export default function BahnarTranslateScreen() {
 
   const isRecording = recorderState.isRecording;
   const seconds = Math.floor((recorderState.durationMillis ?? 0) / 1000);
+
+  // Expanding ring behind the mic while recording — makes "it's listening"
+  // obvious at a glance.
+  useEffect(() => {
+    if (!isRecording) {
+      pulse.stopAnimation();
+      pulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.timing(pulse, { toValue: 1, duration: 1200, easing: Easing.out(Easing.ease), useNativeDriver: true })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isRecording, pulse]);
 
   // Hard stop at the server's 30 s limit.
   useEffect(() => {
@@ -207,16 +227,19 @@ export default function BahnarTranslateScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, { paddingTop: insets.top + spacing(1) }]}>
         <IconButton icon="arrow-back" onPress={() => router.back()} />
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={styles.title}>{t("aiGuide.bahnarDirection")}</Text>
           <Text style={styles.subtitle}>Ba Na</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + spacing(3) }]}
+        keyboardShouldPersistTaps="handled"
+      >
         {firstRunHint && !error ? (
           <View style={styles.hintCard}>
             <Ionicons name="time-outline" size={16} color={colors.navyDeep} />
@@ -227,6 +250,18 @@ export default function BahnarTranslateScreen() {
 
         {/* ── Speak ─────────────────────────────────────────────── */}
         <View style={styles.micWrap}>
+          {isRecording ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.micPulse,
+                {
+                  opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] }),
+                  transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] }) }],
+                },
+              ]}
+            />
+          ) : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={isRecording ? t("aiGuide.stopRecording") : t("aiGuide.speakBahnar")}
@@ -325,12 +360,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing(2),
-    paddingTop: spacing(5),
     paddingBottom: spacing(1),
   },
   title: { fontSize: 12, fontWeight: "700", color: colors.textMuted, letterSpacing: 0.5 },
   subtitle: { fontSize: 18, fontWeight: "700", color: colors.navy },
-  body: { padding: spacing(2.5), gap: spacing(1.25), paddingBottom: TAB_BAR_CLEARANCE },
+  body: { padding: spacing(2.5), gap: spacing(1.25) },
   hintCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -350,6 +384,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   micButtonRecording: { backgroundColor: colors.danger },
+  // Same footprint as micButton, centered on it (micWrap paddingTop = spacing(2)).
+  micPulse: {
+    position: "absolute",
+    top: spacing(2),
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.danger,
+  },
   micLabel: { fontSize: 13, color: colors.textMuted },
   label: { fontSize: 13, fontWeight: "600", color: colors.textMuted },
   textArea: {

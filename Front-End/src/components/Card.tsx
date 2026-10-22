@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, View, ViewStyle } from "react-native";
 import { Image, ImageSource } from "expo-image";
-import { colors, radius, spacing } from "@/theme/colors";
+import { colors, radius, shadow, spacing } from "@/theme/colors";
 
 type Variant = "flat" | "elevated" | "media";
 
@@ -10,7 +10,7 @@ interface Props {
   style?: ViewStyle;
   variant?: Variant;
   /** Only used when variant="media" — renders a rounded photo header above children. */
-  imageSource?: ImageSource | string;
+  imageSource?: ImageSource | string | number;
   imageHeight?: number;
   /** Absolutely-positioned slot over the image (e.g. a favorite-heart icon or rating badge). */
   overlay?: React.ReactNode;
@@ -57,14 +57,6 @@ export function Card({
     </View>
   );
 }
-
-const shadow: ViewStyle = {
-  shadowColor: "#000",
-  shadowOpacity: 0.08,
-  shadowRadius: 12,
-  shadowOffset: { width: 0, height: 4 },
-  elevation: 3,
-};
 
 const styles = StyleSheet.create({
   card: {

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { getUserMissionsSummary } from "@/api/endpoints/missions";
 import { GamificationSummary, MOCK_GAMIFICATION } from "@/mocks/gamification";
@@ -39,27 +40,32 @@ export function useGamification(): GamificationSummary {
   const { user } = useAuth();
   const [summary, setSummary] = useState<GamificationSummary>(EMPTY_GAMIFICATION);
 
-  useEffect(() => {
-    if (!user) {
-      setSummary(EMPTY_GAMIFICATION);
-      return;
-    }
-    if (isDemoAccount(user)) {
-      setSummary(MOCK_GAMIFICATION);
-      return;
-    }
-    let cancelled = false;
-    getUserMissionsSummary(user.id)
-      .then((res) => {
-        if (!cancelled) setSummary(deriveSummary(res.totalXP));
-      })
-      .catch(() => {
-        if (!cancelled) setSummary(EMPTY_GAMIFICATION);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
+  // Refetch on every focus (not just on mount) — otherwise Home/Account,
+  // which stay mounted across tab switches, keep showing stale points
+  // after a mission is completed on another tab.
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) {
+        setSummary(EMPTY_GAMIFICATION);
+        return;
+      }
+      if (isDemoAccount(user)) {
+        setSummary(MOCK_GAMIFICATION);
+        return;
+      }
+      let cancelled = false;
+      getUserMissionsSummary(user.id)
+        .then((res) => {
+          if (!cancelled) setSummary(deriveSummary(res.totalXP));
+        })
+        .catch(() => {
+          if (!cancelled) setSummary(EMPTY_GAMIFICATION);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [user])
+  );
 
   return summary;
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Task.Application.DTOs.Requests;
+using Task.Application.DTOs.Responses;
 using Task.Application.Interfaces.Services;
 
 namespace Task.Presentation.Controllers;
@@ -20,7 +21,17 @@ public class VoucherController : ControllerBase
     public async System.Threading.Tasks.Task<IActionResult> GetAll()
     {
         var result = await _service.GetAllAsync(includeInactive: false);
-        return Ok(result);
+        return Ok(result.Select(HideCodeUnlessAdmin));
+    }
+
+    // The redeemable code is the voucher's value — the public catalog must not
+    // hand it out. Users get it from /owned/{userId} after redeeming; admins
+    // still see it so they can edit it.
+    private VoucherResponse HideCodeUnlessAdmin(
+        VoucherResponse voucher)
+    {
+        if (!User.IsInRole("Admin")) voucher.Code = string.Empty;
+        return voucher;
     }
 
     [Authorize(Roles = "Admin")]
@@ -36,7 +47,7 @@ public class VoucherController : ControllerBase
     {
         var result = await _service.GetByIdAsync(id);
         if (result == null) return NotFound("Voucher not found.");
-        return Ok(result);
+        return Ok(HideCodeUnlessAdmin(result));
     }
 
     [Authorize(Roles = "Admin")]

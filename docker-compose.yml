@@ -220,6 +220,9 @@ services:
       Jwt__Key: "${JWT_SECRET_KEY}"
       Jwt__Issuer: IAMService
       Jwt__Audience: IAMClient
+      Smtp__User: "disatravel.support@gmail.com"
+      Smtp__Password: "${SMTP_PASSWORD:-}"
+      Smtp__FromAddress: "disatravel.support@gmail.com"
     volumes:
       # Event cover images / avatars — survives container restart/rebuild.
       - ./Disa-App/IAMService/Uploads:/app/Uploads

@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from "react-native";
+import { LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
 import { Redirect, Tabs, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,10 +25,6 @@ const ROOT_PATHS = new Set(["/home", "/ai-guide", "/mission", "/voucher", "/acco
 
 // Old architecture on Android needs this opt-in for LayoutAnimation; a no-op
 // under the new architecture / Fabric, and on iOS.
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
 const TAB_META: Record<string, { focused: keyof typeof Ionicons.glyphMap; unfocused: keyof typeof Ionicons.glyphMap }> = {
   home: { focused: "home", unfocused: "home-outline" },
   "ai-guide": { focused: "chatbubble-ellipses", unfocused: "chatbubble-ellipses-outline" },

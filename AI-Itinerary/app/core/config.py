@@ -56,7 +56,8 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_FALLBACK_MODEL: str = "gpt-4.1-mini"
     OPENAI_MAX_RETRIES: int = 2
-    OPENAI_TIMEOUT: int = 30
+    # Complete multi-day JSON can legitimately take longer than 30 seconds.
+    OPENAI_TIMEOUT: int = 90
 
     # ── OSRM ──────────────────────────────────────────────────────────────────
     OSRM_URL: str = "http://router.project-osrm.org"

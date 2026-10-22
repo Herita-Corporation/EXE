@@ -32,15 +32,24 @@ export default function MissionRecordScreen() {
   const min = minSeconds ? Number(minSeconds) : null;
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState(false);
+  const [cameraKey, setCameraKey] = useState(0);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const cameraRef = useRef<CameraView>(null);
+  const recordingRef = useRef(false);
   const secondsRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (recordingRef.current) {
+        try {
+          cameraRef.current?.stopRecording();
+        } catch {}
+      }
     };
   }, []);
 
@@ -66,7 +75,15 @@ export default function MissionRecordScreen() {
   }
 
   async function onPressIn() {
-    if (recording) return;
+    // React state does not update synchronously, so use a ref as the lock to
+    // prevent two native recordAsync calls from a quick/double press.
+    if (recordingRef.current) return;
+    if (!cameraReady || cameraError || !cameraRef.current) {
+      showToast(t("capture.cameraNotReady"), "error");
+      return;
+    }
+
+    recordingRef.current = true;
     secondsRef.current = 0;
     setSeconds(0);
     setRecording(true);
@@ -76,7 +93,7 @@ export default function MissionRecordScreen() {
     }, 1000);
 
     try {
-      const video = await cameraRef.current?.recordAsync({ maxDuration: MAX_SECONDS });
+      const video = await cameraRef.current.recordAsync({ maxDuration: MAX_SECONDS });
       if (video?.uri) {
         // Server rejects evidence shorter than the template's minimum — catch
         // it here so the user can simply hold the button again.
@@ -87,7 +104,16 @@ export default function MissionRecordScreen() {
         setPendingCapturedVideo(video.uri, secondsRef.current);
         router.back();
       }
+    } catch {
+      // recordAsync rejects on Android when the camera session is not ready,
+      // is interrupted, or the recorder cannot start. Pressable does not await
+      // this handler, so the error must be consumed here to avoid an unhandled
+      // promise/RedBox.
+      setCameraReady(false);
+      setCameraKey((key) => key + 1); // rebuild a potentially broken native session
+      showToast(t("capture.recordFailed"), "error");
     } finally {
+      recordingRef.current = false;
       setRecording(false);
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -97,13 +123,34 @@ export default function MissionRecordScreen() {
   }
 
   function onPressOut() {
-    if (!recording) return;
-    cameraRef.current?.stopRecording();
+    if (!recordingRef.current) return;
+    try {
+      cameraRef.current?.stopRecording();
+    } catch {
+      // recordAsync owns the user-visible error path. Some Android camera
+      // implementations throw here as the recording session is torn down.
+    }
   }
 
   return (
     <View style={styles.root}>
-      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" mode="video" />
+      <CameraView
+        key={cameraKey}
+        ref={cameraRef}
+        style={StyleSheet.absoluteFill}
+        facing="back"
+        mode="video"
+        videoQuality="480p"
+        onCameraReady={() => {
+          setCameraError(false);
+          setCameraReady(true);
+        }}
+        onMountError={() => {
+          setCameraReady(false);
+          setCameraError(true);
+          showToast(t("capture.cameraUnavailable"), "error");
+        }}
+      />
 
       <View style={[styles.topRow, { top: insets.top + spacing(1.5) }]}>
         <IconButton icon="close" variant="glass" onPress={() => router.back()} />
@@ -133,6 +180,7 @@ export default function MissionRecordScreen() {
       <View style={[styles.bottomRow, { bottom: insets.bottom + spacing(4) }]}>
         <Pressable
           style={[styles.shutterOuter, recording && styles.shutterOuterActive]}
+          disabled={!cameraReady || cameraError}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
         >

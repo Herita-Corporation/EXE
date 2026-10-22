@@ -65,6 +65,10 @@ public class AITourController : ControllerBase
         {
             return Unauthorized(new { Success = false, Message = ex.Message });
         }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Success = false, Message = ex.Message });
+        }
         catch (InvalidOperationException ex) when (ex.Message.Contains("rate limit"))
         {
             return StatusCode(StatusCodes.Status429TooManyRequests,
@@ -147,6 +151,29 @@ public class AITourController : ControllerBase
         }
     }
 
+    [HttpDelete("user-data/all")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> DeleteAllUserData(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var token = GetBearerToken();
+            var success = await _aiItineraryService.DeleteAllUserDataAsync(token, cancellationToken);
+            return Ok(new { Success = success });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { Success = false, Message = ex.Message });
+        }
+        catch (HttpRequestException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { Success = false, Message = "AI-Itinerary service is unavailable.", Detail = ex.Message });
+        }
+    }
+
     // ── GET /api/v1/itinerary/{id}/activities/{activityId}/alternatives ──────
 
     /// <summary>
@@ -182,6 +209,42 @@ public class AITourController : ControllerBase
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
                 new { Success = false, Message = "AI-Itinerary service is unavailable.", Detail = ex.Message });
+        }
+    }
+
+    [HttpPost("{itineraryId:guid}/activities/{activityId}/coordinates")]
+    [ProducesResponseType(typeof(LocationCoords), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ResolveActivityCoordinates(
+        Guid itineraryId,
+        string activityId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var token = GetBearerToken();
+            var result = await _aiItineraryService.ResolveActivityCoordinatesAsync(
+                itineraryId, activityId, token, cancellationToken);
+            return result is null
+                ? NotFound(new { Success = false, Message = "Activity not found." })
+                : Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Success = false, Message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { Success = false, Message = ex.Message });
+        }
+        catch (HttpRequestException ex)
+        {
+            return StatusCode(
+                ex.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity
+                    ? StatusCodes.Status422UnprocessableEntity
+                    : StatusCodes.Status503ServiceUnavailable,
+                new { Success = false, Message = ex.Message });
         }
     }
 

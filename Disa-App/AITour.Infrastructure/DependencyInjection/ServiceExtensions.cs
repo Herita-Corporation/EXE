@@ -19,7 +19,7 @@ public static class ServiceExtensions
     /// {
     ///   "AIItinerary": {
     ///     "BaseUrl": "http://localhost:8000",
-    ///     "TimeoutSeconds": 120
+    ///     "TimeoutSeconds": 180
     ///   }
     /// }
     /// </code>
@@ -32,7 +32,7 @@ public static class ServiceExtensions
             ?? throw new InvalidOperationException(
                 "AIItinerary:BaseUrl is not configured in appsettings.json.");
 
-        var timeoutSeconds = configuration.GetValue<int>("AIItinerary:TimeoutSeconds", 120);
+        var timeoutSeconds = configuration.GetValue<int>("AIItinerary:TimeoutSeconds", 180);
 
         services.AddHttpClient<AIItineraryClient>(client =>
         {

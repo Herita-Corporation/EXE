@@ -71,6 +71,10 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+export interface DeleteAccountRequest {
+  password: string;
+}
+
 export interface ForgotPasswordRequest {
   email: string;
 }

@@ -49,7 +49,7 @@ async function doRequest<T>(
     method: opts.method ?? "GET",
     data: opts.data,
     params: opts.params,
-    timeout: opts.timeoutMs ?? (service === "aiTour" ? 90000 : 15000),
+    timeout: opts.timeoutMs ?? (service === "aiTour" ? 180000 : 15000),
     headers: {
       Accept: "application/json",
       ...opts.headers,

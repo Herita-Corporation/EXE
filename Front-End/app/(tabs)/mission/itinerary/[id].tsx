@@ -24,6 +24,7 @@ import { IconButton } from "@/components/IconButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { Chip } from "@/components/Chip";
 import { formatDate } from "@/utils/date";
+import { useSmartBack } from "@/utils/backNavigation";
 import { haptics } from "@/utils/haptics";
 import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
 import {
@@ -31,6 +32,7 @@ import {
   getActivityAlternatives,
   getItinerary,
   replaceActivity,
+  resolveActivityCoordinates,
 } from "@/api/endpoints/itinerary";
 import {
   assignMission,
@@ -110,6 +112,10 @@ function distanceMeters(
 
 const ARRIVAL_RADIUS_METERS = 150;
 
+function missionTitleKey(type: number, title: string) {
+  return `${type}:${title.trim().toLocaleLowerCase()}`;
+}
+
 function openMapsFor(activity: Activity, city?: string) {
   // Prefer server-geocoded GPS; otherwise let Google Maps search by name +
   // area (meals/coffee are never geocoded, hotel names often miss).
@@ -123,16 +129,33 @@ function openMapsFor(activity: Activity, city?: string) {
 // when the itinerary has them; otherwise the device geocoder (Google on
 // Android, Apple on iOS) on name + area. Null if the place can't be found.
 async function resolvePlaceCoords(
+  itineraryId: string,
   activity: Activity,
   city?: string
 ): Promise<{ lat: number; lng: number } | null> {
   if (activity.coordinates) return activity.coordinates;
   try {
+    const resolved = await resolveActivityCoordinates(
+      itineraryId,
+      activity.activity_id
+    );
+    activity.coordinates = resolved;
+    return resolved;
+  } catch {}
+
+  try {
     const perm = await Location.requestForegroundPermissionsAsync();
     if (!perm.granted) return null;
-    const query = [activity.name, activity.location ?? city].filter(Boolean).join(", ");
-    const [hit] = await Location.geocodeAsync(query);
-    return hit ? { lat: hit.latitude, lng: hit.longitude } : null;
+    const queries = [
+      [activity.name, city].filter(Boolean).join(", "),
+      [activity.name, activity.location].filter(Boolean).join(", "),
+      activity.name,
+    ].filter(Boolean);
+    for (const query of [...new Set(queries)]) {
+      const [hit] = await Location.geocodeAsync(query);
+      if (hit) return { lat: hit.latitude, lng: hit.longitude };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -406,6 +429,9 @@ function ActivityCard({
   activity,
   photoAssigned,
   videoAssigned,
+  photoCompleted,
+  videoCompleted,
+  missionsReady,
   photoXp,
   videoXp,
   assigningPhoto,
@@ -418,6 +444,9 @@ function ActivityCard({
   activity: Activity;
   photoAssigned: boolean;
   videoAssigned: boolean;
+  photoCompleted: boolean;
+  videoCompleted: boolean;
+  missionsReady: boolean;
   photoXp: number;
   videoXp: number;
   assigningPhoto: boolean;
@@ -490,7 +519,11 @@ function ActivityCard({
           {photoAssigned ? (
             <View style={cardStyles.assignedBadge}>
               <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-              <Text style={cardStyles.assignedText}>{t("itineraryDetail.photoAssigned", { xp: photoXp })}</Text>
+              <Text style={cardStyles.assignedText}>
+                {photoCompleted
+                  ? t("missionStatus.completed")
+                  : t("itineraryDetail.photoAssigned", { xp: photoXp })}
+              </Text>
             </View>
           ) : (
             <SwipeButton
@@ -500,6 +533,7 @@ function ActivityCard({
               loadingText={t("itineraryDetail.accepting")}
               onSwipeSuccess={onAssignPhoto}
               loading={assigningPhoto}
+              disabled={!missionsReady}
             />
           )}
 
@@ -507,7 +541,11 @@ function ActivityCard({
           {videoAssigned ? (
             <View style={cardStyles.assignedBadge}>
               <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-              <Text style={cardStyles.assignedText}>{t("itineraryDetail.videoAssigned", { xp: videoXp })}</Text>
+              <Text style={cardStyles.assignedText}>
+                {videoCompleted
+                  ? t("missionStatus.completed")
+                  : t("itineraryDetail.videoAssigned", { xp: videoXp })}
+              </Text>
             </View>
           ) : (
             <SwipeButton
@@ -517,6 +555,7 @@ function ActivityCard({
               loadingText={t("itineraryDetail.accepting")}
               onSwipeSuccess={onAssignVideo}
               loading={assigningVideo}
+              disabled={!missionsReady}
             />
           )}
         </View>
@@ -644,6 +683,7 @@ const cardStyles = StyleSheet.create({
 
 export default function ItineraryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const goBack = useSmartBack();
   const { user } = useAuth();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -655,6 +695,10 @@ export default function ItineraryDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<MissionTemplate[]>([]);
   const [assignedKeys, setAssignedKeys] = useState<Set<string>>(new Set());
+  const [completedKeys, setCompletedKeys] = useState<Set<string>>(new Set());
+  const [assignedTitleKeys, setAssignedTitleKeys] = useState<Set<string>>(new Set());
+  const [completedTitleKeys, setCompletedTitleKeys] = useState<Set<string>>(new Set());
+  const [missionsReady, setMissionsReady] = useState(false);
   const [assigningKey, setAssigningKey] = useState<string | null>(null);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [alternatives, setAlternatives] = useState<ActivityAlternative[]>([]);
@@ -669,6 +713,8 @@ export default function ItineraryDetailScreen() {
 
   const waypointIndexRef = useRef(0);
   const watchSubRef = useRef<Location.LocationSubscription | null>(null);
+  const assigningKeysRef = useRef<Set<string>>(new Set());
+  const assigningTitleKeysRef = useRef<Set<string>>(new Set());
 
   const waypoints = useMemo(
     () =>
@@ -690,19 +736,51 @@ export default function ItineraryDetailScreen() {
     useCallback(() => {
       if (!user) return;
       let cancelled = false;
+      setMissionsReady(false);
       listUserMissions(user.id)
         .then((missions) => {
           if (cancelled) return;
-          const keys = missions
-            .filter((m) => m.tripId?.toLowerCase() === id.toLowerCase() && m.placeId)
-            .map((m) => `${m.placeId!.toLowerCase()}:${m.type}`);
-          setAssignedKeys((prev) => new Set([...prev, ...keys]));
+          const tripMissions = missions.filter(
+            (m) => !m.tripId || m.tripId.toLowerCase() === id.toLowerCase()
+          );
+          const nextAssignedKeys = new Set(
+            tripMissions
+              .filter((m) => m.placeId)
+              .map((m) => `${m.placeId!.toLowerCase()}:${m.type}`)
+          );
+          setAssignedKeys(nextAssignedKeys);
+          assigningKeysRef.current = new Set(nextAssignedKeys);
+          const nextAssignedTitleKeys = new Set(
+            missions.map((m) => missionTitleKey(m.type, m.title))
+          );
+          setAssignedTitleKeys(nextAssignedTitleKeys);
+          assigningTitleKeysRef.current = new Set(nextAssignedTitleKeys);
+          setCompletedKeys(new Set(
+            tripMissions
+              .filter((m) => m.status === 2 && m.placeId)
+              .map((m) => `${m.placeId!.toLowerCase()}:${m.type}`)
+          ));
+          setCompletedTitleKeys(new Set(
+            missions
+              .filter((m) => m.status === 2)
+              .map((m) => missionTitleKey(m.type, m.title))
+          ));
+          if (!cancelled) setMissionsReady(true);
         })
-        .catch(() => {});
+        .catch((err) => {
+          if (cancelled) return;
+          setMissionsReady(false);
+          showToast(
+            err instanceof ApiError
+              ? err.message
+              : t("itineraryDetail.assignFailed"),
+            "error"
+          );
+        });
       return () => {
         cancelled = true;
       };
-    }, [user, id])
+    }, [user, id, showToast, t])
   );
 
   const photoTemplate = templates.find(
@@ -758,23 +836,48 @@ export default function ItineraryDetailScreen() {
     if (!user || !data) return;
     const key = `${activity.activity_id.toLowerCase()}:${template.type}`;
     const missionTitle = t("itineraryDetail.missionTitle", { label, place: activity.name });
+    const titleKey = missionTitleKey(template.type, missionTitle);
+    if (
+      assignedKeys.has(key) ||
+      assignedTitleKeys.has(titleKey) ||
+      assigningKeysRef.current.has(key) ||
+      assigningTitleKeysRef.current.has(titleKey)
+    ) return;
+    assigningKeysRef.current.add(key);
+    assigningTitleKeysRef.current.add(titleKey);
 
     setAssigningKey(key);
     try {
-      const target = await resolvePlaceCoords(activity, data.trip_summary.cities[0]);
+      const target = await resolvePlaceCoords(
+        data.itinerary_id,
+        activity,
+        data.trip_summary.cities[0]
+      );
+      if (!target) {
+        throw new ApiError(
+          "Địa điểm chưa có tọa độ xác thực trên bản đồ. Bạn vẫn có thể xem chỉ đường theo tên hoặc đổi địa điểm, nhưng chưa thể nhận nhiệm vụ GPS tại đây.",
+          422,
+          "MISSION_LOCATION_UNAVAILABLE"
+        );
+      }
       await assignMission({
         userId: user.id,
         tripId: data.itinerary_id,
         placeId: activity.activity_id,
         templateId: template.id,
         title: missionTitle,
-        targetLatitude: target?.lat ?? null,
-        targetLongitude: target?.lng ?? null,
+        targetLatitude: target.lat,
+        targetLongitude: target.lng,
       });
       setAssignedKeys((prev) => new Set(prev).add(key));
+      setAssignedTitleKeys((prev) =>
+        new Set(prev).add(titleKey)
+      );
       haptics.success();
-      showToast(`Đã nhận nhiệm vụ: ${label} tại ${activity.name} 🎯`, "success");
+      showToast(`Đã nhận nhiệm vụ: ${label} tại ${activity.name}`, "success");
     } catch (err) {
+      assigningKeysRef.current.delete(key);
+      assigningTitleKeysRef.current.delete(titleKey);
       showToast(err instanceof ApiError ? err.message : t("itineraryDetail.assignFailed"), "error");
     } finally {
       setAssigningKey(null);
@@ -795,7 +898,7 @@ export default function ItineraryDetailScreen() {
               await deleteMissionsForTrip(id);
             } catch {}
             if (user) await removeItineraryFromHistory(user.id, id);
-            router.back();
+            goBack();
           } catch (err) {
             showToast(err instanceof ApiError ? err.message : t("itineraryDetail.deleteFailed"), "error");
           } finally {
@@ -931,7 +1034,7 @@ export default function ItineraryDetailScreen() {
       // Swipe-back is disabled on this route, so the error state must keep a
       // visible way out.
       <ScreenContainer>
-        <BackHeader title={t("itineraries.title")} onBack={() => router.back()} />
+        <BackHeader title={t("itineraries.title")} onBack={goBack} />
         <ErrorBanner message={error ?? t("itineraryDetail.notFound")} />
       </ScreenContainer>
     );
@@ -959,7 +1062,7 @@ export default function ItineraryDetailScreen() {
         {/* 0 ── Header: back · title · delete ── */}
         <BackHeader
           title={data.trip_summary.cities.join(", ")}
-          onBack={() => router.back()}
+          onBack={goBack}
           right={
             <IconButton
               icon="trash-outline"
@@ -998,6 +1101,10 @@ export default function ItineraryDetailScreen() {
               hint={`${t("itineraryDetail.budget")} ${formatVndShort(data.trip_summary.budget)}`}
             />
           </View>
+          <View style={screenStyles.estimateNotice}>
+            <Ionicons name="information-circle-outline" size={16} color={colors.warning} />
+            <Text style={screenStyles.estimateNoticeText}>{t("itineraryDetail.estimateNotice")}</Text>
+          </View>
         </View>
 
         {/* 2 ── Day filter chips (sticky while scrolling) ── */}
@@ -1034,12 +1141,25 @@ export default function ItineraryDetailScreen() {
               {day.activities.map((activity, idx) => {
                 const photoKey = `${activity.activity_id.toLowerCase()}:${MISSION_TYPE_PHOTO}`;
                 const videoKey = `${activity.activity_id.toLowerCase()}:${MISSION_TYPE_VIDEO}`;
+                const photoTitle = t("itineraryDetail.missionTitle", {
+                  label: t("itineraryDetail.photoLabel"),
+                  place: activity.name,
+                });
+                const videoTitle = t("itineraryDetail.missionTitle", {
+                  label: t("itineraryDetail.videoLabel"),
+                  place: activity.name,
+                });
+                const photoTitleKey = missionTitleKey(MISSION_TYPE_PHOTO, photoTitle);
+                const videoTitleKey = missionTitleKey(MISSION_TYPE_VIDEO, videoTitle);
                 return (
                   <ActivityCard
                     key={`${activity.activity_id}-${idx}`}
                     activity={activity}
-                    photoAssigned={assignedKeys.has(photoKey)}
-                    videoAssigned={assignedKeys.has(videoKey)}
+                    photoAssigned={assignedKeys.has(photoKey) || assignedTitleKeys.has(photoTitleKey)}
+                    videoAssigned={assignedKeys.has(videoKey) || assignedTitleKeys.has(videoTitleKey)}
+                    photoCompleted={completedKeys.has(photoKey) || completedTitleKeys.has(photoTitleKey)}
+                    videoCompleted={completedKeys.has(videoKey) || completedTitleKeys.has(videoTitleKey)}
+                    missionsReady={missionsReady}
                     photoXp={photoTemplate?.rewardXP ?? 0}
                     videoXp={videoTemplate?.rewardXP ?? 0}
                     assigningPhoto={assigningKey === photoKey}
@@ -1223,6 +1343,14 @@ const screenStyles = StyleSheet.create({
   summaryLabel: { color: "rgba(255,255,255,0.7)", fontSize: 11 },
   summaryHint: { color: "rgba(255,255,255,0.55)", fontSize: 10 },
   summaryDivider: { width: 1, height: 36, backgroundColor: "rgba(255,255,255,0.15)" },
+  estimateNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing(0.75),
+    marginTop: spacing(1),
+    paddingHorizontal: spacing(1.5),
+  },
+  estimateNoticeText: { flex: 1, fontSize: 11, lineHeight: 16, color: colors.textMuted },
   dayChipsWrap: {
     backgroundColor: colors.background,
     paddingVertical: spacing(1.25),

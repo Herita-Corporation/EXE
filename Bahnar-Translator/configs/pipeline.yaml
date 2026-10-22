@@ -41,4 +41,4 @@ confidence:                       # tune trên val bằng: python -m src.pipelin
   tau_asr: 0.60
   tau_mt: 0.0                     # 0 = không chặn theo MT
   retry_message: "Xin nói lại chậm hơn."
-  disclaimer: "Bản dịch máy — có thể chưa chính xác."
+  disclaimer: "Bản dịch do AI tạo, có thể không chính xác 100%. Tiếng Ba Na có nhiều biến thể theo vùng; mô hình hiện chỉ phù hợp nhất với biến thể có trong bộ dữ liệu cuong06 (thu từ nội dung Ba Na trên YouTube, chưa xác minh được phương ngữ cụ thể). Chỉ nên dùng kết quả để tham khảo."

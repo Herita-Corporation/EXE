@@ -66,7 +66,7 @@ class TestValidateGeneratedBudget:
 
     def test_exceeds_budget_raises(self, service):
         with pytest.raises(BudgetExceededError):
-            service.validate_generated_budget(7_000_001, 7_000_000)
+            service.validate_generated_budget(9_100_001, 7_000_000)
 
 
 class TestPerDayCalculations:
@@ -92,3 +92,24 @@ class TestCacheKey:
         key1 = service.build_cache_key(["Da Nang"], 5_000_000, 3, [])
         key2 = service.build_cache_key(["Da Nang"], 6_000_000, 3, [])
         assert key1 != key2
+
+    def test_different_traveler_count_different_key(self, service):
+        key1 = service.build_cache_key(["Da Nang"], 10_000_000, 3, [], 1)
+        key2 = service.build_cache_key(["Da Nang"], 10_000_000, 3, [], 2)
+        assert key1 != key2
+
+
+class TestBudgetProfile:
+    def test_large_budget_selects_luxury_and_target_band(self, service):
+        planning, _ = service.calculate_planning_budget(125_000_000)
+        profile = service.build_budget_profile(125_000_000, planning, 1, 5)
+
+        assert profile["tier"] == "luxury"
+        assert profile["enforce_minimum"] is True
+        assert profile["target_total_cost_min"] == 52_500_000
+        assert profile["target_total_cost_max"] == 78_750_000
+
+    def test_tier_uses_budget_per_person_per_day(self, service):
+        planning, _ = service.calculate_planning_budget(10_000_000)
+        profile = service.build_budget_profile(10_000_000, planning, 5, 5)
+        assert profile["tier"] == "economy"

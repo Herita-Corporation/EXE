@@ -1,7 +1,6 @@
 import React, { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,7 +31,7 @@ const COMPLETED_STATUS = 2;
 
 // Must match MissionSubmissionService.MaxDistanceMeters — the server is the
 // real check; this just avoids uploading a photo/video that will be rejected.
-const MAX_DISTANCE_METERS = 1000;
+const MAX_DISTANCE_METERS = 500;
 
 function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const R = 6371000;
@@ -136,21 +135,6 @@ export default function MissionDetailScreen() {
     });
   }
 
-  async function pickFromLibrary() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      showToast(t("missionDetail.libraryPermission"), "error");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
-    }
-  }
-
   const target =
     mission?.targetLatitude != null && mission?.targetLongitude != null
       ? { lat: mission.targetLatitude, lng: mission.targetLongitude }
@@ -211,6 +195,7 @@ export default function MissionDetailScreen() {
         userMissionId: id,
         photoUri,
         videoUri,
+        videoDurationSeconds: videoDuration || undefined,
         latitude: here?.lat,
         longitude: here?.lng,
         takenAt: new Date().toISOString(),
@@ -336,10 +321,7 @@ export default function MissionDetailScreen() {
 
             <View style={styles.submitButtonRow}>
               {mission.requiresPhoto ? (
-                <>
-                  <Button title={t("missionDetail.takePhoto")} variant="secondary" icon="camera-outline" onPress={openCamera} style={{ flex: 1 }} />
-                  <Button title={t("missionDetail.pickFromLibrary")} variant="secondary" icon="images-outline" onPress={pickFromLibrary} style={{ flex: 1 }} />
-                </>
+                <Button title={t("missionDetail.takePhoto")} variant="secondary" icon="camera-outline" onPress={openCamera} style={{ flex: 1 }} />
               ) : null}
               {mission.requiresVideo ? (
                 <Button

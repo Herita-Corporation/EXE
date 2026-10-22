@@ -6,6 +6,13 @@ public interface IUserMissionRepository
 {
     System.Threading.Tasks.Task AddAsync(UserMission mission);
 
+    /// <summary>
+    /// Atomically returns the existing assignment for the same user/place title/type,
+    /// or inserts <paramref name="mission"/> when none exists.
+    /// </summary>
+    System.Threading.Tasks.Task<Guid> GetOrAddAssignmentAsync(
+        UserMission mission, Task.Domain.Enums.MissionType missionType);
+
     System.Threading.Tasks.Task<IEnumerable<UserMission>> GetByUserIdAsync(Guid userId);
 
     System.Threading.Tasks.Task<UserMission?> GetByIdAsync(Guid id);

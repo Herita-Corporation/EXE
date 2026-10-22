@@ -250,6 +250,48 @@ public class AuthController : ControllerBase
         return Ok("Đổi mật khẩu thành công");
     }
 
+    // XÓA TÀI KHOẢN — yêu cầu xác nhận lại mật khẩu. Các refresh token,
+    // verification code và liên kết role được xóa cascade cùng người dùng.
+    [Authorize]
+    [HttpDelete("delete-account")]
+    public async Task<IActionResult> DeleteAccount(DeleteAccountRequest request)
+    {
+        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId);
+
+        if (user == null)
+            return NotFound("Không tìm thấy người dùng");
+
+        if (string.IsNullOrWhiteSpace(request.Password) ||
+            !_hasher.Verify(request.Password, user.PasswordHash))
+        {
+            return BadRequest("Mật khẩu không chính xác");
+        }
+
+        if (!string.IsNullOrWhiteSpace(user.AvatarUrl))
+            await _fileStorageService.DeleteAsync(user.AvatarUrl);
+
+        _context.Users.Remove(user);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { Success = true, Message = "Đã xóa tài khoản vĩnh viễn" });
+    }
+
+    [Authorize]
+    [HttpPost("verify-password")]
+    public async Task<IActionResult> VerifyPassword(DeleteAccountRequest request)
+    {
+        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId);
+        if (user == null) return NotFound("Không tìm thấy người dùng");
+
+        if (string.IsNullOrWhiteSpace(request.Password) ||
+            !_hasher.Verify(request.Password, user.PasswordHash))
+            return BadRequest("Mật khẩu không chính xác");
+
+        return Ok(new { Success = true });
+    }
+
     
     // QUÊN MẬT KHẨU
     

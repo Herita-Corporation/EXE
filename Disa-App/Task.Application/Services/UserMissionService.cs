@@ -26,6 +26,16 @@ public class UserMissionService : IUserMissionService
         if (template == null)
             throw new Exception("Mission template not found.");
 
+        // Idempotent: the same mission (template) at the same place of the same
+        // trip is only ever assigned once — re-swiping returns the existing one.
+        var existing = (await _userMissionRepository.GetByUserIdAsync(request.UserId))
+            .FirstOrDefault(x =>
+                x.TripId == request.TripId &&
+                x.PlaceId == request.PlaceId &&
+                x.TemplateId == template.Id);
+        if (existing != null)
+            return existing.Id;
+
         var mission = new UserMission
         {
             UserId = request.UserId,
@@ -37,6 +47,9 @@ public class UserMissionService : IUserMissionService
 
             RewardXP = template.RewardXP,
             RewardCoins = template.RewardCoins,
+
+            TargetLatitude = request.TargetLatitude,
+            TargetLongitude = request.TargetLongitude,
 
             Status = Domain.Enums.MissionStatus.Assigned,
 
@@ -58,6 +71,8 @@ public class UserMissionService : IUserMissionService
             return new UserMissionResponse
             {
                 Id = x.Id,
+                TripId = x.TripId,
+                PlaceId = x.PlaceId,
                 Title = x.Title,
                 Status = x.Status,
                 RewardXP = x.RewardXP,
@@ -70,7 +85,9 @@ public class UserMissionService : IUserMissionService
                 RequiresLocation = x.Template.RequiresLocation,
                 MinVideoSeconds = x.Template.MinVideoSeconds,
                 EvidenceUrl = evidence?.MediaUrl,
-                EvidenceType = evidence?.Type
+                EvidenceType = evidence?.Type,
+                TargetLatitude = x.TargetLatitude,
+                TargetLongitude = x.TargetLongitude
             };
         });
     }
@@ -87,6 +104,8 @@ public class UserMissionService : IUserMissionService
         return new UserMissionResponse
         {
             Id = mission.Id,
+            TripId = mission.TripId,
+            PlaceId = mission.PlaceId,
             Title = mission.Title,
             Status = mission.Status,
             RewardXP = mission.RewardXP,
@@ -99,7 +118,9 @@ public class UserMissionService : IUserMissionService
             RequiresLocation = mission.Template.RequiresLocation,
             MinVideoSeconds = mission.Template.MinVideoSeconds,
             EvidenceUrl = evidence?.MediaUrl,
-            EvidenceType = evidence?.Type
+            EvidenceType = evidence?.Type,
+            TargetLatitude = mission.TargetLatitude,
+            TargetLongitude = mission.TargetLongitude
         };
     }
 
@@ -122,6 +143,24 @@ public class UserMissionService : IUserMissionService
     public async System.Threading.Tasks.Task DeleteMissionsForTripAsync(Guid tripId)
     {
         await _userMissionRepository.DeleteByTripIdExceptCompletedAsync(tripId);
+    }
+
+    public async System.Threading.Tasks.Task PruneMissionsAsync(Guid userId, IReadOnlyCollection<Guid> keepTripIds)
+    {
+        await _userMissionRepository.DeleteForUserExceptTripsAsync(userId, keepTripIds);
+    }
+
+    public async System.Threading.Tasks.Task DeleteMissionAsync(Guid id)
+    {
+        var mission = await _userMissionRepository.GetByIdAsync(id);
+        if (mission == null)
+            return;
+
+        // Completed missions are permanent — they carry earned XP/Coins.
+        if (mission.Status == Domain.Enums.MissionStatus.Completed)
+            throw new InvalidOperationException("Không thể xóa nhiệm vụ đã hoàn thành.");
+
+        await _userMissionRepository.DeleteByIdAsync(id);
     }
 
     public async System.Threading.Tasks.Task DeleteAllMissionsForUserAsync(Guid userId)

@@ -6,16 +6,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Card } from "@/components/Card";
 import { Avatar } from "@/components/Avatar";
-import { IconButton } from "@/components/IconButton";
 import { SectionHeader } from "@/components/SectionHeader";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { VoucherIcon } from "@/components/VoucherIcon";
 import { useAuth } from "@/context/AuthContext";
-import { useToast } from "@/context/ToastContext";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { TranslationKey } from "@/i18n/LocaleContext";
-import { MOCK_OFFERS } from "@/mocks/destinations";
+import { HOME_OFFERS } from "@/mocks/homeOffers";
 import { FEATURED_MISSIONS } from "@/mocks/featuredMissions";
 import { colors, isDark, radius, spacing } from "@/theme/colors";
 import { GradientHero } from "@/components/GradientHero";
@@ -34,23 +32,11 @@ const QUICK_ACTIONS: Array<{
   { key: "mission-history", labelKey: "home.missionHistory", icon: "time-outline", href: "/(tabs)/mission/completed?from=home" },
   { key: "collection", labelKey: "home.collection", icon: "albums-outline", href: "/(tabs)/mission/collection?from=home" },
   { key: "events", labelKey: "home.events", icon: "calendar-outline", href: "/(tabs)/mission/events?from=home" },
-  { key: "more", labelKey: "home.more", icon: "grid-outline", href: "/(tabs)/account" },
+  { key: "translate", labelKey: "extra.translate", icon: "language-outline", href: "/(tabs)/ai-guide" },
 ];
-
-// Mock offers carry an icon, not a category — map it so the tile picks up
-// the same category colors used on the Voucher tab.
-const OFFER_STYLE: Record<
-  string,
-  { category: string; icon: keyof typeof Ionicons.glyphMap }
-> = {
-  "cafe-outline": { category: "Dining", icon: "cafe" },
-  "bed-outline": { category: "Hotels", icon: "bed" },
-  "airplane-outline": { category: "Travel", icon: "airplane" },
-};
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  const { showToast } = useToast();
   const gamification = useGamification();
   const { t } = useLocale();
   const displayName = user?.username ?? t("common.voyager");
@@ -66,12 +52,6 @@ export default function HomeScreen() {
           }
           style={styles.logo}
           contentFit="contain"
-        />
-        <IconButton
-          icon="notifications-outline"
-          variant="solid"
-          size={20}
-          onPress={() => showToast("Chưa có thông báo mới.", "info")}
         />
       </View>
 
@@ -161,23 +141,14 @@ export default function HomeScreen() {
         style={styles.carousel}
         contentContainerStyle={styles.carouselContent}
       >
-        {MOCK_OFFERS.map((offer) => (
-          <Pressable
-            key={offer.id}
-            onPress={() =>
-              showToast(`Đổi ưu đãi "${offer.title}"? (demo — chưa có backend ưu đãi)`, "info")
-            }
-          >
+        {HOME_OFFERS.map((offer) => (
+          <Pressable key={offer.id} onPress={() => router.push("/(tabs)/voucher")}>
             <Card variant="elevated" style={styles.offerCard}>
-              <VoucherIcon
-                category={OFFER_STYLE[offer.icon]?.category}
-                icon={OFFER_STYLE[offer.icon]?.icon}
-                size={48}
-              />
+              <VoucherIcon category={offer.category} icon={offer.icon} size={48} />
               <View style={styles.offerInfo}>
-                <Text style={styles.offerTitle} numberOfLines={1}>{offer.title}</Text>
-                <Text style={styles.offerLocation} numberOfLines={1}>{offer.location}</Text>
-                <Text style={styles.offerText} numberOfLines={1}>{offer.offerText}</Text>
+                <Text style={styles.offerTitle} numberOfLines={1}>{t(offer.titleKey)}</Text>
+                <Text style={styles.offerLocation} numberOfLines={1}>{t(offer.locationKey)}</Text>
+                <Text style={styles.offerText} numberOfLines={1}>{t(offer.offerKey)}</Text>
               </View>
             </Card>
           </Pressable>
@@ -262,5 +233,5 @@ const styles = StyleSheet.create({
   offerInfo: { flex: 1, gap: 1 },
   offerTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
   offerLocation: { fontSize: 12, color: colors.textMuted },
-  offerText: { fontSize: 12.5, fontWeight: "700", color: colors.link, marginTop: 2 },
+  offerText: { fontSize: 13, fontWeight: "700", color: colors.link, marginTop: 2 },
 });

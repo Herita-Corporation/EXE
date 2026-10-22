@@ -13,7 +13,11 @@ export default function MissionLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="itineraries" />
       <Stack.Screen name="create" />
-      <Stack.Screen name="itinerary/[id]" />
+      {/* Swipe-to-back would fight the mission swipe sliders; back via the arrow only */}
+      <Stack.Screen
+        name="itinerary/[id]"
+        options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
+      />
       <Stack.Screen name="[id]" />
       <Stack.Screen name="camera" options={{ presentation: "fullScreenModal" }} />
       <Stack.Screen name="record" />

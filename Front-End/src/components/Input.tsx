@@ -15,6 +15,8 @@ interface Props extends TextInputProps {
   icon?: keyof typeof Ionicons.glyphMap;
   /** e.g. a password show/hide eye button. */
   rightElement?: React.ReactNode;
+  /** Forwarded to the TextInput (React 19 ref-as-prop) for focus chaining. */
+  ref?: React.Ref<TextInput>;
 }
 
 export function Input({
@@ -22,6 +24,7 @@ export function Input({
   error,
   icon,
   rightElement,
+  ref,
   style,
   onFocus,
   onBlur,
@@ -43,6 +46,7 @@ export function Input({
           <Ionicons name={icon} size={18} color={colors.textMuted} style={styles.icon} />
         ) : null}
         <TextInput
+          ref={ref}
           placeholderTextColor={colors.textMuted}
           style={[styles.input, style]}
           onFocus={(e) => {

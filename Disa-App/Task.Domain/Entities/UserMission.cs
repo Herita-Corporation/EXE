@@ -29,6 +29,12 @@ namespace Task.Domain.Entities
 
         public int RewardCoins { get; set; }
 
+        // GPS of the mission's place (from the itinerary activity). When set,
+        // a submission must be taken within range of it to complete.
+        public double? TargetLatitude { get; set; }
+
+        public double? TargetLongitude { get; set; }
+
         // Navigation
         public MissionTemplate Template { get; set; } = null!;
 

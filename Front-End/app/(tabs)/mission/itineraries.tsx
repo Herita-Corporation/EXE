@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
+import { SkeletonCard } from "@/components/Skeleton";
+import { BackHeader } from "@/components/BackHeader";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
@@ -14,16 +15,19 @@ import { useSmartBack } from "@/utils/backNavigation";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { ItineraryResponse } from "@/types/itinerary";
+import { getRegionImage } from "@/data/regionImages";
+import { formatDateRange, toIsoDate } from "@/utils/date";
+import { Image } from "expo-image";
 import { colors, spacing } from "@/theme/colors";
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return toIsoDate(new Date());
 }
 
 export default function MyItinerariesScreen() {
   const goBack = useSmartBack();
   const { user } = useAuth();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<
     { entry: ItineraryHistoryEntry; data: ItineraryResponse }[]
@@ -74,17 +78,16 @@ export default function MyItinerariesScreen() {
 
   return (
     <ScreenContainer backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={goBack} />
-        <Text style={styles.title}>{t("itineraries.title")}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BackHeader title={t("itineraries.title")} onBack={goBack} />
       <Text style={styles.subtitle}>
         {t("itineraries.subtitle")}
       </Text>
 
       {loading ? (
-        <ActivityIndicator color={colors.navy} />
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
       ) : items.length === 0 ? (
         <EmptyState
           title={t("itineraries.emptyTitle")}
@@ -99,9 +102,11 @@ export default function MyItinerariesScreen() {
                 <Badge label={t("itineraries.active")} tone="success" />
               </View>
               <Card variant="elevated" style={styles.currentCard}>
-                <View style={styles.currentImage}>
-                  <Ionicons name="image-outline" size={28} color="rgba(255,255,255,0.7)" />
-                </View>
+                <Image
+                  source={getRegionImage(current.data.trip_summary.cities[0])}
+                  style={styles.currentImage}
+                  contentFit="cover"
+                />
                 <View style={styles.locationRow}>
                   <Ionicons name="location" size={12} color={colors.gold} />
                   <Text style={styles.currentLocation}>
@@ -112,7 +117,7 @@ export default function MyItinerariesScreen() {
                   {current.data.trip_summary.cities.join(" → ")}
                 </Text>
                 <Text style={styles.currentDates}>
-                  {current.data.trip_summary.start_date} - {current.data.trip_summary.end_date} ·{" "}
+                  {formatDateRange(current.data.trip_summary.start_date, current.data.trip_summary.end_date, locale)} ·{" "}
                   {current.data.trip_summary.trip_duration_days} {t("itineraries.days")}
                 </Text>
                 <Button
@@ -143,11 +148,11 @@ export default function MyItinerariesScreen() {
                   key={data.itinerary_id}
                   variant="media"
                   style={styles.pastCard}
-                  imageSource={`https://picsum.photos/seed/disa-trip-${data.itinerary_id}/600/300`}
+                  imageSource={getRegionImage(data.trip_summary.cities[0])}
                   overlay={<Badge label={label} tone={tone} />}
                 >
                   <Text style={styles.pastDates}>
-                    {data.trip_summary.start_date} - {data.trip_summary.end_date}
+                    {formatDateRange(data.trip_summary.start_date, data.trip_summary.end_date, locale)}
                   </Text>
                   <Text style={styles.pastTitle}>
                     {data.trip_summary.cities.join(" → ")}
@@ -178,8 +183,6 @@ export default function MyItinerariesScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 18, fontWeight: "700", color: colors.navy },
   subtitle: { color: colors.textMuted, fontSize: 13 },
   sectionHeaderRow: {
     flexDirection: "row",

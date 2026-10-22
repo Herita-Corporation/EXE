@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/i18n/LocaleContext";
+import { haptics } from "@/utils/haptics";
 import { colors, radius, shadow, spacing, TAB_BAR_HEIGHT } from "@/theme/colors";
 
 // A fully custom tabBar, not screenOptions.tabBarIcon — React Navigation's
@@ -73,6 +74,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
         const onPress = () => {
           const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
           if (event.defaultPrevented) return;
+          if (!isFocused) haptics.tap();
           // Always land on that tab's own root screen, not whatever it was
           // last showing — a tab can be left mid-stack by a one-off deep
           // link (e.g. Home's quick actions push straight into

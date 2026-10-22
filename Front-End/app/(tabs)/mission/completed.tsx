@@ -1,12 +1,12 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { IconButton } from "@/components/IconButton";
+import { SkeletonRow } from "@/components/Skeleton";
+import { BackHeader } from "@/components/BackHeader";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
-import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { MissionThumb } from "@/components/MissionThumb";
 import { listUserMissions } from "@/api/endpoints/missions";
@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { UserMission } from "@/types/missions";
 import { useSmartBack } from "@/utils/backNavigation";
 import { useLocale } from "@/i18n/LocaleContext";
+import { formatDate } from "@/utils/date";
 import { colors, spacing } from "@/theme/colors";
 
 const COMPLETED_STATUS = 2;
@@ -21,7 +22,7 @@ const COMPLETED_STATUS = 2;
 export default function CompletedMissionsScreen() {
   const goBack = useSmartBack();
   const { user } = useAuth();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [missions, setMissions] = useState<UserMission[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,11 +46,7 @@ export default function CompletedMissionsScreen() {
 
   return (
     <ScreenContainer backgroundColor={colors.surface}>
-      <View style={styles.headerRow}>
-        <IconButton icon="arrow-back" onPress={goBack} />
-        <Text style={styles.title}>{t("completed.title")}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <BackHeader title={t("completed.title")} onBack={goBack} />
       <Text style={styles.subtitle}>
         {t("completed.subtitle", { count: missions.length })}
       </Text>
@@ -60,7 +57,11 @@ export default function CompletedMissionsScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={colors.navy} />
+        <>
+          <SkeletonRow thumbSize={44} />
+          <SkeletonRow thumbSize={44} />
+          <SkeletonRow thumbSize={44} />
+        </>
       ) : missions.length === 0 ? (
         <EmptyState title={t("completed.emptyTitle")} />
       ) : (
@@ -72,7 +73,7 @@ export default function CompletedMissionsScreen() {
                 <Text style={styles.rowTitle}>{m.title}</Text>
                 <Text style={styles.rowDate}>
                   {t("completed.completedPrefix")}{" "}
-                  {m.completedAt ? new Date(m.completedAt).toLocaleDateString("vi-VN") : "—"}
+                  {formatDate(m.completedAt, locale)}
                 </Text>
               </View>
               <Badge label={`+${m.rewardXP + m.rewardCoins} ${t("completed.pts")}`} tone="success" />
@@ -81,17 +82,11 @@ export default function CompletedMissionsScreen() {
           </Pressable>
         ))
       )}
-
-      {/* listUserMissions has no pagination params today — this is a
-          disabled placeholder rather than a functional "load more". */}
-      <Button title={t("completed.viewOlderHistory")} variant="outline" disabled onPress={() => {}} />
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 18, fontWeight: "700", color: colors.navy },
   subtitle: { color: colors.textMuted, fontSize: 13 },
   statsRow: { flexDirection: "row", gap: spacing(1) },
   row: { flexDirection: "row", alignItems: "center", gap: spacing(1.25) },

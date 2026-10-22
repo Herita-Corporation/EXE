@@ -93,7 +93,7 @@ export default function ResetPasswordScreen() {
           placeholder="••••••••"
         />
 
-        <Button title={t("resetPassword.resetButton")} shape="rounded" onPress={onSubmit} loading={loading} />
+        <Button title={t("resetPassword.resetButton")} onPress={onSubmit} loading={loading} />
       </Card>
     </ScreenContainer>
   );

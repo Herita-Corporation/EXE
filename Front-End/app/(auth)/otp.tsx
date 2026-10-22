@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -96,13 +96,14 @@ export default function OtpScreen() {
         <ErrorBanner message={error} />
         <OtpInput value={code} onChange={setCode} length={6} />
 
-        <Text style={styles.timerText}>
-          {t("otp.codeExpiresIn")} <Text style={styles.timerValue}>{formatTime(seconds)}</Text>
-        </Text>
+        {seconds > 0 ? (
+          <Text style={styles.timerText}>
+            {t("extra.resendIn")} <Text style={styles.timerValue}>{formatTime(seconds)}</Text>
+          </Text>
+        ) : null}
 
         <Button
           title={t("otp.verifyNow")}
-          shape="rounded"
           onPress={onVerify}
           loading={verifying}
           disabled={code.length < 6}
@@ -121,10 +122,13 @@ export default function OtpScreen() {
         ) : null}
       </View>
 
-      <View style={styles.supportRow}>
+      <Pressable
+        style={styles.supportRow}
+        onPress={() => Linking.openURL("mailto:disatravel.support@gmail.com")}
+      >
         <Ionicons name="help-circle-outline" size={16} color={colors.textMuted} />
         <Text style={styles.support}>{t("otp.havingTrouble")}</Text>
-      </View>
+      </Pressable>
     </ScreenContainer>
   );
 }

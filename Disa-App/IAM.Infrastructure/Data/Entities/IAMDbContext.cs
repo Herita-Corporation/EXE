@@ -70,6 +70,13 @@ public partial class IAMDbContext : DbContext
             entity.HasIndex(e => e.Email).IsUnique();
             entity.HasIndex(e => e.Username).IsUnique();
 
+            entity.Property(e => e.GoogleId)
+                .HasMaxLength(255);
+
+            entity.HasIndex(e => e.GoogleId)
+                .IsUnique()
+                .HasFilter("[GoogleId] IS NOT NULL");
+
             entity.HasMany(u => u.Roles)
                 .WithMany(r => r.Users)
                 .UsingEntity<Dictionary<string, object>>(

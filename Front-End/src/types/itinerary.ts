@@ -5,6 +5,7 @@
 export interface GenerateItineraryRequest {
   cities: string[];
   budget: number;
+  travelers: number;
   start_date: string; // "YYYY-MM-DD"
   end_date: string; // "YYYY-MM-DD"
   preferences: string[];

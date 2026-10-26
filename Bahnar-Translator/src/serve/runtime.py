@@ -13,6 +13,7 @@ from src.asr.augment import rms_normalize
 from src.data.build_mt_corpus import with_tags
 from src.mt.glossary import Glossary, load_glossary
 from src.mt.modeling import encode
+from src.mt.postprocess import remove_adjacent_repetitions
 
 
 class ONNXASRModel:
@@ -71,7 +72,8 @@ class CT2Translator:
         toks = [self.tok.convert_ids_to_tokens(x) for x in ids]
         prefix = [[self.cfg["model"]["tgt_lang"]]] * len(toks) if self.cfg["model"]["family"] == "nllb" else None
         res = self.tr.translate_batch(toks, target_prefix=prefix, beam_size=self.num_beams, return_scores=True,
-                                      max_decoding_length=256)
+                                      max_decoding_length=256, repetition_penalty=1.15,
+                                      no_repeat_ngram_size=3)
         out = []
         for r, mp in zip(res, maps):
             h = self.tok.decode(self.tok.convert_tokens_to_ids(r.hypotheses[0]), skip_special_tokens=False)
@@ -79,7 +81,8 @@ class CT2Translator:
                 if not (t.startswith("<g") and t[2:-1].isdigit()):
                     h = h.replace(t, "")
             lp = float(r.scores[0])  # CT2: logprob chuẩn hóa theo độ dài
-            out.append({"text": Glossary.restore(" ".join(h.split()), mp), "confidence": float(np.exp(lp)),
+            restored = Glossary.restore(" ".join(h.split()), mp)
+            out.append({"text": remove_adjacent_repetitions(restored), "confidence": float(np.exp(lp)),
                         "logprob": lp})
         return out
 

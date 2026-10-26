@@ -39,11 +39,21 @@ public interface IAIItineraryService
         string bearerToken,
         CancellationToken cancellationToken = default);
 
+    Task<bool> DeleteAllUserDataAsync(
+        string bearerToken,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets AI-suggested alternative places for one activity slot, so the
     /// user can swap it for a better fit.
     /// </summary>
     Task<ActivityAlternativesResponse?> GetActivityAlternativesAsync(
+        Guid itineraryId,
+        string activityId,
+        string bearerToken,
+        CancellationToken cancellationToken = default);
+
+    Task<LocationCoords?> ResolveActivityCoordinatesAsync(
         Guid itineraryId,
         string activityId,
         string bearerToken,

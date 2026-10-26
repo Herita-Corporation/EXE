@@ -12,8 +12,10 @@ v4 changes (direct-generation, no RAG):
 """
 
 import json
+import unicodedata
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
+from uuid import NAMESPACE_URL, uuid5
 
 from app.core.constants import (
     AFTERNOON_ATTRACTION_END,
@@ -53,22 +55,27 @@ _TYPE_MAP: Dict[str, ActivityType] = {
 
 def compute_total_cost(day_plans: List[DayPlan]) -> float:
     """
-    Sums a full itinerary's cost. Hotel activities appear 2-3 times per day
-    (check-in, rest, overnight stay) — counted only ONCE per day (the highest
-    hotel cost seen, i.e. the overnight rate) to avoid inflating the total.
+    Sums a full itinerary's cost. Repeated rows for the SAME hotel on one day
+    (check-in, rest, overnight stay) are counted once at their highest nightly
+    rate. Different hotel names are counted separately, because changing to a
+    different property is a real additional booking rather than a free repeat.
     Shared by the initial generation pipeline and the "replace one activity"
     endpoint, so both compute the total the same way.
     """
     total_cost = 0.0
     for day in day_plans:
-        day_hotel_cost = 0.0
+        hotel_costs_by_place: Dict[str, float] = {}
         for a in day.activities:
             if a.type == ActivityType.HOTEL:
-                if a.cost > day_hotel_cost:
-                    day_hotel_cost = a.cost
+                normalized_name = unicodedata.normalize("NFKC", a.name).strip().casefold()
+                hotel_key = normalized_name or a.activity_id
+                hotel_costs_by_place[hotel_key] = max(
+                    hotel_costs_by_place.get(hotel_key, 0.0),
+                    a.cost,
+                )
             else:
                 total_cost += a.cost
-        total_cost += day_hotel_cost
+        total_cost += sum(hotel_costs_by_place.values())
     return total_cost
 
 
@@ -80,6 +87,8 @@ class ItineraryBuilder:
         gpt_raw: str,
         start_date: date,
         cities: List[str],
+        expected_days: Optional[int] = None,
+        earliest_start_time: Optional[str] = None,
     ) -> List[DayPlan]:
         """
         Parse and validate GPT output into structured day plans.
@@ -103,6 +112,10 @@ class ItineraryBuilder:
         days_data = data.get("days", [])
         if not days_data:
             raise InvalidItineraryError("GPT returned no daily plans.")
+        if expected_days is not None and len(days_data) != expected_days:
+            raise InvalidItineraryError(
+                f"GPT returned {len(days_data)} day(s), expected exactly {expected_days}."
+            )
 
         day_plans = []
         for i, day_data in enumerate(days_data):
@@ -111,10 +124,38 @@ class ItineraryBuilder:
             activities_raw = day_data.get("activities", [])
 
             activities = self._build_activities(activities_raw)
+            if i == 0 and earliest_start_time:
+                activities = self._trim_elapsed_activities(
+                    activities, earliest_start_time
+                )
 
             day_plans.append(DayPlan(date=str(day_date), city=city, activities=activities))
 
         return day_plans
+
+    def _trim_elapsed_activities(
+        self, activities: List[Activity], earliest_start_time: str
+    ) -> List[Activity]:
+        """Remove elapsed same-day slots and clamp the first active slot.
+
+        This is a deterministic safety net after prompting: a newly generated
+        same-day itinerary must never tell the user to begin in the past.
+        """
+        remaining: List[Activity] = []
+        for activity in activities:
+            if activity.end_time <= earliest_start_time:
+                continue
+            if activity.start_time < earliest_start_time:
+                activity = activity.model_copy(
+                    update={"start_time": earliest_start_time}
+                )
+            remaining.append(activity)
+
+        if not remaining:
+            raise InvalidItineraryError(
+                "No feasible activities remain after the same-day start time."
+            )
+        return remaining
 
     def _build_activities(self, activities_raw: List[Dict]) -> List[Activity]:
         """Parse a single day's activities, fixing any time overlaps."""
@@ -148,8 +189,13 @@ class ItineraryBuilder:
             )
 
             activity_label = data.get("activity") or data.get("notes") or name
+            place_identity = "|".join(
+                unicodedata.normalize("NFKC", str(value)).strip().casefold()
+                for value in (name, data.get("location") or "")
+            )
 
             return Activity(
+                activity_id=str(uuid5(NAMESPACE_URL, f"disa-place:{place_identity}")),
                 start_time=data.get("start_time", "09:00"),
                 end_time=data.get("end_time", "10:00"),
                 type=activity_type,

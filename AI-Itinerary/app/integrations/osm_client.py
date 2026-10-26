@@ -98,7 +98,14 @@ class OSMClient:
             ) as client:
                 response = await client.get(
                     _NOMINATIM_URL,
-                    params={"q": query, "format": "json", "limit": 1},
+                    params={
+                        "q": query,
+                        "format": "json",
+                        "limit": 1,
+                        "countrycodes": "vn",
+                        "addressdetails": 0,
+                        "accept-language": "vi,en",
+                    },
                 )
                 response.raise_for_status()
                 results = response.json()

@@ -24,16 +24,10 @@ public static class DependencyInjection
 
         // Repository
         services.AddScoped<IMissionTemplateRepository, MissionTemplateRepository>();
-
-        // Service
-        services.AddScoped<IMissionTemplateService, MissionTemplateService>();
-
-        services.AddScoped<IMissionTemplateRepository, MissionTemplateRepository>();
         services.AddScoped<IUserMissionRepository, UserMissionRepository>();
         services.AddScoped<IFileStorageService, FileStorageService>();
         services.AddScoped<IMissionSubmissionRepository, MissionSubmissionRepository>();
         services.AddScoped<IMissionEvidenceRepository, MissionEvidenceRepository>();
-        services.AddScoped<IMissionSubmissionService, MissionSubmissionService>();
         services.AddScoped<IVoucherRepository, VoucherRepository>();
         return services;
     }

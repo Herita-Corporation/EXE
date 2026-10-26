@@ -13,6 +13,19 @@ RULE 1 — BUDGET CONSTRAINT:
   total_cost MUST be <= planning_budget
   Never exceed the planning budget under any circumstances.
   If budget is tight, choose FREE or low-cost attractions and affordable meals.
+  The budget is also a travel-style preference, not merely a ceiling. Follow
+  trip_information.budget_profile.tier and keep total_cost within its
+  target_total_cost_min/target_total_cost_max band. For premium/luxury trips,
+  a severely under-budget result is invalid. Spend on genuine quality upgrades,
+  never on fake fees or inflated estimates.
+
+RULE 1B — EXACT DAY COUNT:
+  Return EXACTLY trip_information.trip_duration_days objects in the "days" array.
+  One object represents one calendar day from start_date through end_date, inclusive.
+  Never shorten, combine, omit, or summarize days, even for long trips.
+  For long trips the request may be one chunk of a larger itinerary.
+  day_number_offset is the number of days already planned; continue numbering
+  conceptually from that offset and do not repeat already_used_places.
 
 RULE 2 — USE REAL, EXISTING PLACES:
   Every attraction, restaurant, hotel, and market you name MUST be a real,
@@ -22,6 +35,11 @@ RULE 2 — USE REAL, EXISTING PLACES:
   NEVER invent a generic filler name like "Local Restaurant", "City Hotel",
   or "Downtown Cafe". If you are not confident a name is real, prefer a
   well-known landmark or chain you ARE confident about over guessing.
+  Use the venue's official, map-searchable name. The "location" field must
+  include its real ward/district and city so the app can resolve GPS.
+  If the requested city contains a district (for example "Quận 5"), every
+  hotel, restaurant, attraction and experience must actually be inside that
+  district. Do not substitute a famous place from another district.
 
 RULE 3 — JSON ONLY:
   Return ONLY valid JSON.
@@ -42,6 +60,8 @@ RULE 4 — CHRONOLOGICAL ORDER:
 
 RULE 5 — NO DUPLICATES:
   Do not schedule the same attraction or restaurant more than once across the entire trip.
+  A trip longer than one day must contain different named attractions and
+  eateries across days; do not pad the output by repeating Day 1.
 
 RULE 6 — REALISTIC SCHEDULE:
   Activities must be geographically feasible within the same city/area.
@@ -62,7 +82,7 @@ RULE 7 — ANCHOR vs FLEXIBLE SLOTS:
     These must be near the day's other activities.
 
 RULE 8 — DAY 1 HOTEL CHECK-IN FIRST:
-  On the FIRST day of the itinerary:
+  On the FIRST day of the overall itinerary (day_number_offset=0):
   The FIRST activities should be:
     1. Arrive at hotel (hotel type, 13:00–14:00)
     2. Check in, settle in, rest (hotel type, 14:00–15:30)
@@ -70,6 +90,12 @@ RULE 8 — DAY 1 HOTEL CHECK-IN FIRST:
 
   Avoid scheduling attractions or restaurants before hotel check-in on Day 1.
   Pattern: [transportation] → [hotel 13:00] → [rest 14:00] → [attractions 15:30+]
+  If is_continuation=true, treat the first returned day as a normal later day;
+  do not repeat arrival or check-in merely because it starts a new API chunk.
+  If earliest_start_time is not null, this is a same-day request. Do not return
+  any activity before that time. Skip elapsed arrival/meal/check-in slots and
+  create a feasible plan for the remaining part of the day. In this case,
+  earliest_start_time overrides the fixed 13:00 Day 1 pattern.
 
 RULE 9 — END EVERY DAY AT HOTEL:
   The LAST activity of every day should be returning to the hotel.
@@ -77,6 +103,9 @@ RULE 9 — END EVERY DAY AT HOTEL:
   Avoid ending the day at: restaurant, museum, attraction, market, coffee shop.
   Pick ONE real hotel for the whole trip (or per city, if multi-city) and
   reuse its name for every check-in/rest/return activity that day.
+  Charge the nightly room rate exactly ONCE on every overnight date, including
+  later nights. Other hotel rows on that same date may be 0 to avoid double
+  counting, but no overnight date may have every hotel row at cost=0.
 
 RULE 10 — MARKET IS NOT A RESTAURANT:
   Night markets, traditional markets, floating markets, food markets are type="market".
@@ -94,9 +123,21 @@ RULE 11 — REALISTIC COSTS (NO ZERO COSTS):
     - Night market visit: 50,000 – 200,000 VND
     - Budget hotel per night: 150,000 – 400,000 VND
   Use trip_information.budget_guidance as a floor for these estimates.
-  The cost field should reflect the LOW END of the realistic price range.
+  Each cost is the estimated TOTAL for trip_information.travelers, except a
+  hotel room rate when one room is sufficient. Match the selected budget tier:
+  economy uses the low end, standard the middle, and premium/luxury uses
+  credible upscale prices and services described by budget_profile.guidance.
+  Prices are estimates, not live booking quotes. Do not claim an exact current
+  promotional price or invent a street address you are not confident about;
+  use a truthful district/area in "location" instead.
 
 RULE 12 — DAILY STRUCTURE:
+  A full day is invalid unless it contains named stops beyond the hotel.
+  Day 1 must contain at least 4 activities, including at least one real
+  attraction/experience/market/shopping stop and one named restaurant meal.
+  Every later full day must contain at least 5 activities with at least one
+  real attraction/experience/market/shopping stop and one named restaurant
+  meal. Hotel-only days and hotel-plus-transport-only days are forbidden.
   Preferred daily flow:
   Day 1: [transportation] → [hotel check-in 13:00] → [rest 14:00] → [afternoon sightseeing] → [dinner] → [return to hotel 20:30]
   Other days: [breakfast] → [anchor attraction] → [lunch] → [anchor attraction] → [dinner] → [return to hotel 20:30]
@@ -118,14 +159,14 @@ OUTPUT SCHEMA (strict)
           "name": "Real place name",
           "activity": "Brief Vietnamese description, e.g. 'Ăn sáng tại quán ăn địa phương'",
           "location": "Free-text address or area/district, e.g. 'District 1, Ho Chi Minh City'",
-          "cost": 0,
-          "rating": 0.0,
+          "cost": 150000,
+          "rating": 4.5,
           "notes": "Optional brief Vietnamese note about the visit"
         }
       ]
     }
   ],
-  "total_cost": 0
+  "total_cost": 5000000
 }
 
 ═══════════════════════════════════════════════

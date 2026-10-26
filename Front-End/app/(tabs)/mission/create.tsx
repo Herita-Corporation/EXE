@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -24,17 +24,28 @@ import { IconButton } from "@/components/IconButton";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
-import { generateItinerary } from "@/api/endpoints/itinerary";
+import { deleteItinerary, generateItinerary } from "@/api/endpoints/itinerary";
 import { pruneMissions } from "@/api/endpoints/missions";
 import { ApiError } from "@/api/http";
 import { useAuth } from "@/context/AuthContext";
-import { getLiveItineraryIds, setLastGeneratedItinerary } from "@/utils/itineraryHistory";
+import {
+  addItineraryToHistory,
+  getLiveItineraryIds,
+  setLastGeneratedItinerary,
+} from "@/utils/itineraryHistory";
 import { useSmartBack } from "@/utils/backNavigation";
 import { VIETNAM_PROVINCES, type ProvinceHighlight } from "@/data/vietnamProvinces";
 import { getRegionImage } from "@/data/regionImages";
 import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
-import { formatDate, fromIsoDate, toIsoDate } from "@/utils/date";
+import {
+  formatDate,
+  fromIsoDate,
+  toIsoDate,
+  vietnamHour,
+  vietnamTodayIso,
+} from "@/utils/date";
 import { colors, radius, spacing } from "@/theme/colors";
+import type { ItineraryResponse } from "@/types/itinerary";
 
 const TRAVEL_STYLE_KEYS: Array<{ key: string; labelKey: TranslationKey; icon: keyof typeof Ionicons.glyphMap }> = [
   { key: "food", labelKey: "createItinerary.styleFood", icon: "restaurant-outline" },
@@ -45,6 +56,36 @@ const TRAVEL_STYLE_KEYS: Array<{ key: string; labelKey: TranslationKey; icon: ke
 
 const MIN_BUDGET_VND = 2_000_000;
 const MAX_BUDGET_VND = 125_000_000;
+const SAME_DAY_BOOKING_CUTOFF_HOUR = 18;
+const MEAL_TYPES = new Set(["breakfast", "lunch", "dinner"]);
+const EXPLORATION_TYPES = new Set(["attraction", "experience", "market", "shopping"]);
+
+function firstUnusableDay(
+  itinerary: ItineraryResponse,
+  partialFirstDay: boolean
+): number | null {
+  for (let index = 0; index < itinerary.days.length; index += 1) {
+    const activities = itinerary.days[index].activities;
+    const partial = partialFirstDay && index === 0;
+    const minimumActivities = partial ? 2 : index === 0 ? 4 : 5;
+    const hasMeal = activities.some((activity) => MEAL_TYPES.has(activity.type));
+    const hasExploration = activities.some((activity) =>
+      EXPLORATION_TYPES.has(activity.type)
+    );
+    const hasPaidHotel = activities.some(
+      (activity) => activity.type === "hotel" && activity.cost > 0
+    );
+
+    if (
+      activities.length < minimumActivities ||
+      !hasPaidHotel ||
+      (partial ? !hasMeal && !hasExploration : !hasMeal || !hasExploration)
+    ) {
+      return index + 1;
+    }
+  }
+  return null;
+}
 
 function formatVnd(n: number): string {
   return `${Math.round(n).toLocaleString("vi-VN")} VND`;
@@ -55,9 +96,20 @@ function formatVndShort(n: number, unit: string): string {
 }
 
 function todayPlus(days: number): string {
-  const d = new Date();
+  return datePlus(vietnamTodayIso(), days);
+}
+
+function datePlus(iso: string, days: number): string {
+  const d = fromIsoDate(iso);
   d.setDate(d.getDate() + days);
   return toIsoDate(d);
+}
+
+function earliestStartIso(now = new Date()): string {
+  const today = vietnamTodayIso(now);
+  return vietnamHour(now) >= SAME_DAY_BOOKING_CUTOFF_HOUR
+    ? datePlus(today, 1)
+    : today;
 }
 
 /** Accent-insensitive match so "da lat" finds "Đà Lạt". */
@@ -150,6 +202,9 @@ export default function CreateItineraryScreen() {
   }
   const [startDate, setStartDate] = useState(todayPlus(14));
   const [endDate, setEndDate] = useState(todayPlus(18));
+  const [clockNow, setClockNow] = useState(() => new Date());
+  const earliestStartDate = earliestStartIso(clockNow);
+  const latestEndDate = datePlus(startDate, 4);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [travelers, setTravelers] = useState(2);
@@ -157,6 +212,27 @@ export default function CreateItineraryScreen() {
   const [styles_, setStyles_] = useState<string[]>(["food"]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setClockNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (startDate >= earliestStartDate) return;
+    const durationOffset = Math.min(
+      4,
+      Math.max(
+        0,
+        Math.round(
+          (fromIsoDate(endDate).getTime() - fromIsoDate(startDate).getTime()) /
+            86_400_000
+        )
+      )
+    );
+    setStartDate(earliestStartDate);
+    setEndDate(datePlus(earliestStartDate, durationOffset));
+  }, [earliestStartDate, startDate, endDate]);
 
   function toggle(list: string[], key: string, setList: (v: string[]) => void) {
     setList(list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
@@ -168,8 +244,19 @@ export default function CreateItineraryScreen() {
       setError(t("createItinerary.errorSelectProvince"));
       return;
     }
+    if (startDate < earliestStartDate || endDate < earliestStartDate) {
+      setError(t("createItinerary.errorPastDate"));
+      return;
+    }
     if (startDate > endDate) {
       setError(t("createItinerary.errorDateOrder"));
+      return;
+    }
+    const expectedDays = Math.round(
+      (fromIsoDate(endDate).getTime() - fromIsoDate(startDate).getTime()) / 86_400_000
+    ) + 1;
+    if (expectedDays > 5) {
+      setError(t("createItinerary.errorTooManyDays"));
       return;
     }
     if (styles_.length === 0) {
@@ -184,22 +271,58 @@ export default function CreateItineraryScreen() {
         // The slider is per person; AI-Itinerary plans against the whole
         // trip budget (schemas/request.py: "Total trip budget in VND").
         budget: budgetVnd * travelers,
+        travelers,
         start_date: startDate,
         end_date: endDate,
         preferences: styles_,
       });
+      if (result.days.length !== expectedDays) {
+        throw new ApiError(
+          t("createItinerary.errorIncompleteDays", {
+            expected: expectedDays,
+            actual: result.days.length,
+          }),
+          502,
+          "INCOMPLETE_ITINERARY"
+        );
+      }
+      const unusableDay = firstUnusableDay(
+        result,
+        startDate === vietnamTodayIso()
+      );
+      if (unusableDay !== null) {
+        // The backend already persisted this response. Remove the unusable
+        // row best-effort so it does not pollute "My itineraries".
+        try {
+          await deleteItinerary(result.itinerary_id);
+        } catch {}
+        throw new ApiError(
+          t("createItinerary.errorIncompleteActivities", { day: unusableDay }),
+          502,
+          "UNUSABLE_ITINERARY"
+        );
+      }
       // Drop missions left over from itineraries that no longer exist — only
       // saved ones ("Lộ trình của tôi") and this new one keep theirs.
       // Best-effort: a failure here must not block opening the new itinerary.
       if (user) {
         try {
+          await addItineraryToHistory(user.id, {
+            id: result.itinerary_id,
+            cities: result.trip_summary.cities,
+            totalCost: result.total_cost,
+            createdAt: result.created_at,
+          });
           await setLastGeneratedItinerary(user.id, result.itinerary_id);
           await pruneMissions(user.id, await getLiveItineraryIds(user.id));
         } catch {}
       }
-      // Not saved to "My Itineraries" yet — only once the user reviews and
-      // taps "Xác nhận tạo lộ trình" on the detail screen (see [id].tsx).
-      router.replace(`/(tabs)/mission/itinerary/${result.itinerary_id}`);
+      // The server already persisted the result and the local history was
+      // updated above, so moving to a mission cannot make this trip disappear.
+      router.replace({
+        pathname: "/(tabs)/mission/itinerary/[id]",
+        params: { id: result.itinerary_id, from: "home" },
+      });
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : t("createItinerary.errorGenerateFailed")
@@ -334,16 +457,19 @@ export default function CreateItineraryScreen() {
           <DateTimePicker
             value={fromIsoDate(startDate)}
             mode="date"
-            minimumDate={new Date()}
+            minimumDate={fromIsoDate(earliestStartDate)}
             display={Platform.OS === "ios" ? "inline" : "default"}
-            onChange={(_, date) => {
+            onValueChange={(_, date) => {
               setShowStartPicker(false);
-              if (!date) return;
               const next = toIsoDate(date);
               setStartDate(next);
-              // Keep the range valid instead of erroring on submit.
+              // A trip is 1-5 calendar days inclusive. Keep the end date
+              // inside the newly selected start date's valid window.
+              const latest = datePlus(next, 4);
               if (endDate < next) setEndDate(next);
+              else if (endDate > latest) setEndDate(latest);
             }}
+            onDismiss={() => setShowStartPicker(false)}
           />
         ) : null}
         {showEndPicker ? (
@@ -351,11 +477,13 @@ export default function CreateItineraryScreen() {
             value={fromIsoDate(endDate)}
             mode="date"
             minimumDate={fromIsoDate(startDate)}
+            maximumDate={fromIsoDate(latestEndDate)}
             display={Platform.OS === "ios" ? "inline" : "default"}
-            onChange={(_, date) => {
+            onValueChange={(_, date) => {
               setShowEndPicker(false);
-              if (date) setEndDate(toIsoDate(date));
+              setEndDate(toIsoDate(date));
             }}
+            onDismiss={() => setShowEndPicker(false)}
           />
         ) : null}
 
@@ -594,7 +722,13 @@ export default function CreateItineraryScreen() {
 
       {/* AI generation can take up to a minute — a blocking, explained wait
           instead of a tiny spinner inside the button. */}
-      <Modal visible={loading} transparent animationType="fade">
+      <Modal
+        visible={loading}
+        transparent
+        animationType="fade"
+        hardwareAccelerated
+        onRequestClose={() => {}}
+      >
         <View style={styles.generatingBackdrop}>
           <View style={styles.generatingCard}>
             <View style={styles.generatingIcon}>

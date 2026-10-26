@@ -29,7 +29,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import InvalidBudgetError, InvalidCityError, InvalidDateError
+from app.core.constants import MIN_HOTEL_PRICE_VND
+from app.core.exceptions import InvalidBudgetError, InvalidCityError, InvalidDateError, InvalidItineraryError
 from app.core.logging import get_logger
 from app.database.models.itinerary import GeneratedItinerary
 from app.database.repositories.cache_repository import CacheRepository
@@ -51,6 +52,84 @@ from app.schemas.request import GenerateItineraryRequest
 from app.services.budget_service import BudgetService
 
 logger = get_logger(__name__)
+VIETNAM_TZ = timezone(timedelta(hours=7))
+
+MEAL_TYPES = {
+    ActivityType.BREAKFAST,
+    ActivityType.LUNCH,
+    ActivityType.DINNER,
+}
+EXPLORATION_TYPES = {
+    ActivityType.ATTRACTION,
+    ActivityType.EXPERIENCE,
+    ActivityType.MARKET,
+    ActivityType.SHOPPING,
+}
+
+
+def normalize_daily_hotel_costs(
+    day_plans: list[DayPlan], suggested_nightly_rate: float
+) -> None:
+    """Charge one positive nightly rate per day for the selected hotel.
+
+    GPT may emit multiple rows for check-in/rest/return. Only one row should
+    carry the room rate, but an entire day of zero-cost hotel rows is invalid.
+    """
+    fallback_rate = max(round(suggested_nightly_rate), MIN_HOTEL_PRICE_VND)
+    for day in day_plans:
+        hotels = [activity for activity in day.activities if activity.type == ActivityType.HOTEL]
+        if not hotels:
+            continue
+        positive_rates = [activity.cost for activity in hotels if activity.cost > 0]
+        nightly_rate = max(positive_rates) if positive_rates else fallback_rate
+        hotels[0].cost = max(nightly_rate, MIN_HOTEL_PRICE_VND)
+        for duplicate_row in hotels[1:]:
+            duplicate_row.cost = 0
+
+
+def validate_itinerary_quality(
+    day_plans: list[DayPlan], *, partial_first_day: bool = False
+) -> None:
+    """Reject superficially complete but unusable model output."""
+    violations: list[str] = []
+    for day_index, day in enumerate(day_plans):
+        activities = day.activities
+        is_partial = partial_first_day and day_index == 0
+        minimum_activities = 2 if is_partial else (4 if day_index == 0 else 5)
+        meals = [activity for activity in activities if activity.type in MEAL_TYPES]
+        exploration = [
+            activity for activity in activities if activity.type in EXPLORATION_TYPES
+        ]
+        hotels = [
+            activity for activity in activities if activity.type == ActivityType.HOTEL
+        ]
+
+        if len(activities) < minimum_activities:
+            violations.append(
+                f"day {day_index + 1} has {len(activities)} activities; "
+                f"minimum is {minimum_activities}"
+            )
+        if is_partial:
+            if not meals and not exploration:
+                violations.append(f"day {day_index + 1} has no meal or exploration stop")
+        else:
+            if not meals:
+                violations.append(f"day {day_index + 1} has no named meal stop")
+            if not exploration:
+                violations.append(f"day {day_index + 1} has no exploration stop")
+        if not hotels:
+            violations.append(f"day {day_index + 1} has no hotel return/stay")
+        elif max(hotel.cost for hotel in hotels) <= 0:
+            violations.append(f"day {day_index + 1} has no positive nightly hotel rate")
+
+        hotel_names = {
+            hotel.name.strip().casefold() for hotel in hotels if hotel.name.strip()
+        }
+        if len(hotel_names) > 1:
+            violations.append(f"day {day_index + 1} switches between multiple hotels")
+
+    if violations:
+        raise InvalidItineraryError("; ".join(violations))
 
 
 class ItineraryOrchestrator:
@@ -98,6 +177,12 @@ class ItineraryOrchestrator:
         breakdown = self.budget_service.allocate_budget(
             planning_budget, request.trip_duration_days
         )
+        budget_profile = self.budget_service.build_budget_profile(
+            request.budget,
+            planning_budget,
+            request.travelers,
+            request.trip_duration_days,
+        )
 
         # ── Step 3: Check Cache ───────────────────────────────────────────────
         # NOTE: the cache key intentionally omits user_id/dates/itinerary_id —
@@ -114,56 +199,60 @@ class ItineraryOrchestrator:
             request.budget,
             request.trip_duration_days,
             request.preferences or [],
+            request.travelers,
         )
         cached = await self.cache_repo.get(cache_key)
+        vietnam_today = datetime.now(VIETNAM_TZ).date()
+        cache_candidate = bool(
+            request.start_date > vietnam_today
+            and cached
+            and len(cached.get("days", [])) == request.trip_duration_days
+        )
+        cached_day_plans: list[DayPlan] | None = None
+        cache_valid = False
+        if cache_candidate:
+            try:
+                cached_day_plans = [
+                    DayPlan(
+                        **{
+                            **day,
+                            "date": str(request.start_date + timedelta(days=index)),
+                        }
+                    )
+                    for index, day in enumerate(cached["days"])
+                ]
+                normalize_daily_hotel_costs(
+                    cached_day_plans,
+                    breakdown.accommodation / max(request.trip_duration_days, 1),
+                )
+                validate_itinerary_quality(cached_day_plans)
+                cache_valid = True
+            except (InvalidItineraryError, TypeError, ValueError) as exc:
+                logger.warning(
+                    "invalid_cache_ignored",
+                    extra={"cache_key": cache_key, "reason": str(exc)},
+                )
 
-        if cached:
+        if cache_valid:
             logger.info("cache_hit", extra={"cache_key": cache_key})
-            # Re-anchor the cached days to THIS request's start_date — the
-            # cache key doesn't include dates, so a hit may come from a
-            # request with a different date range (same relative day offsets).
-            day_plans = [
-                DayPlan(**{**d, "date": str(request.start_date + timedelta(days=i))})
-                for i, d in enumerate(cached["days"])
-            ]
-            total_cost = cached["total_cost"]
+            day_plans = cached_day_plans or []
+            total_cost = compute_total_cost(day_plans)
         else:
-            # ── Step 4: Build GPT Context ───────────────────────────────────
-            # No DB-retrieved candidates — GPT generates places from its own knowledge.
-            context = GenerationContext(
-                trip_information={
-                    "user_id": str(user_id),
-                    "cities": request.cities,
-                    "start_date": str(request.start_date),
-                    "end_date": str(request.end_date),
-                    "trip_duration_days": request.trip_duration_days,
-                    "total_budget": request.budget,
-                    "planning_budget": planning_budget,
-                    "reserve_budget": reserve_budget,
-                    "budget_breakdown": breakdown.model_dump(),
-                    "preferences": request.preferences or [],
-                    # Pricing guidance for GPT
-                    "budget_guidance": self._build_budget_guidance(breakdown, request.trip_duration_days),
-                },
+            # Generate long trips in bounded chunks. The model previously
+            # stopped after roughly five days for 9-10 day requests.
+            day_plans = await self._generate_day_plans(
+                request=request,
+                user_id=user_id,
+                planning_budget=planning_budget,
+                reserve_budget=reserve_budget,
+                breakdown=breakdown,
+                budget_profile=budget_profile,
+                request_id=request_id,
             )
 
-            # ── Step 5: Generate Itinerary (GPT) ────────────────────────────
-            gpt_raw = await self.openai_client.generate_itinerary(
-                context.model_dump()
-            )
-
-            # ── Step 6: Build Day Plans ──────────────────────────────────────
-            day_plans = self.itinerary_builder.build_from_gpt_output(
-                json.dumps(gpt_raw),
-                start_date=request.start_date,
-                cities=request.cities,
-            )
-
-            # ── Step 6.5: Geocode fixed-anchor activities ────────────────────
-            # Only cache-miss path — a cache hit's day_plans already carry
-            # coordinates baked in from when that entry was first generated
-            # (see Cache section below, which stores the geocoded result).
-            await self._geocode_fixed_activities(day_plans, request.cities)
+            # GPS is resolved lazily when directions or a mission needs it.
+            # Serial public-geocoder calls previously added 8+ seconds to
+            # every generation, even when the user never used map features.
 
             # ── Step 7: Validate Budget ──────────────────────────────────────
             total_cost = compute_total_cost(day_plans)
@@ -214,7 +303,7 @@ class ItineraryOrchestrator:
         # ── Cache ──────────────────────────────────────────────────────────────
         # Only refresh the cache on a miss — on a hit we already reused it
         # as-is, no need to rewrite the same content back.
-        if not cached:
+        if not cache_valid:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
             await self.cache_repo.set(
                 cache_key,
@@ -236,16 +325,240 @@ class ItineraryOrchestrator:
 
         return result
 
+    async def _generate_day_plans(
+        self,
+        *,
+        request: GenerateItineraryRequest,
+        user_id: UUID,
+        planning_budget: float,
+        reserve_budget: float,
+        breakdown: BudgetBreakdown,
+        budget_profile: Dict[str, Any],
+        request_id: str,
+    ) -> list[DayPlan]:
+        """Generate and merge count-validated chunks of at most five days.
+
+        If a model still truncates a chunk twice, subdivide it into one-day
+        requests. A response is returned only after every requested calendar
+        day has a corresponding DayPlan.
+        """
+        result: list[DayPlan] = []
+        used_places: list[str] = []
+
+        for chunk_offset in range(0, request.trip_duration_days, 5):
+            chunk_days = min(5, request.trip_duration_days - chunk_offset)
+            chunk = await self._generate_chunk(
+                request=request,
+                user_id=user_id,
+                planning_budget=planning_budget,
+                reserve_budget=reserve_budget,
+                breakdown=breakdown,
+                budget_profile=budget_profile,
+                request_id=request_id,
+                chunk_offset=chunk_offset,
+                chunk_days=chunk_days,
+                used_places=used_places,
+            )
+            result.extend(chunk)
+            used_places.extend(
+                activity.name
+                for day in chunk
+                for activity in day.activities
+                if activity.type != ActivityType.HOTEL and activity.name
+            )
+
+        if len(result) != request.trip_duration_days:
+            raise InvalidItineraryError(
+                f"Generated {len(result)} day(s), expected {request.trip_duration_days}."
+            )
+        return result
+
+    async def _generate_chunk(
+        self,
+        *,
+        request: GenerateItineraryRequest,
+        user_id: UUID,
+        planning_budget: float,
+        reserve_budget: float,
+        breakdown: BudgetBreakdown,
+        budget_profile: Dict[str, Any],
+        request_id: str,
+        chunk_offset: int,
+        chunk_days: int,
+        used_places: list[str],
+    ) -> list[DayPlan]:
+        chunk_start = request.start_date + timedelta(days=chunk_offset)
+        chunk_end = chunk_start + timedelta(days=chunk_days - 1)
+        ratio = chunk_days / request.trip_duration_days
+        chunk_breakdown = {
+            key: round(value * ratio)
+            for key, value in breakdown.model_dump().items()
+        }
+        vietnam_now = datetime.now(VIETNAM_TZ)
+        earliest_start_time: str | None = None
+        if chunk_offset == 0 and chunk_start == vietnam_now.date():
+            # Give the traveler one hour to get ready, rounded to the next
+            # half-hour. Same-day requests after 18:00 are rejected earlier.
+            ready_at = vietnam_now + timedelta(hours=1)
+            minute = 30 if ready_at.minute <= 30 else 0
+            hour = ready_at.hour if minute == 30 else ready_at.hour + 1
+            earliest_start_time = f"{hour:02d}:{minute:02d}"
+
+        chunk_budget_profile = {
+            **budget_profile,
+            "target_total_cost_min": round(
+                budget_profile["target_total_cost_min"] * ratio
+            ),
+            "target_total_cost_max": round(
+                budget_profile["target_total_cost_max"] * ratio
+            ),
+        }
+        context = GenerationContext(
+            trip_information={
+                "user_id": str(user_id),
+                "cities": request.cities,
+                "start_date": str(chunk_start),
+                "end_date": str(chunk_end),
+                "trip_duration_days": chunk_days,
+                "overall_start_date": str(request.start_date),
+                "overall_end_date": str(request.end_date),
+                "overall_trip_duration_days": request.trip_duration_days,
+                "day_number_offset": chunk_offset,
+                "is_continuation": chunk_offset > 0,
+                "total_budget": round(request.budget * ratio),
+                "planning_budget": round(planning_budget * ratio),
+                "reserve_budget": round(reserve_budget * ratio),
+                "travelers": request.travelers,
+                "budget_breakdown": chunk_breakdown,
+                "budget_profile": chunk_budget_profile,
+                "earliest_start_time": earliest_start_time,
+                "preferences": request.preferences or [],
+                "already_used_places": used_places[-80:],
+                "budget_guidance": self._build_budget_guidance(
+                    breakdown, request.trip_duration_days
+                ),
+            },
+        )
+
+        last_error: InvalidItineraryError | None = None
+        best_under_target: tuple[float, list[DayPlan]] | None = None
+        for attempt in range(2):
+            gpt_raw = await self.openai_client.generate_itinerary(context.model_dump())
+            try:
+                candidate = self.itinerary_builder.build_from_gpt_output(
+                    json.dumps(gpt_raw),
+                    start_date=chunk_start,
+                    cities=request.cities,
+                    expected_days=chunk_days,
+                    earliest_start_time=earliest_start_time,
+                )
+                normalize_daily_hotel_costs(
+                    candidate,
+                    breakdown.accommodation / max(request.trip_duration_days, 1),
+                )
+                validate_itinerary_quality(
+                    candidate,
+                    partial_first_day=earliest_start_time is not None,
+                )
+                candidate_cost = compute_total_cost(candidate)
+                minimum_cost = chunk_budget_profile["target_total_cost_min"]
+                if (
+                    chunk_budget_profile["enforce_minimum"]
+                    and candidate_cost < minimum_cost
+                ):
+                    if best_under_target is None or candidate_cost > best_under_target[0]:
+                        best_under_target = (candidate_cost, candidate)
+                    context.trip_information["retry_feedback"] = (
+                        f"The previous complete itinerary cost {candidate_cost:,.0f} VND, "
+                        f"below the {chunk_budget_profile['tier']} target minimum of "
+                        f"{minimum_cost:,.0f} VND. Upgrade real hotels, transport, "
+                        "restaurants and paid experiences while staying realistic."
+                    )
+                    logger.warning(
+                        "budget_target_retry",
+                        extra={
+                            "request_id": request_id,
+                            "candidate_cost": candidate_cost,
+                            "minimum_cost": minimum_cost,
+                            "attempt": attempt + 1,
+                        },
+                    )
+                    continue
+                return candidate
+            except InvalidItineraryError as exc:
+                last_error = exc
+                context.trip_information["retry_feedback"] = (
+                    "The previous response was rejected as unusable: "
+                    f"{exc}. Return every requested day with real named places, "
+                    "at least one restaurant meal and one exploration stop per "
+                    "full day, plus one positive nightly hotel charge."
+                )
+                logger.warning(
+                    "invalid_chunk_retry",
+                    extra={
+                        "request_id": request_id,
+                        "chunk_offset": chunk_offset,
+                        "chunk_days": chunk_days,
+                        "attempt": attempt + 1,
+                        "reason": str(exc),
+                    },
+                )
+
+        # A structurally complete result is preferable to recursively making
+        # up to ten more GPT calls. The targeted second prompt above usually
+        # raises quality; if it still underspends, return the better complete
+        # candidate without turning a budget-style miss into a timeout.
+        if best_under_target is not None:
+            return best_under_target[1]
+
+        if chunk_days > 1:
+            logger.warning(
+                "chunk_subdivided_to_single_days",
+                extra={"request_id": request_id, "chunk_offset": chunk_offset},
+            )
+            single_days: list[DayPlan] = []
+            for relative_day in range(chunk_days):
+                day = await self._generate_chunk(
+                    request=request,
+                    user_id=user_id,
+                    planning_budget=planning_budget,
+                    reserve_budget=reserve_budget,
+                    breakdown=breakdown,
+                    budget_profile=budget_profile,
+                    request_id=request_id,
+                    chunk_offset=chunk_offset + relative_day,
+                    chunk_days=1,
+                    used_places=used_places + [
+                        activity.name
+                        for plan in single_days
+                        for activity in plan.activities
+                        if activity.type != ActivityType.HOTEL and activity.name
+                    ],
+                )
+                single_days.extend(day)
+            return single_days
+
+        raise last_error or InvalidItineraryError("GPT returned an invalid day plan.")
+
     def _validate_request(self, request: GenerateItineraryRequest) -> None:
         """Domain-level validation beyond Pydantic."""
         if request.budget <= 0:
             raise InvalidBudgetError()
         if request.start_date > request.end_date:
             raise InvalidDateError()
+        vietnam_now = datetime.now(VIETNAM_TZ)
+        if request.start_date < vietnam_now.date():
+            raise InvalidDateError("Trip start date cannot be in the past.")
+        if request.start_date == vietnam_now.date() and vietnam_now.hour >= 18:
+            raise InvalidDateError(
+                "Same-day itineraries cannot be created after 18:00 Vietnam time."
+            )
         if not request.cities or len(request.cities) == 0:
             raise InvalidCityError()
         if request.trip_duration_days <= 0:
             raise InvalidDateError("Trip duration must be at least 1 day.")
+        if request.trip_duration_days > 5:
+            raise InvalidDateError("Trip duration cannot exceed 5 days.")
 
     async def _geocode_fixed_activities(self, day_plans, cities) -> None:
         """
@@ -265,9 +578,16 @@ class ItineraryOrchestrator:
         location.
         """
         fallback_city = cities[0] if cities else ""
+        # Nominatim is rate-limited to one request/second. Looking up every
+        # fixed stop of a long trip caused avoidable mobile/proxy timeouts.
+        # Missing coordinates are resolved lazily by the app when a mission
+        # is accepted, so cap eager navigation anchors here.
+        remaining = 8
         for day in day_plans:
             city = day.city or fallback_city
             for activity in day.activities:
+                if remaining <= 0:
+                    return
                 if activity.slot_type != SlotType.FIXED:
                     continue
                 if activity.type == ActivityType.TRANSPORTATION:
@@ -283,6 +603,7 @@ class ItineraryOrchestrator:
                 coords = await self.osm_client.get_place_coordinates(f"{activity.name}, {city}")
                 if coords:
                     activity.coordinates = LocationCoords(lat=coords[0], lng=coords[1])
+                remaining -= 1
 
     def _validate_structure(self, day_plans) -> None:
         """

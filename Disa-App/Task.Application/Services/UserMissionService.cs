@@ -10,13 +10,16 @@ public class UserMissionService : IUserMissionService
 {
     private readonly IUserMissionRepository _userMissionRepository;
     private readonly IMissionTemplateRepository _missionTemplateRepository;
+    private readonly IFileStorageService _fileStorageService;
 
     public UserMissionService(
         IUserMissionRepository userMissionRepository,
-        IMissionTemplateRepository missionTemplateRepository)
+        IMissionTemplateRepository missionTemplateRepository,
+        IFileStorageService fileStorageService)
     {
         _userMissionRepository = userMissionRepository;
         _missionTemplateRepository = missionTemplateRepository;
+        _fileStorageService = fileStorageService;
     }
 
     public async System.Threading.Tasks.Task<Guid> AssignMissionAsync(AssignMissionRequest request)
@@ -26,15 +29,12 @@ public class UserMissionService : IUserMissionService
         if (template == null)
             throw new Exception("Mission template not found.");
 
-        // Idempotent: the same mission (template) at the same place of the same
-        // trip is only ever assigned once — re-swiping returns the existing one.
-        var existing = (await _userMissionRepository.GetByUserIdAsync(request.UserId))
-            .FirstOrDefault(x =>
-                x.TripId == request.TripId &&
-                x.PlaceId == request.PlaceId &&
-                x.TemplateId == template.Id);
-        if (existing != null)
-            return existing.Id;
+        if (template.RequiresLocation &&
+            (!request.TargetLatitude.HasValue || !request.TargetLongitude.HasValue))
+        {
+            throw new InvalidOperationException(
+                "Không xác định được vị trí địa điểm nên chưa thể nhận nhiệm vụ.");
+        }
 
         var mission = new UserMission
         {
@@ -56,14 +56,12 @@ public class UserMissionService : IUserMissionService
             StartAt = DateTime.UtcNow
         };
 
-        await _userMissionRepository.AddAsync(mission);
-
-        return mission.Id;
+        return await _userMissionRepository.GetOrAddAssignmentAsync(mission, template.Type);
     }
 
     public async System.Threading.Tasks.Task<IEnumerable<UserMissionResponse>> GetUserMissionsAsync(Guid userId)
     {
-        var missions = await _userMissionRepository.GetByUserIdAsync(userId);
+        var missions = await GetDeduplicatedMissionsAsync(userId);
 
         return missions.Select(x =>
         {
@@ -126,7 +124,7 @@ public class UserMissionService : IUserMissionService
 
     public async System.Threading.Tasks.Task<UserMissionSummaryResponse> GetSummaryAsync(Guid userId)
     {
-        var missions = await _userMissionRepository.GetByUserIdAsync(userId);
+        var missions = await GetDeduplicatedMissionsAsync(userId);
 
         var completed = missions
             .Where(x => x.Status == Domain.Enums.MissionStatus.Completed)
@@ -165,6 +163,54 @@ public class UserMissionService : IUserMissionService
 
     public async System.Threading.Tasks.Task DeleteAllMissionsForUserAsync(Guid userId)
     {
+        var missions = await _userMissionRepository.GetByUserIdAsync(userId);
+        var mediaUrls = missions
+            .SelectMany(m => m.Submissions)
+            .SelectMany(s => s.Evidences)
+            .Select(e => e.MediaUrl)
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Distinct()
+            .ToList();
+        foreach (var mediaUrl in mediaUrls)
+            await _fileStorageService.DeleteAsync(mediaUrl);
+
         await _userMissionRepository.DeleteAllByUserIdAsync(userId);
+    }
+
+    private async System.Threading.Tasks.Task<List<UserMission>> GetDeduplicatedMissionsAsync(Guid userId)
+    {
+        var all = (await _userMissionRepository.GetByUserIdAsync(userId)).ToList();
+        var keepers = new List<UserMission>();
+
+        foreach (var group in all.GroupBy(x => new
+                 {
+                     x.UserId,
+                     MissionType = x.Template.Type,
+                     Title = x.Title.Trim().ToUpperInvariant()
+                 }))
+        {
+            // Keep completed progress from older duplicate data; otherwise
+            // keep the assignment the user accepted first.
+            var ordered = group
+                .OrderByDescending(x => x.Status == Domain.Enums.MissionStatus.Completed)
+                .ThenBy(x => x.StartAt)
+                .ToList();
+            keepers.Add(ordered[0]);
+
+            foreach (var duplicate in ordered.Skip(1))
+            {
+                foreach (var mediaUrl in duplicate.Submissions
+                             .SelectMany(s => s.Evidences)
+                             .Select(e => e.MediaUrl)
+                             .Where(url => !string.IsNullOrWhiteSpace(url))
+                             .Distinct())
+                {
+                    await _fileStorageService.DeleteAsync(mediaUrl);
+                }
+                await _userMissionRepository.DeleteByIdAsync(duplicate.Id);
+            }
+        }
+
+        return keepers;
     }
 }

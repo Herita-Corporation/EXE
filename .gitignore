@@ -1,2 +1,5 @@
 # Local secrets — see .env.example for the template.
 .env
+
+# Project-local language runtimes (installed for development only).
+.runtime/

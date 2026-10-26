@@ -15,7 +15,6 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 // Register Application Services
 builder.Services.AddScoped<IMissionTemplateService, MissionTemplateService>();
-builder.Services.AddScoped<IMissionTemplateService, MissionTemplateService>();
 builder.Services.AddScoped<IUserMissionService, UserMissionService>();
 builder.Services.AddScoped<IMissionSubmissionService, MissionSubmissionService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();

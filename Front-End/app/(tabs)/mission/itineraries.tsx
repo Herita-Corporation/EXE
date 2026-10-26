@@ -16,12 +16,12 @@ import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { ItineraryResponse } from "@/types/itinerary";
 import { getRegionImage } from "@/data/regionImages";
-import { formatDateRange, toIsoDate } from "@/utils/date";
+import { formatDateRange, vietnamTodayIso } from "@/utils/date";
 import { Image } from "expo-image";
 import { colors, spacing } from "@/theme/colors";
 
 function todayIso() {
-  return toIsoDate(new Date());
+  return vietnamTodayIso();
 }
 
 export default function MyItinerariesScreen() {
@@ -64,17 +64,58 @@ export default function MyItinerariesScreen() {
   );
 
   const today = todayIso();
-  // "Current journey" now requires the user to have explicitly tapped
-  // "Bắt đầu lộ trình" on the detail screen (entry.startedAt set) — a saved
-  // itinerary that was never started just sits in the list below, it no
-  // longer auto-promotes itself to the active-journey card based on dates
-  // alone. The badge on each "past" item still reflects its own state
-  // (Chưa bắt đầu / Sắp tới / Đã hoàn thành).
-  const currentIndex = items.findIndex(
-    (i) => !!i.entry.startedAt && i.data.trip_summary.end_date >= today
+  // Calendar dates determine Current/Future/Past. `startedAt` records a user
+  // action only; it is not lifecycle truth for a scheduled itinerary.
+  const currentItems = items.filter(
+    ({ data }) =>
+      data.trip_summary.start_date <= today &&
+      data.trip_summary.end_date >= today
   );
-  const current = currentIndex >= 0 ? items[currentIndex] : null;
-  const past = items.filter((_, idx) => idx !== currentIndex);
+  const future = items
+    .filter(({ data }) => data.trip_summary.start_date > today)
+    .sort((a, b) =>
+      a.data.trip_summary.start_date.localeCompare(b.data.trip_summary.start_date)
+    );
+  const past = items
+    .filter(({ data }) => data.trip_summary.end_date < today)
+    .sort((a, b) =>
+      b.data.trip_summary.end_date.localeCompare(a.data.trip_summary.end_date)
+    );
+  const current = currentItems[0] ?? null;
+  const additionalCurrent = currentItems.slice(1);
+
+  const renderCompactCards = (
+    list: { entry: ItineraryHistoryEntry; data: ItineraryResponse }[],
+    label: string,
+    tone: React.ComponentProps<typeof Badge>["tone"]
+  ) =>
+    list.map(({ data }) => (
+      <Card
+        key={data.itinerary_id}
+        variant="media"
+        style={styles.pastCard}
+        imageSource={getRegionImage(data.trip_summary.cities[0])}
+        overlay={<Badge label={label} tone={tone} />}
+      >
+        <Text style={styles.pastDates}>
+          {formatDateRange(
+            data.trip_summary.start_date,
+            data.trip_summary.end_date,
+            locale
+          )}
+        </Text>
+        <Text style={styles.pastTitle}>
+          {data.trip_summary.cities.join(" → ")}
+        </Text>
+        <Button
+          title={t("itineraries.details")}
+          variant="outline"
+          onPress={() =>
+            router.push(`/(tabs)/mission/itinerary/${data.itinerary_id}`)
+          }
+        />
+      </Card>
+    ));
 
   return (
     <ScreenContainer backgroundColor={colors.surface}>
@@ -127,6 +168,20 @@ export default function MyItinerariesScreen() {
                   }
                 />
               </Card>
+              {renderCompactCards(
+                additionalCurrent,
+                t("itineraries.active"),
+                "success"
+              )}
+            </>
+          ) : null}
+
+          {future.length > 0 ? (
+            <>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionLabel}>{t("itineraries.upcoming")}</Text>
+              </View>
+              {renderCompactCards(future, t("itineraries.upcoming"), "gold")}
             </>
           ) : null}
 
@@ -135,38 +190,7 @@ export default function MyItinerariesScreen() {
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionLabel}>{t("itineraries.pastAdventures")}</Text>
               </View>
-              {past.map(({ entry, data }) => {
-                const isUpcoming = data.trip_summary.start_date > today;
-                const label = !entry.startedAt
-                  ? t("itineraries.notStarted")
-                  : isUpcoming
-                  ? t("itineraries.upcoming")
-                  : t("itineraries.completed");
-                const tone = !entry.startedAt ? "neutral" : isUpcoming ? "gold" : "primary";
-                return (
-                <Card
-                  key={data.itinerary_id}
-                  variant="media"
-                  style={styles.pastCard}
-                  imageSource={getRegionImage(data.trip_summary.cities[0])}
-                  overlay={<Badge label={label} tone={tone} />}
-                >
-                  <Text style={styles.pastDates}>
-                    {formatDateRange(data.trip_summary.start_date, data.trip_summary.end_date, locale)}
-                  </Text>
-                  <Text style={styles.pastTitle}>
-                    {data.trip_summary.cities.join(" → ")}
-                  </Text>
-                  <Button
-                    title={t("itineraries.details")}
-                    variant="outline"
-                    onPress={() =>
-                      router.push(`/(tabs)/mission/itinerary/${data.itinerary_id}`)
-                    }
-                  />
-                </Card>
-                );
-              })}
+              {renderCompactCards(past, t("itineraries.completed"), "primary")}
             </>
           ) : null}
         </>

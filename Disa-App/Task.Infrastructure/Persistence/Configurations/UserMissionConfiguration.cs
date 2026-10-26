@@ -35,6 +35,11 @@ public class UserMissionConfiguration : IEntityTypeConfiguration<UserMission>
         builder.Property(x => x.RewardCoins)
                .HasDefaultValue(0);
 
+        // Lookup index. Semantic uniqueness by user + place title + mission
+        // type spans the related template row and is enforced transactionally.
+        builder.HasIndex(x => new { x.UserId, x.TripId, x.PlaceId, x.TemplateId })
+               .IsUnique(false);
+
         // Relationship: UserMission -> MissionTemplate
         builder.HasOne(x => x.Template)
                .WithMany(x => x.UserMissions)

@@ -287,9 +287,10 @@ class BudgetService:
         preferences: list[str],
         travelers: int = 1,
     ) -> str:
-        """Build deterministic cache key."""
-        city_str = ",".join(sorted(cities))
-        pref_str = ",".join(sorted(preferences))
+        """Build a deterministic, formatting-insensitive cache key."""
+        normalize = lambda value: " ".join(value.strip().casefold().split())
+        city_str = ",".join(sorted(normalize(city) for city in cities))
+        pref_str = ",".join(sorted(normalize(preference) for preference in preferences))
         return (
             f"v=5|city={city_str}|duration={trip_duration_days}"
             f"|budget={int(budget)}|travelers={travelers}|preferences={pref_str}"

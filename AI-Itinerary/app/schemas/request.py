@@ -42,8 +42,6 @@ class GenerateItineraryRequest(BaseModel):
             )
         if self.start_date > self.end_date:
             raise ValueError("start_date must be less than or equal to end_date.")
-        if (self.end_date - self.start_date).days + 1 > 5:
-            raise ValueError("Trip duration cannot exceed 5 days.")
         return self
 
     @property

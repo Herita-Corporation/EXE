@@ -7,6 +7,7 @@ own knowledge.
 
 import asyncio
 import json
+import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -16,6 +17,7 @@ from openai import AsyncOpenAI
 from app.core.config import settings
 from app.core.exceptions import GPTGenerationFailedError
 from app.core.logging import get_logger
+from app.schemas.generation_output import ITINERARY_RESPONSE_FORMAT
 
 logger = get_logger(__name__)
 
@@ -69,7 +71,7 @@ class OpenAIClient:
 
     - Primary model: gpt-4o-mini
     - Fallback model: gpt-4.1-mini
-    - Max retries: 2 (spec §68)
+    - One retry with the fallback model
     - Temperature: low (0.2) for deterministic output
     """
 
@@ -98,7 +100,11 @@ class OpenAIClient:
             GPTGenerationFailedError: After max retries exhausted.
         """
         user_message = json.dumps(context, ensure_ascii=False, indent=2)
-        return await self._complete_json(_SYSTEM_PROMPT, user_message)
+        return await self._complete_json(
+            _SYSTEM_PROMPT,
+            user_message,
+            response_format=ITINERARY_RESPONSE_FORMAT,
+        )
 
     async def generate_alternatives(
         self, context: Dict[str, Any]
@@ -118,7 +124,11 @@ class OpenAIClient:
         return await self._complete_json(_ALTERNATIVES_SYSTEM_PROMPT, user_message)
 
     async def _complete_json(
-        self, system_prompt: str, user_message: str
+        self,
+        system_prompt: str,
+        user_message: str,
+        *,
+        response_format: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Shared retry/fallback-model loop for a single JSON-mode chat call."""
         models_to_try = [self._primary_model, self._fallback_model]
@@ -126,6 +136,7 @@ class OpenAIClient:
         last_error: Exception | None = None
         for attempt in range(settings.OPENAI_MAX_RETRIES + 1):
             model = models_to_try[min(attempt, len(models_to_try) - 1)]
+            request_started = time.monotonic()
             try:
                 logger.info(
                     "gpt_request_started",
@@ -138,7 +149,7 @@ class OpenAIClient:
                         {"role": "user", "content": user_message},
                     ],
                     temperature=0.2,
-                    response_format={"type": "json_object"},
+                    response_format=response_format or {"type": "json_object"},
                     # Avoid truncating a long itinerary after its first days.
                     max_tokens=12000,
                 )
@@ -153,6 +164,7 @@ class OpenAIClient:
                         "attempt": attempt + 1,
                         "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
                         "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                        "latency_ms": int((time.monotonic() - request_started) * 1000),
                     },
                 )
                 return parsed
@@ -161,7 +173,12 @@ class OpenAIClient:
                 last_error = exc
                 logger.warning(
                     "gpt_request_failed",
-                    extra={"model": model, "attempt": attempt + 1, "error": str(exc)},
+                    extra={
+                        "model": model,
+                        "attempt": attempt + 1,
+                        "error": str(exc),
+                        "latency_ms": int((time.monotonic() - request_started) * 1000),
+                    },
                 )
                 if attempt < settings.OPENAI_MAX_RETRIES:
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff

@@ -201,7 +201,16 @@ class ItineraryOrchestrator:
             request.preferences or [],
             request.travelers,
         )
+        cache_lookup_started = time.monotonic()
         cached = await self.cache_repo.get(cache_key)
+        logger.info(
+            "cache_lookup_complete",
+            extra={
+                "request_id": request_id,
+                "cache_hit": cached is not None,
+                "latency_ms": int((time.monotonic() - cache_lookup_started) * 1000),
+            },
+        )
         vietnam_today = datetime.now(VIETNAM_TZ).date()
         cache_candidate = bool(
             request.start_date > vietnam_today
@@ -347,6 +356,16 @@ class ItineraryOrchestrator:
 
         for chunk_offset in range(0, request.trip_duration_days, 5):
             chunk_days = min(5, request.trip_duration_days - chunk_offset)
+            chunk_started = time.monotonic()
+            logger.info(
+                "chunk_generation_started",
+                extra={
+                    "request_id": request_id,
+                    "chunk_number": chunk_offset // 5 + 1,
+                    "chunk_count": (request.trip_duration_days + 4) // 5,
+                    "chunk_days": chunk_days,
+                },
+            )
             chunk = await self._generate_chunk(
                 request=request,
                 user_id=user_id,
@@ -358,6 +377,15 @@ class ItineraryOrchestrator:
                 chunk_offset=chunk_offset,
                 chunk_days=chunk_days,
                 used_places=used_places,
+            )
+            logger.info(
+                "chunk_generation_complete",
+                extra={
+                    "request_id": request_id,
+                    "chunk_number": chunk_offset // 5 + 1,
+                    "chunk_days": chunk_days,
+                    "latency_ms": int((time.monotonic() - chunk_started) * 1000),
+                },
             )
             result.extend(chunk)
             used_places.extend(
@@ -557,8 +585,6 @@ class ItineraryOrchestrator:
             raise InvalidCityError()
         if request.trip_duration_days <= 0:
             raise InvalidDateError("Trip duration must be at least 1 day.")
-        if request.trip_duration_days > 5:
-            raise InvalidDateError("Trip duration cannot exceed 5 days.")
 
     async def _geocode_fixed_activities(self, day_plans, cities) -> None:
         """

@@ -4,6 +4,7 @@ import {
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   View,
@@ -27,7 +28,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useLocale();
   const [index, setIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   async function finish() {
     await markOnboardingSeen();

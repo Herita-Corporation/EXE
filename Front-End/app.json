@@ -80,7 +80,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "router": {

@@ -209,7 +209,9 @@ services:
       Jwt__Issuer: IAMService
       Jwt__Audience: IAMClient
       AIItinerary__BaseUrl: http://ai-itinerary:8000
-      AIItinerary__TimeoutSeconds: "120"
+      # Itineraries are generated in five-day model chunks, so longer trips
+      # need more than the former two-minute proxy timeout.
+      AIItinerary__TimeoutSeconds: "3600"
       # Bahnar → Vietnamese translator (optional). Unreachable/unset → only /api/v1/translate/* return 503.
       Translator__BaseUrl: "${TRANSLATOR_BASE_URL:-http://bahnar-translator:8080}"
       Translator__ApiKey: "${TRANSLATOR_API_KEY:-}"

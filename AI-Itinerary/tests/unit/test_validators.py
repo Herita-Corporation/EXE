@@ -84,15 +84,25 @@ class TestGenerateItineraryRequestSchema:
         )
         assert len(req.cities) == 3
 
-    def test_more_than_five_days_raises(self):
-        with pytest.raises(ValidationError):
-            GenerateItineraryRequest(
-                user_id=uuid.uuid4(),
-                cities=["Da Nang"],
-                budget=5_000_000,
-                start_date=date(2027, 1, 1),
-                end_date=date(2027, 1, 6),
-            )
+    def test_more_than_five_days_is_valid(self):
+        req = GenerateItineraryRequest(
+            user_id=uuid.uuid4(),
+            cities=["Da Nang"],
+            budget=5_000_000,
+            start_date=date(2027, 1, 1),
+            end_date=date(2027, 1, 15),
+        )
+        assert req.trip_duration_days == 15
+
+    def test_long_trip_is_valid_at_domain_layer(self):
+        req = GenerateItineraryRequest(
+            user_id=uuid.uuid4(),
+            cities=["Da Nang"],
+            budget=5_000_000,
+            start_date=date(2027, 1, 1),
+            end_date=date(2027, 1, 15),
+        )
+        ItineraryOrchestrator(db=None)._validate_request(req)
 
     def test_preferences_optional(self):
         req = GenerateItineraryRequest(

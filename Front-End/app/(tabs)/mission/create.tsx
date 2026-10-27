@@ -204,13 +204,16 @@ export default function CreateItineraryScreen() {
   const [endDate, setEndDate] = useState(todayPlus(18));
   const [clockNow, setClockNow] = useState(() => new Date());
   const earliestStartDate = earliestStartIso(clockNow);
-  const latestEndDate = datePlus(startDate, 4);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [travelers, setTravelers] = useState(2);
   const [budgetVnd, setBudgetVnd] = useState(30_000_000);
   const [styles_, setStyles_] = useState<string[]>(["food"]);
   const [loading, setLoading] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<{
+    days: number;
+    chunks: number;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -220,14 +223,11 @@ export default function CreateItineraryScreen() {
 
   useEffect(() => {
     if (startDate >= earliestStartDate) return;
-    const durationOffset = Math.min(
-      4,
-      Math.max(
-        0,
-        Math.round(
-          (fromIsoDate(endDate).getTime() - fromIsoDate(startDate).getTime()) /
-            86_400_000
-        )
+    const durationOffset = Math.max(
+      0,
+      Math.round(
+        (fromIsoDate(endDate).getTime() - fromIsoDate(startDate).getTime()) /
+          86_400_000
       )
     );
     setStartDate(earliestStartDate);
@@ -255,15 +255,15 @@ export default function CreateItineraryScreen() {
     const expectedDays = Math.round(
       (fromIsoDate(endDate).getTime() - fromIsoDate(startDate).getTime()) / 86_400_000
     ) + 1;
-    if (expectedDays > 5) {
-      setError(t("createItinerary.errorTooManyDays"));
-      return;
-    }
     if (styles_.length === 0) {
       setError(t("createItinerary.errorSelectStyle"));
       return;
     }
 
+    setGenerationProgress({
+      days: expectedDays,
+      chunks: Math.ceil(expectedDays / 5),
+    });
     setLoading(true);
     try {
       const result = await generateItinerary({
@@ -329,6 +329,7 @@ export default function CreateItineraryScreen() {
       );
     } finally {
       setLoading(false);
+      setGenerationProgress(null);
     }
   }
 
@@ -463,11 +464,8 @@ export default function CreateItineraryScreen() {
               setShowStartPicker(false);
               const next = toIsoDate(date);
               setStartDate(next);
-              // A trip is 1-5 calendar days inclusive. Keep the end date
-              // inside the newly selected start date's valid window.
-              const latest = datePlus(next, 4);
+              // Keep the selected date range valid when the start date moves.
               if (endDate < next) setEndDate(next);
-              else if (endDate > latest) setEndDate(latest);
             }}
             onDismiss={() => setShowStartPicker(false)}
           />
@@ -477,7 +475,6 @@ export default function CreateItineraryScreen() {
             value={fromIsoDate(endDate)}
             mode="date"
             minimumDate={fromIsoDate(startDate)}
-            maximumDate={fromIsoDate(latestEndDate)}
             display={Platform.OS === "ios" ? "inline" : "default"}
             onValueChange={(_, date) => {
               setShowEndPicker(false);
@@ -735,7 +732,11 @@ export default function CreateItineraryScreen() {
               <Ionicons name="sparkles" size={26} color={colors.gold} />
             </View>
             <Text style={styles.generatingTitle}>{t("extra.generatingTitle")}</Text>
-            <Text style={styles.generatingText}>{t("extra.generatingSubtitle")}</Text>
+            <Text style={styles.generatingText}>
+              {generationProgress
+                ? t("extra.generatingProgress", generationProgress)
+                : t("extra.generatingSubtitle")}
+            </Text>
             <ActivityIndicator color={colors.navy} style={{ marginTop: spacing(1) }} />
           </View>
         </View>

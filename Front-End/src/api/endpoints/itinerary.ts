@@ -12,10 +12,23 @@ import type {
 // AI-Itinerary Python service; user_id is derived server-side from the JWT).
 
 export function generateItinerary(payload: GenerateItineraryRequest) {
+  const durationDays = Math.max(
+    1,
+    Math.round(
+      (Date.parse(payload.end_date) - Date.parse(payload.start_date)) / 86_400_000
+    ) + 1
+  );
+  // AI-Itinerary generates five days per model call. Scale the client timeout
+  // with the number of chunks instead of treating five days as a product limit.
+  const timeoutMs = Math.max(
+    180_000,
+    Math.ceil(durationDays / 5) * 120_000 + 60_000
+  );
+
   return request<ItineraryResponse>("aiTour", "/api/v1/itinerary/generate", {
     method: "POST",
     data: payload,
-    timeoutMs: 180000, // Long itineraries can require one structural retry.
+    timeoutMs,
   });
 }
 

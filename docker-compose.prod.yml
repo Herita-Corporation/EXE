@@ -61,7 +61,7 @@ services:
       - ./Disa-App/DATABASE:/scripts:ro
     networks:
       - disa-network
-    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql && /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/IAMDb_GoogleId.sql"]
+    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -b -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql && /opt/mssql-tools18/bin/sqlcmd -b -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/IAMDb_GoogleId.sql"]
 
   # ── PostgreSQL + pgvector (AI-Itinerary database) ───────────────────────────
   postgres:

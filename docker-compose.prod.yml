@@ -12,10 +12,9 @@
 # One-time setup before first `up`:
 #   1. Add a 2GB swap file on the VM (Ubuntu on EC2 has none by default) —
 #      safety margin for the 4GB t3.medium running 7 containers at once.
-#   2. Nothing else — sqlserver-init auto-creates TaskDb's schema,
-#      ai-itinerary-migrate auto-runs Alembic for Postgres, IAMDb
-#      auto-creates via EnsureCreated() on IAMService's first boot. No
-#      manual SQL step needed (unlike a managed-DB deploy).
+#   2. Nothing else — sqlserver-init auto-creates TaskDb and repairs legacy
+#      IAMDb schema additions; ai-itinerary-migrate auto-runs Alembic for
+#      Postgres. IAMDb auto-creates via EnsureCreated() on first boot.
 #
 # Usage:
 #   cp .env.production.example .env   # then fill in real values
@@ -62,7 +61,7 @@ services:
       - ./Disa-App/DATABASE:/scripts:ro
     networks:
       - disa-network
-    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql"]
+    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql && /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/IAMDb_GoogleId.sql"]
 
   # ── PostgreSQL + pgvector (AI-Itinerary database) ───────────────────────────
   postgres:

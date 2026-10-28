@@ -1,5 +1,6 @@
 ﻿using IAM.Infrastructure.Data.Entities;
 using IAM.Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
 
 namespace IAM.Infrastructure.Data;
 
@@ -8,6 +9,27 @@ public static class SeedData
     public static void Initialize(IAMDbContext context, BCryptPassworkHasher hasher)
     {
         context.Database.EnsureCreated();
+
+        // EnsureCreated only creates a brand-new schema. Keep this repair
+        // idempotent so databases created before Google Login receive the new
+        // nullable column and its filtered unique index during startup.
+        context.Database.ExecuteSqlRaw("""
+            IF COL_LENGTH(N'dbo.Users', N'GoogleId') IS NULL
+            BEGIN
+                ALTER TABLE dbo.Users ADD GoogleId NVARCHAR(255) NULL;
+            END;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.indexes
+                WHERE object_id = OBJECT_ID(N'dbo.Users')
+                  AND name = N'IX_Users_GoogleId'
+            )
+            BEGIN
+                CREATE UNIQUE INDEX IX_Users_GoogleId
+                    ON dbo.Users (GoogleId)
+                    WHERE GoogleId IS NOT NULL;
+            END;
+            """);
 
         // ===== ROLES =====
         if (!context.Roles.Any())

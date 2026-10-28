@@ -1,8 +1,10 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -14,15 +16,57 @@ import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
 import { colors, isDark, spacing } from "@/theme/colors";
 
+WebBrowser.maybeCompleteAuthSession();
+
+const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+
 export default function LoginScreen() {
-  const { login } = useAuth();
-  const { t } = useLocale();
+  const { login, loginWithGoogle } = useAuth();
+  const { locale, t } = useLocale();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const passwordRef = useRef<TextInput>(null);
+  const handledGoogleToken = useRef<string | null>(null);
+  const [googleRequest, googleResponse, promptGoogleLogin] = Google.useIdTokenAuthRequest({
+    webClientId: googleWebClientId,
+    androidClientId: googleAndroidClientId,
+    iosClientId: googleIosClientId,
+    selectAccount: true,
+  });
+  const googleLabel = locale === "vi" ? "Tiếp tục với Google" : "Continue with Google";
+  const googleNotConfigured = locale === "vi"
+    ? "Đăng nhập Google chưa được cấu hình cho bản build này."
+    : "Google sign-in has not been configured for this build.";
+
+  useEffect(() => {
+    if (googleResponse?.type !== "success") return;
+
+    const idToken = googleResponse.params.id_token;
+    if (!idToken) {
+      setGoogleLoading(false);
+      setError(t("auth.loginFailed"));
+      return;
+    }
+    if (handledGoogleToken.current === idToken) return;
+    handledGoogleToken.current = idToken;
+
+    void (async () => {
+      try {
+        await loginWithGoogle(idToken);
+        router.replace("/(tabs)/home");
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : t("auth.loginFailed"));
+      } finally {
+        setGoogleLoading(false);
+      }
+    })();
+  }, [googleResponse, loginWithGoogle, t]);
 
   async function onSubmit() {
     setError(null);
@@ -38,6 +82,23 @@ export default function LoginScreen() {
       setError(err instanceof ApiError ? err.message : t("auth.loginFailed"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function onGoogleSubmit() {
+    setError(null);
+    if (!googleWebClientId || !googleAndroidClientId) {
+      setError(googleNotConfigured);
+      return;
+    }
+
+    setGoogleLoading(true);
+    try {
+      const result = await promptGoogleLogin();
+      if (result.type !== "success") setGoogleLoading(false);
+    } catch {
+      setGoogleLoading(false);
+      setError(t("auth.loginFailed"));
     }
   }
 
@@ -112,6 +173,22 @@ export default function LoginScreen() {
           icon="arrow-forward"
           iconPosition="right"
         />
+
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>{locale === "vi" ? "hoặc" : "or"}</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <Button
+          title={googleLabel}
+          onPress={onGoogleSubmit}
+          loading={googleLoading}
+          disabled={!googleRequest || loading}
+          variant="outline"
+          size="lg"
+          icon="logo-google"
+        />
       </Card>
 
       <View style={styles.registerRow}>
@@ -169,6 +246,9 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginTop: -spacing(0.5),
   },
+  divider: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  dividerText: { color: colors.textMuted, fontSize: 12, textTransform: "uppercase" },
   footer: { marginTop: "auto", paddingTop: spacing(4), gap: spacing(0.5) },
   footerLinks: { color: colors.textMuted, fontSize: 12, textAlign: "center" },
   copyright: { color: colors.textMuted, fontSize: 11, textAlign: "center" },

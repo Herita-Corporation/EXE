@@ -183,6 +183,12 @@ services:
       Jwt__Key: "${JWT_SECRET_KEY}"
       Jwt__Issuer: IAMService
       Jwt__Audience: IAMClient
+      # OAuth client IDs are public identifiers. Configure these in the EC2 .env file.
+      # The default preserves the client ID that was previously in appsettings.json.
+      GoogleAuth__ClientIds__0: "${GOOGLE_WEB_CLIENT_ID:-366568785172-kgvdv4m524ulcg19ef1pksqa7q4g5n7c.apps.googleusercontent.com}"
+      GoogleAuth__ClientIds__1: "${GOOGLE_ANDROID_CLIENT_ID:-}"
+      GoogleAuth__ClientIds__2: "${GOOGLE_ANDROID_PLAY_CLIENT_ID:-}"
+      GoogleAuth__ClientIds__3: "${GOOGLE_IOS_CLIENT_ID:-}"
       Smtp__User: "disatravel.support@gmail.com"
       Smtp__Password: "${SMTP_PASSWORD:-}"
       Smtp__FromAddress: "disatravel.support@gmail.com"

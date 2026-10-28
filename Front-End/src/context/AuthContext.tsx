@@ -24,6 +24,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   register: (
     username: string,
     email: string,
@@ -119,6 +120,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const res = await authApi.loginWithGoogle({ idToken });
+    await saveTokens({
+      accessToken: res.accessToken,
+      refreshToken: res.refreshToken,
+    });
+    setUser(userFromToken(res.accessToken));
+    try {
+      const me = await authApi.me();
+      setUser((prev) => (prev ? { ...prev, ...meFields(me) } : prev));
+    } catch {
+      // Non-fatal — the JWT still establishes a usable session.
+    }
+  }, []);
+
   const register = useCallback(
     async (username: string, email: string, password: string, phoneNumber: string) => {
       return authApi.register({ username, email, password, phoneNumber });
@@ -163,12 +179,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       isAuthenticated: !!user,
       login,
+      loginWithGoogle,
       register,
       logout,
       deleteAccount,
       refreshMe,
     }),
-    [user, isLoading, login, register, logout, deleteAccount, refreshMe]
+    [user, isLoading, login, loginWithGoogle, register, logout, deleteAccount, refreshMe]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

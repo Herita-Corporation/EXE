@@ -7,4 +7,6 @@ public interface IFileStorageService
     System.Threading.Tasks.Task<string> UploadImageAsync(IFormFile file);
 
     System.Threading.Tasks.Task<string> UploadVideoAsync(IFormFile file);
+
+    System.Threading.Tasks.Task DeleteAsync(string mediaUrl);
 }

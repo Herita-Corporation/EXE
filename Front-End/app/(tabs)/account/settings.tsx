@@ -20,7 +20,7 @@ import { useToast } from "@/context/ToastContext";
 import { colors, spacing } from "@/theme/colors";
 
 export default function AccountSettingsScreen() {
-  const { user, refreshMe } = useAuth();
+  const { user, refreshMe, deleteAccount } = useAuth();
   const { t, locale } = useLocale();
   const { showToast } = useToast();
   // Only settings with a real effect are shown — push is wired to the Expo
@@ -35,6 +35,9 @@ export default function AccountSettingsScreen() {
   const [savingField, setSavingField] = useState(false);
   const [verifyingEmail, setVerifyingEmail] = useState(false);
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   async function onTogglePush(next: boolean) {
     if (!next) {
@@ -94,6 +97,19 @@ export default function AccountSettingsScreen() {
       showToast(err instanceof ApiError ? err.message : t("settings.changePhoneFailed"), "error");
     } finally {
       setSavingField(false);
+    }
+  }
+
+  async function onDeleteAccount() {
+    if (!deletePassword.trim()) return;
+    setDeletingAccount(true);
+    try {
+      await deleteAccount(deletePassword);
+      router.replace("/(auth)/login");
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : t("settings.deleteAccountFailed"), "error");
+    } finally {
+      setDeletingAccount(false);
     }
   }
 
@@ -210,6 +226,46 @@ export default function AccountSettingsScreen() {
         />
       </Card>
 
+      <Text style={[styles.sectionLabel, styles.dangerLabel]}>{t("settings.dangerZone")}</Text>
+      <Card style={styles.sectionCard}>
+        <SettingsRow
+          icon="trash-outline"
+          label={t("settings.deleteAccount")}
+          description={t("settings.deleteAccountDescription")}
+          onPress={() => setShowDeleteForm((value) => !value)}
+        />
+        {showDeleteForm ? (
+          <View style={styles.editRow}>
+            <Input
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              secureTextEntry
+              autoCapitalize="none"
+              placeholder={t("settings.deleteAccountPassword")}
+            />
+            <View style={styles.editButtonsRow}>
+              <Button
+                title={t("common.cancel")}
+                variant="ghost"
+                size="sm"
+                onPress={() => {
+                  setShowDeleteForm(false);
+                  setDeletePassword("");
+                }}
+              />
+              <Button
+                title={t("settings.deleteAccountConfirm")}
+                variant="danger"
+                size="sm"
+                loading={deletingAccount}
+                disabled={!deletePassword.trim()}
+                onPress={onDeleteAccount}
+              />
+            </View>
+          </View>
+        ) : null}
+      </Card>
+
       <LanguagePickerModal
         visible={languagePickerOpen}
         onClose={() => setLanguagePickerOpen(false)}
@@ -231,4 +287,5 @@ const styles = StyleSheet.create({
   verifyLink: { color: colors.navy, fontWeight: "700", fontSize: 13 },
   editRow: { gap: spacing(1), paddingBottom: spacing(1.25) },
   editButtonsRow: { flexDirection: "row", justifyContent: "flex-end", gap: spacing(1) },
+  dangerLabel: { color: colors.danger },
 });

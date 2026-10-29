@@ -8,7 +8,7 @@ v2 changes:
 - allocate_budget(): now aware of budget floors to avoid zero-cost assignments
 """
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from app.core.constants import (
     BUDGET_ALLOCATION,
@@ -91,6 +91,63 @@ class BudgetService:
             },
         )
         return breakdown
+
+    def build_budget_profile(
+        self,
+        total_budget: float,
+        planning_budget: float,
+        travelers: int,
+        trip_duration_days: int,
+    ) -> Dict[str, Any]:
+        """Turn a raw budget into a spending style the model can act on.
+
+        A budget is a preference as well as a ceiling. Without a target band,
+        a model tends to choose the cheapest valid option even when the user
+        explicitly supplied a premium budget.
+        """
+        people = max(travelers, 1)
+        days = max(trip_duration_days, 1)
+        per_person_per_day = total_budget / people / days
+
+        if per_person_per_day >= 7_000_000:
+            tier = "luxury"
+            min_ratio, max_ratio = 0.60, 0.90
+            guidance = (
+                "Prioritize verified 4-5 star hotels or resorts, premium dining, "
+                "private transfers, and high-quality paid experiences. Do not add "
+                "filler or inflate prices merely to spend the budget."
+            )
+        elif per_person_per_day >= 3_000_000:
+            tier = "premium"
+            min_ratio, max_ratio = 0.50, 0.85
+            guidance = (
+                "Prefer upscale hotels, comfortable private transport, reputable "
+                "restaurants, and selected paid experiences."
+            )
+        elif per_person_per_day >= 1_000_000:
+            tier = "standard"
+            min_ratio, max_ratio = 0.35, 0.80
+            guidance = (
+                "Balance comfort and value with mid-range accommodation, local "
+                "restaurants, and a mix of free and paid attractions."
+            )
+        else:
+            tier = "economy"
+            min_ratio, max_ratio = 0.0, 0.75
+            guidance = (
+                "Optimize for affordability with budget accommodation, local food, "
+                "public transport, and free or low-cost attractions."
+            )
+
+        return {
+            "tier": tier,
+            "travelers": people,
+            "budget_per_person_per_day": round(per_person_per_day),
+            "target_total_cost_min": round(planning_budget * min_ratio),
+            "target_total_cost_max": round(planning_budget * max_ratio),
+            "enforce_minimum": tier in ("premium", "luxury"),
+            "guidance": guidance,
+        }
 
     def validate_generated_budget(
         self, total_cost: float, planning_budget: float
@@ -228,11 +285,12 @@ class BudgetService:
         budget: float,
         trip_duration_days: int,
         preferences: list[str],
+        travelers: int = 1,
     ) -> str:
         """Build deterministic cache key."""
         city_str = ",".join(sorted(cities))
         pref_str = ",".join(sorted(preferences))
         return (
-            f"city={city_str}|duration={trip_duration_days}"
-            f"|budget={int(budget)}|preferences={pref_str}"
+            f"v=5|city={city_str}|duration={trip_duration_days}"
+            f"|budget={int(budget)}|travelers={travelers}|preferences={pref_str}"
         )

@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Task.Application.DTOs.Requests;
 using Task.Application.Interfaces.Services;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace Task.Presentation.Controllers;
 
@@ -93,10 +95,15 @@ public class UserMissionController : ControllerBase
     }
 
     // Full reset for one user — deletes every mission, including completed
-    // ones. Not exposed in the app's UI today; used for account cleanup.
+    // ones. Restricted to the same authenticated user for account cleanup.
+    [Authorize]
     [HttpDelete("user/{userId}")]
     public async System.Threading.Tasks.Task<IActionResult> DeleteAllForUser(Guid userId)
     {
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(claim, out var authenticatedUserId) || authenticatedUserId != userId)
+            return Forbid();
+
         await _service.DeleteAllMissionsForUserAsync(userId);
 
         return Ok(new { Success = true });

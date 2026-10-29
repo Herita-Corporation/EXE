@@ -75,12 +75,19 @@ export function getUserMissionsSummary(userId: string) {
   return request<UserMissionSummary>("task", `/api/user-missions/user/${userId}/summary`);
 }
 
+export function deleteAllMissionData(userId: string) {
+  return request<{ success: boolean }>("task", `/api/user-missions/user/${userId}`, {
+    method: "DELETE",
+  });
+}
+
 // ── Mission submissions (multipart/form-data) ───────────────────────────────
 
 export interface SubmitMissionParams {
   userMissionId: string;
   photoUri?: string | null;
   videoUri?: string | null;
+  videoDurationSeconds?: number | null;
   latitude?: number | null;
   longitude?: number | null;
   takenAt?: string; // ISO string; defaults server-side to UtcNow if omitted
@@ -90,6 +97,7 @@ export function submitMission({
   userMissionId,
   photoUri,
   videoUri,
+  videoDurationSeconds,
   latitude,
   longitude,
   takenAt,
@@ -119,6 +127,7 @@ export function submitMission({
       type: mime,
     } as unknown as Blob);
   }
+  if (videoDurationSeconds != null) form.append("VideoDurationSeconds", String(videoDurationSeconds));
   if (latitude != null) form.append("Latitude", String(latitude));
   if (longitude != null) form.append("Longitude", String(longitude));
   if (takenAt) form.append("TakenAt", takenAt);

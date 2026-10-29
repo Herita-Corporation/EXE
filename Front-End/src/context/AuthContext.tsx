@@ -7,6 +7,8 @@ import React, {
   useState,
 } from "react";
 import * as authApi from "@/api/endpoints/auth";
+import { deleteAllItineraryData } from "@/api/endpoints/itinerary";
+import { deleteAllMissionData } from "@/api/endpoints/missions";
 import { ApiError } from "@/api/http";
 import type { AuthUser, MeResponse, RegisterResponse } from "@/types/auth";
 import { decodeJwt } from "@/utils/jwt";
@@ -29,6 +31,7 @@ interface AuthContextValue {
     phoneNumber: string
   ) => Promise<RegisterResponse>;
   logout: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   refreshMe: () => Promise<void>;
 }
 
@@ -141,6 +144,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser((prev) => (prev ? { ...prev, ...meFields(me) } : prev));
   }, []);
 
+  const deleteAccount = useCallback(async (password: string) => {
+    if (!user) throw new Error("No authenticated user");
+
+    // Keep IAM identity until dependent services confirm cleanup. If either
+    // request fails, the user can retry without leaving orphaned private data.
+    await authApi.verifyPassword({ password });
+    await deleteAllItineraryData();
+    await deleteAllMissionData(user.id);
+    await authApi.deleteAccount({ password });
+    await clearTokens();
+    setUser(null);
+  }, [user]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -149,9 +165,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       logout,
+      deleteAccount,
       refreshMe,
     }),
-    [user, isLoading, login, register, logout, refreshMe]
+    [user, isLoading, login, register, logout, deleteAccount, refreshMe]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

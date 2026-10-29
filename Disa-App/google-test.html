@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>DISA - Google Login Test</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <h2>DISA - Test Google Login</h2>
+
+    <div id="g_id_onload"
+         data-client_id="366568785172-kgvdv4m524ulcg19ef1pksqa7q4g5n7c.apps.googleusercontent.com"
+         data-callback="handleCredentialResponse">
+    </div>
+
+    <div class="g_id_signin"
+         data-type="standard">
+    </div>
+
+    <h3>Google ID Token:</h3>
+
+    <textarea
+        id="token"
+        rows="10"
+        cols="100"
+        readonly>
+    </textarea>
+
+    <p>
+        <button onclick="copyToken()">Copy ID Token</button>
+    </p>
+
+    <script>
+        function handleCredentialResponse(response) {
+            document.getElementById("token").value =
+                response.credential;
+        }
+
+        function copyToken() {
+            const token = document.getElementById("token").value;
+
+            if (!token) {
+                alert("Bạn chưa đăng nhập Google!");
+                return;
+            }
+
+            navigator.clipboard.writeText(token)
+                .then(() => alert("Đã copy Google ID Token!"))
+                .catch(() => alert("Không thể copy token"));
+        }
+    </script>
+</body>
+</html>

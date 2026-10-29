@@ -24,7 +24,6 @@ import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { GradientHero } from "@/components/GradientHero";
 import { deleteMission, listUserMissions, pruneMissions } from "@/api/endpoints/missions";
 import { useToast } from "@/context/ToastContext";
-import { getLiveItineraryIds } from "@/utils/itineraryHistory";
 import { ApiError } from "@/api/http";
 import { useAuth } from "@/context/AuthContext";
 import { MISSION_STATUS_KEY, MISSION_TYPE_KEY, UserMission } from "@/types/missions";
@@ -39,6 +38,25 @@ const ACTIVE_STATUSES = new Set([0, 1]);
 const COMPLETED_STATUS = 2;
 
 type MissionTab = "active" | "completed";
+
+function deduplicateMissions(items: UserMission[]): UserMission[] {
+  const bySemanticKey = new Map<string, UserMission>();
+  for (const mission of items) {
+    const key = [
+      mission.type,
+      mission.title.trim().toLocaleLowerCase(),
+    ].join(":");
+    const existing = bySemanticKey.get(key);
+    if (
+      !existing ||
+      (mission.status === COMPLETED_STATUS && existing.status !== COMPLETED_STATUS) ||
+      new Date(mission.startAt).getTime() < new Date(existing.startAt).getTime()
+    ) {
+      bySemanticKey.set(key, mission);
+    }
+  }
+  return [...bySemanticKey.values()];
+}
 
 // Status → pill colors (Assigned / PendingReview / Completed / Rejected / Expired).
 const STATUS_TONE: Record<number, { bg: string; fg: string }> = {
@@ -63,15 +81,10 @@ export default function MissionHomeScreen() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      // Drop missions of itineraries that no longer exist before listing.
-      // Best-effort — a failed prune just shows the unpruned list.
-      if (user) {
-        try {
-          await pruneMissions(user.id, await getLiveItineraryIds(user.id));
-        } catch {}
-      }
+      // Orphan cleanup already runs when an itinerary is created/deleted.
+      // Avoid a serial prune request every time this tab receives focus.
       const missionList = user ? await listUserMissions(user.id) : [];
-      setMissions(missionList);
+      setMissions(deduplicateMissions(missionList));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("missionList.loadFailed"));
     } finally {

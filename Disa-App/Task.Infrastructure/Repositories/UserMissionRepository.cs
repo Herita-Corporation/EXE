@@ -2,6 +2,9 @@
 using Task.Application.Interfaces.Repositories;
 using Task.Domain.Entities;
 using Task.Infrastructure.Persistence;
+using System.Data;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Task.Infrastructure.Repositories;
 
@@ -18,6 +21,54 @@ public class UserMissionRepository : IUserMissionRepository
     {
         await _context.UserMissions.AddAsync(mission);
         await _context.SaveChangesAsync();
+    }
+
+    public async System.Threading.Tasks.Task<Guid> GetOrAddAssignmentAsync(
+        UserMission mission, Domain.Enums.MissionType missionType)
+    {
+        await using var transaction = await _context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable);
+
+        // Template IDs are not a semantic identity: multiple templates may
+        // represent the same Photo/Video/Location mission. This lock also
+        // closes the two-swipe race across concurrent API requests.
+        if (_context.Database.IsSqlServer())
+        {
+            var normalizedTitle = mission.Title.Trim().ToUpperInvariant();
+            var titleHash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(normalizedTitle)));
+            var lockResource =
+                $"disa:mission:{mission.UserId:N}:{(int)missionType}:{titleHash}";
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                DECLARE @lockResult int;
+                EXEC @lockResult = sp_getapplock
+                    @Resource = {lockResource},
+                    @LockMode = N'Exclusive',
+                    @LockOwner = N'Transaction',
+                    @LockTimeout = 10000;
+                IF @lockResult < 0
+                    THROW 51000, 'Could not acquire mission assignment lock.', 1;");
+        }
+
+        var existingId = await _context.UserMissions
+            .Where(x => x.UserId == mission.UserId
+                && (x.Title == mission.Title || x.PlaceId == mission.PlaceId)
+                && x.Template.Type == missionType)
+            .OrderByDescending(x => x.Status == Domain.Enums.MissionStatus.Completed)
+            .ThenBy(x => x.StartAt)
+            .Select(x => (Guid?)x.Id)
+            .FirstOrDefaultAsync();
+
+        if (existingId.HasValue)
+        {
+            await transaction.CommitAsync();
+            return existingId.Value;
+        }
+
+        await _context.UserMissions.AddAsync(mission);
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return mission.Id;
     }
 
     public async System.Threading.Tasks.Task<IEnumerable<UserMission>> GetByUserIdAsync(Guid userId)

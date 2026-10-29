@@ -9,6 +9,7 @@ import numpy as np
 from src.data.build_mt_corpus import with_tags
 from src.mt.glossary import Glossary, load_glossary
 from src.mt.modeling import encode
+from src.mt.postprocess import remove_adjacent_repetitions
 
 
 class Translator:
@@ -50,12 +51,15 @@ class Translator:
             att = torch.tensor([x + [0] * (L - len(x)) for x in e["attention_mask"]], device=self.device)
             with torch.inference_mode():
                 seqs = self.model.generate(input_ids=ids, attention_mask=att, num_beams=self.num_beams,
-                                           max_length=self.max_length)
+                                           max_length=self.max_length,
+                                           repetition_penalty=1.15,
+                                           no_repeat_ngram_size=3)
                 scores = self._mean_logprob(ids, att, seqs).cpu().numpy()
             hyps = self.tok.batch_decode(seqs, skip_special_tokens=False)
             for h, mp, sc in zip(hyps, maps, scores):
                 h = self._clean(h)
-                out.append({"text": Glossary.restore(h, mp), "confidence": float(np.exp(sc)), "logprob": float(sc)})
+                restored = Glossary.restore(h, mp)
+                out.append({"text": remove_adjacent_repetitions(restored), "confidence": float(np.exp(sc)), "logprob": float(sc)})
         return out
 
     def _mean_logprob(self, ids, att, seqs):

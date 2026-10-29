@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using Google.Apis.Auth;
+using Microsoft.Extensions.Configuration;
 
 namespace IAMService.Controllers;
 
@@ -18,6 +20,7 @@ public class AuthController : ControllerBase
     private readonly JwtTokenGenerator _jwt;
     private readonly BCryptPassworkHasher _hasher;
     private readonly IFileStorageService _fileStorageService;
+    private readonly IConfiguration _configuration;
     private readonly IEmailSender _emailSender;
 
     public AuthController(
@@ -25,12 +28,14 @@ public class AuthController : ControllerBase
         JwtTokenGenerator jwt,
         BCryptPassworkHasher hasher,
         IFileStorageService fileStorageService,
+        IConfiguration configuration,
         IEmailSender emailSender)
     {
         _context = context;
         _jwt = jwt;
         _hasher = hasher;
         _fileStorageService = fileStorageService;
+        _configuration = configuration;
         _emailSender = emailSender;
     }
 
@@ -131,6 +136,122 @@ public class AuthController : ControllerBase
             Message = "Đăng nhập thành công",
             AccessToken = accessToken,
             RefreshToken = refreshToken
+        });
+    }
+    [AllowAnonymous]
+    [HttpPost("google-login")]
+    public async Task<IActionResult> GoogleLogin(
+    [FromBody] GoogleLoginRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.IdToken))
+            return BadRequest("Google ID Token không được để trống");
+
+        var clientIds = _configuration
+            .GetSection("GoogleAuth:ClientIds")
+            .Get<string[]>();
+
+        if (clientIds == null || clientIds.Length == 0)
+            return StatusCode(500, "Chưa cấu hình Google Client ID");
+
+        GoogleJsonWebSignature.Payload payload;
+
+        try
+        {
+            payload = await GoogleJsonWebSignature.ValidateAsync(
+                request.IdToken,
+                new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = clientIds
+                });
+        }
+        catch (InvalidJwtException)
+        {
+            return Unauthorized("Google ID Token không hợp lệ hoặc đã hết hạn");
+        }
+
+        if (payload.EmailVerified != true ||
+            string.IsNullOrWhiteSpace(payload.Email) ||
+            string.IsNullOrWhiteSpace(payload.Subject))
+        {
+            return Unauthorized("Tài khoản Google chưa được xác thực");
+        }
+
+        var user = await _context.Users
+            .Include(u => u.Roles)
+                .ThenInclude(r => r.Permissions)
+            .FirstOrDefaultAsync(u => u.GoogleId == payload.Subject);
+
+        if (user == null)
+        {
+            var existingEmail = await _context.Users
+                .AnyAsync(u => u.Email == payload.Email);
+
+            if (existingEmail)
+            {
+                return Conflict(new
+                {
+                    Message = "Email đã tồn tại. Vui lòng đăng nhập bằng phương thức hiện tại và liên kết Google trong phần tài khoản."
+                });
+            }
+
+            var customerRole = await _context.Roles
+                .Include(r => r.Permissions)
+                .FirstOrDefaultAsync(r => r.Name == "Customer");
+
+            if (customerRole == null)
+                return StatusCode(500, "Không tìm thấy vai trò Customer");
+
+            user = new User
+            {
+                Id = Guid.NewGuid(),
+                Username = $"google_{Guid.NewGuid():N}",
+                Email = payload.Email,
+                GoogleId = payload.Subject,
+                PasswordHash = _hasher.Hash(
+                    Convert.ToHexString(RandomNumberGenerator.GetBytes(32))),
+                IsEmailVerified = true,
+                IsPhoneVerified = false,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            user.Roles.Add(customerRole);
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+        }
+
+        if (!user.IsActive)
+            return Unauthorized("Tài khoản đã bị vô hiệu hóa");
+
+        var accessToken = _jwt.Generate(user);
+
+        var refreshToken = Convert.ToHexString(
+            RandomNumberGenerator.GetBytes(32));
+
+        _context.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.Id,
+            Token = refreshToken,
+            ExpiresAt = DateTime.UtcNow.AddDays(7)
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            Message = "Đăng nhập Google thành công",
+            AccessToken = accessToken,
+            RefreshToken = refreshToken,
+            User = new
+            {
+                user.Id,
+                user.Username,
+                user.Email,
+                user.AvatarUrl,
+                user.IsEmailVerified,
+                Roles = user.Roles.Select(r => r.Name)
+            }
         });
     }
 
@@ -248,6 +369,48 @@ public class AuthController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok("Đổi mật khẩu thành công");
+    }
+
+    // XÓA TÀI KHOẢN — yêu cầu xác nhận lại mật khẩu. Các refresh token,
+    // verification code và liên kết role được xóa cascade cùng người dùng.
+    [Authorize]
+    [HttpDelete("delete-account")]
+    public async Task<IActionResult> DeleteAccount(DeleteAccountRequest request)
+    {
+        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId);
+
+        if (user == null)
+            return NotFound("Không tìm thấy người dùng");
+
+        if (string.IsNullOrWhiteSpace(request.Password) ||
+            !_hasher.Verify(request.Password, user.PasswordHash))
+        {
+            return BadRequest("Mật khẩu không chính xác");
+        }
+
+        if (!string.IsNullOrWhiteSpace(user.AvatarUrl))
+            await _fileStorageService.DeleteAsync(user.AvatarUrl);
+
+        _context.Users.Remove(user);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { Success = true, Message = "Đã xóa tài khoản vĩnh viễn" });
+    }
+
+    [Authorize]
+    [HttpPost("verify-password")]
+    public async Task<IActionResult> VerifyPassword(DeleteAccountRequest request)
+    {
+        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId);
+        if (user == null) return NotFound("Không tìm thấy người dùng");
+
+        if (string.IsNullOrWhiteSpace(request.Password) ||
+            !_hasher.Verify(request.Password, user.PasswordHash))
+            return BadRequest("Mật khẩu không chính xác");
+
+        return Ok(new { Success = true });
     }
 
     

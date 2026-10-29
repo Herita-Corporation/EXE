@@ -38,7 +38,9 @@ generic/fake names.
 3. Match the same activity_type category (e.g. if it's a restaurant, suggest \
 other restaurants — not hotels or attractions).
 4. Keep cost estimates (VND) realistic and within the given budget cap when one \
-is provided.
+is provided. For hotels, "cost" is the nightly room rate and MUST be greater \
+than 0 even when the source itinerary row has cost=0 because another hotel row \
+already carried that day's room charge.
 5. This app is Vietnamese-language, for Vietnamese travelers — write "activity" \
 and "notes" in Vietnamese (tiếng Việt). Keep "name" and "location" as their real \
 names, do not translate them.
@@ -137,6 +139,8 @@ class OpenAIClient:
                     ],
                     temperature=0.2,
                     response_format={"type": "json_object"},
+                    # Avoid truncating a long itinerary after its first days.
+                    max_tokens=12000,
                 )
 
                 raw = response.choices[0].message.content or ""

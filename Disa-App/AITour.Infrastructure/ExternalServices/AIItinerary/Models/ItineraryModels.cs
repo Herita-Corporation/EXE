@@ -18,6 +18,9 @@ public class GenerateItineraryRequest
     [JsonPropertyName("budget")]
     public decimal Budget { get; set; }
 
+    [JsonPropertyName("travelers")]
+    public int Travelers { get; set; } = 1;
+
     [JsonPropertyName("start_date")]
     public string StartDate { get; set; } = string.Empty; // "YYYY-MM-DD"
 

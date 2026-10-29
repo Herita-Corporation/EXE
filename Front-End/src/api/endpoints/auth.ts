@@ -1,6 +1,7 @@
 import { request } from "@/api/http";
 import type {
   ChangeEmailRequest,
+  DeleteAccountRequest,
   ChangePasswordRequest,
   ChangePhoneRequest,
   ChangePhoneResponse,
@@ -45,6 +46,20 @@ export function me() {
 
 export function changePassword(payload: ChangePasswordRequest) {
   return request<string>("iam", "/api/auth/change-password", {
+    method: "POST",
+    data: payload,
+  });
+}
+
+export function deleteAccount(payload: DeleteAccountRequest) {
+  return request<{ success: boolean; message: string }>("iam", "/api/auth/delete-account", {
+    method: "DELETE",
+    data: payload,
+  });
+}
+
+export function verifyPassword(payload: DeleteAccountRequest) {
+  return request<{ success: boolean }>("iam", "/api/auth/verify-password", {
     method: "POST",
     data: payload,
   });

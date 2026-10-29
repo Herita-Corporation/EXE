@@ -27,15 +27,6 @@ public class MissionSubmissionService : IMissionSubmissionService
         _evidenceRepository = evidenceRepository;
         _fileStorageService = fileStorageService;
     }
-    public MissionSubmissionService(
-        IUserMissionRepository userMissionRepository,
-        IMissionSubmissionRepository submissionRepository,
-        IMissionEvidenceRepository evidenceRepository)
-    {
-        _userMissionRepository = userMissionRepository;
-        _submissionRepository = submissionRepository;
-        _evidenceRepository = evidenceRepository;
-    }
     public async System.Threading.Tasks.Task<Guid> SubmitMissionAsync(
      Guid userMissionId,
      SubmitMissionRequest request)
@@ -46,7 +37,30 @@ public class MissionSubmissionService : IMissionSubmissionService
             throw new Exception("Mission not found.");
 
         if (mission.Status != MissionStatus.Assigned)
-            throw new Exception("Mission cannot be submitted.");
+            throw new InvalidOperationException("Nhiệm vụ đã được nộp hoặc không còn khả dụng.");
+
+        if (mission.Template.RequiresPhoto && request.Photo == null)
+            throw new InvalidOperationException("Nhiệm vụ yêu cầu ảnh được chụp trực tiếp trong ứng dụng.");
+
+        if (mission.Template.RequiresVideo && request.Video == null)
+            throw new InvalidOperationException("Nhiệm vụ yêu cầu video được quay trực tiếp trong ứng dụng.");
+
+        if (mission.Template.RequiresVideo && mission.Template.MinVideoSeconds.HasValue &&
+            (!request.VideoDurationSeconds.HasValue ||
+             request.VideoDurationSeconds.Value < mission.Template.MinVideoSeconds.Value))
+        {
+            throw new InvalidOperationException(
+                $"Video phải dài ít nhất {mission.Template.MinVideoSeconds.Value} giây.");
+        }
+
+        // Evidence from an old/future timestamp is not accepted. The app only
+        // exposes its live camera, while this server check also protects direct API calls.
+        var now = DateTime.UtcNow;
+        var takenAtUtc = request.TakenAt.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(request.TakenAt, DateTimeKind.Utc)
+            : request.TakenAt.ToUniversalTime();
+        if (takenAtUtc < now.AddMinutes(-10) || takenAtUtc > now.AddMinutes(2))
+            throw new InvalidOperationException("Ảnh hoặc video phải được ghi nhận tại thời điểm thực hiện nhiệm vụ.");
 
         // Vị trí phải khớp địa điểm nhiệm vụ — kiểm tra TRƯỚC khi lưu gì,
         // để nộp sai chỗ không tạo submission và nhiệm vụ vẫn ở Assigned
@@ -90,7 +104,7 @@ public class MissionSubmissionService : IMissionSubmissionService
                 MediaUrl = imageUrl,
                 Latitude = request.Latitude,
                 Longitude = request.Longitude,
-                TakenAt = request.TakenAt
+                TakenAt = takenAtUtc
             };
 
             await _evidenceRepository.AddAsync(evidence);
@@ -110,7 +124,7 @@ public class MissionSubmissionService : IMissionSubmissionService
                 MediaUrl = videoUrl,
                 Latitude = request.Latitude,
                 Longitude = request.Longitude,
-                TakenAt = request.TakenAt
+                TakenAt = takenAtUtc
             };
 
             await _evidenceRepository.AddAsync(evidence);
@@ -126,7 +140,7 @@ public class MissionSubmissionService : IMissionSubmissionService
 
     // Place GPS comes from free-text geocoding of the place name, so it can
     // be off by a block or two — keep the radius forgiving.
-    private const double MaxDistanceMeters = 1000;
+    private const double MaxDistanceMeters = 500;
 
     private static double DistanceMeters(double lat1, double lng1, double lat2, double lng2)
     {

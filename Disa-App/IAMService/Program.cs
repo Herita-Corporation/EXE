@@ -56,6 +56,9 @@ namespace IAMService
                 options.UseSqlServer(
                     builder.Configuration.GetConnectionString("IAMDb"));
             });
+            var jwtKey = builder.Configuration["Jwt:Key"]
+                ?? throw new InvalidOperationException("Missing required configuration: Jwt:Key");
+
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -69,7 +72,7 @@ namespace IAMService
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+                Encoding.UTF8.GetBytes(jwtKey))
         };
 
         options.Events = new JwtBearerEvents
@@ -111,7 +114,6 @@ namespace IAMService
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddScoped<IFileStorageService, FileStorageService>();
             builder.Services.AddScoped<IPushNotificationService, ExpoPushNotificationService>();
-            builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
             var app = builder.Build();
 
@@ -129,7 +131,7 @@ namespace IAMService
             }
 
             
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
 
             // Serves Event cover images / avatars saved by FileStorageService
             // (Uploads/Images) at http://.../uploads/images/... — the folder
@@ -143,9 +145,18 @@ namespace IAMService
                 RequestPath = "/uploads"
             });
 
+            app.UseRouting();
+
+            // Cho phép React Vite gọi API từ localhost:5173
+            app.UseCors("DisaFrontend");
+
+            // Xác thực JWT
             app.UseAuthentication();
+
+            // Phân quyền Admin / Partner
             app.UseAuthorization();
 
+            // Đăng ký Controller
             app.MapControllers();
 
             app.Run();

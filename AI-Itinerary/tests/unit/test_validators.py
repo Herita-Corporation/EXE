@@ -80,9 +80,19 @@ class TestGenerateItineraryRequestSchema:
             cities=["Da Nang", "Hoi An", "Hue"],
             budget=15_000_000,
             start_date=date(2027, 1, 1),
-            end_date=date(2027, 1, 7),
+            end_date=date(2027, 1, 5),
         )
         assert len(req.cities) == 3
+
+    def test_more_than_five_days_raises(self):
+        with pytest.raises(ValidationError):
+            GenerateItineraryRequest(
+                user_id=uuid.uuid4(),
+                cities=["Da Nang"],
+                budget=5_000_000,
+                start_date=date(2027, 1, 1),
+                end_date=date(2027, 1, 6),
+            )
 
     def test_preferences_optional(self):
         req = GenerateItineraryRequest(

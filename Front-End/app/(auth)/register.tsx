@@ -24,6 +24,7 @@ export default function RegisterScreen() {
   const [confirm, setConfirm] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -143,9 +144,19 @@ export default function RegisterScreen() {
           returnKeyType="done"
           label={t("auth.confirmPassword")}
           icon="shield-checkmark-outline"
-          secureTextEntry={!showPassword}
+          secureTextEntry={!showConfirmPassword}
           value={confirm}
           onChangeText={setConfirm}
+          error={confirm.length > 0 && password !== confirm ? t("auth.passwordsDontMatch") : null}
+          rightElement={
+            <Pressable onPress={() => setShowConfirmPassword((s) => !s)}>
+              <Ionicons
+                name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                size={18}
+                color={colors.textMuted}
+              />
+            </Pressable>
+          }
         />
 
         <Pressable style={styles.tosRow} onPress={() => setAgreed((a) => !a)}>

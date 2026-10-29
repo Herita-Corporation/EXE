@@ -67,7 +67,24 @@ public class AIItineraryClient
             _jsonOptions,
             cancellationToken);
 
-        return await HandleResponseAsync<ItineraryResponse>(response, "GenerateItinerary", cancellationToken);
+        var result = await HandleResponseAsync<ItineraryResponse>(
+            response, "GenerateItinerary", cancellationToken);
+
+        if (result is not null &&
+            DateOnly.TryParse(request.StartDate, out var startDate) &&
+            DateOnly.TryParse(request.EndDate, out var endDate))
+        {
+            var expectedDays = endDate.DayNumber - startDate.DayNumber + 1;
+            if (result.Days.Count != expectedDays)
+            {
+                throw new HttpRequestException(
+                    $"AI-Itinerary returned {result.Days.Count}/{expectedDays} days.",
+                    null,
+                    HttpStatusCode.BadGateway);
+            }
+        }
+
+        return result;
     }
 
     // ── Get Itinerary ─────────────────────────────────────────────────────────
@@ -113,6 +130,19 @@ public class AIItineraryClient
         return result?.Success ?? false;
     }
 
+    public async Task<bool> DeleteAllUserDataAsync(
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        SetBearerToken(bearerToken);
+        var response = await _httpClient.DeleteAsync(
+            "/api/v1/itinerary/user-data/all",
+            cancellationToken);
+        var result = await HandleResponseAsync<DeleteItineraryResponse>(
+            response, "DeleteAllUserData", cancellationToken);
+        return result?.Success ?? false;
+    }
+
     // ── Activity Alternatives ("edit this place" feature) ────────────────────
 
     /// <summary>
@@ -136,6 +166,21 @@ public class AIItineraryClient
 
         return await HandleResponseAsync<ActivityAlternativesResponse>(
             response, "GetActivityAlternatives", cancellationToken);
+    }
+
+    public async Task<LocationCoords?> ResolveActivityCoordinatesAsync(
+        Guid itineraryId,
+        string activityId,
+        string bearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        SetBearerToken(bearerToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/itinerary/{itineraryId}/activities/{activityId}/coordinates");
+        var response = await _httpClient.SendAsync(request, cancellationToken);
+        return await HandleResponseAsync<LocationCoords>(
+            response, "ResolveActivityCoordinates", cancellationToken);
     }
 
     /// <summary>

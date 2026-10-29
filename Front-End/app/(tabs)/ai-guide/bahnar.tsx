@@ -246,6 +246,10 @@ export default function BahnarTranslateScreen() {
             <Text style={styles.hintText}>{t("aiGuide.firstRunNotice")}</Text>
           </View>
         ) : null}
+        <View style={styles.warningCard}>
+          <Ionicons name="warning-outline" size={18} color={colors.warning} />
+          <Text style={styles.warningText}>{t("aiGuide.accuracyDisclaimer")}</Text>
+        </View>
         <ErrorBanner message={error} />
 
         {/* ── Speak ─────────────────────────────────────────────── */}
@@ -374,6 +378,15 @@ const styles = StyleSheet.create({
     padding: spacing(1.25),
   },
   hintText: { flex: 1, fontSize: 12, color: colors.navyDeep },
+  warningCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing(0.75),
+    backgroundColor: colors.goldMuted,
+    borderRadius: radius.md,
+    padding: spacing(1.25),
+  },
+  warningText: { flex: 1, fontSize: 12, lineHeight: 17, color: colors.navyDeep },
   micWrap: { alignItems: "center", gap: spacing(1), paddingVertical: spacing(2) },
   micButton: {
     width: 96,

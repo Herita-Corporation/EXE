@@ -1,5 +1,17 @@
 import type { Locale } from "@/i18n/LocaleContext";
 
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** Vietnam calendar day regardless of the phone/emulator time-zone setting. */
+export function vietnamTodayIso(now = new Date()): string {
+  return new Date(now.getTime() + VIETNAM_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** Current 24-hour clock hour in Vietnam. */
+export function vietnamHour(now = new Date()): number {
+  return new Date(now.getTime() + VIETNAM_OFFSET_MS).getUTCHours();
+}
+
 /** "YYYY-MM-DD" for a Date, using the phone's local calendar day (not UTC —
  * toISOString() rolls back a day before 07:00 in Vietnam, UTC+7). */
 export function toIsoDate(date: Date): string {

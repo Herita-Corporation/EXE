@@ -25,7 +25,7 @@ const SECTIONS_EN = [
   },
   {
     title: "5. Your Choices",
-    body: "You can update your profile, change your password, or contact support to request account or data deletion.",
+    body: "You can update your profile, change your password, or permanently delete your account and data in Settings > Danger Zone. Contact support if you cannot sign in.",
   },
   {
     title: "6. Contact",
@@ -52,7 +52,7 @@ const SECTIONS_VI = [
   },
   {
     title: "5. Lựa chọn của bạn",
-    body: "Bạn có thể cập nhật hồ sơ, đổi mật khẩu, hoặc liên hệ hỗ trợ để yêu cầu xóa tài khoản hoặc dữ liệu.",
+    body: "Bạn có thể cập nhật hồ sơ, đổi mật khẩu hoặc xóa trực tiếp tài khoản và dữ liệu trong Cài đặt > Vùng nguy hiểm. Nếu không đăng nhập được, hãy liên hệ hỗ trợ.",
   },
   {
     title: "6. Liên hệ",

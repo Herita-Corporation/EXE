@@ -38,4 +38,20 @@ public class FileStorageService : IFileStorageService
 
         return $"{request.Scheme}://{request.Host}/uploads/images/{fileName}";
     }
+
+    public Task DeleteAsync(string mediaUrl)
+    {
+        var path = Uri.TryCreate(mediaUrl, UriKind.Absolute, out var uri)
+            ? uri.AbsolutePath
+            : mediaUrl;
+        if (!path.Replace('\\', '/').ToLowerInvariant().StartsWith("/uploads/images/"))
+            return Task.CompletedTask;
+
+        var fileName = Path.GetFileName(path);
+        var root = Path.GetFullPath(Path.Combine("Uploads", "Images"));
+        var target = Path.GetFullPath(Path.Combine(root, fileName));
+        if (target.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && File.Exists(target))
+            File.Delete(target);
+        return Task.CompletedTask;
+    }
 }

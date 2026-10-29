@@ -49,6 +49,12 @@ class ItineraryRepository:
         )
         return result.rowcount > 0
 
+    async def delete_by_user(self, user_id: UUID) -> int:
+        result = await self.db.execute(
+            delete(GeneratedItinerary).where(GeneratedItinerary.user_id == user_id)
+        )
+        return result.rowcount or 0
+
     async def get_by_user(self, user_id: UUID, limit: int = 20) -> list[GeneratedItinerary]:
         result = await self.db.execute(
             select(GeneratedItinerary)

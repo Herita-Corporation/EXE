@@ -111,7 +111,15 @@ namespace IAMService
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddScoped<IFileStorageService, FileStorageService>();
             builder.Services.AddScoped<IPushNotificationService, ExpoPushNotificationService>();
-
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("DisaFrontend", policy =>
+                {
+                    policy.WithOrigins("http://localhost:5173")
+                          .AllowAnyHeader()
+                          .AllowAnyMethod();
+                });
+            });
             var app = builder.Build();
 
             using (var scope = app.Services.CreateScope())
@@ -128,7 +136,7 @@ namespace IAMService
             }
 
             
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
 
             // Serves Event cover images / avatars saved by FileStorageService
             // (Uploads/Images) at http://.../uploads/images/... — the folder
@@ -142,9 +150,18 @@ namespace IAMService
                 RequestPath = "/uploads"
             });
 
+            app.UseRouting();
+
+            // Cho phép React Vite gọi API từ localhost:5173
+            app.UseCors("DisaFrontend");
+
+            // Xác thực JWT
             app.UseAuthentication();
+
+            // Phân quyền Admin / Partner
             app.UseAuthorization();
 
+            // Đăng ký Controller
             app.MapControllers();
 
             app.Run();

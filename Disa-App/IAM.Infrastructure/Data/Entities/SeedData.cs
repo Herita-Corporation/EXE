@@ -1,4 +1,4 @@
-﻿using IAM.Infrastructure.Data.Entities;
+using IAM.Infrastructure.Data.Entities;
 using IAM.Infrastructure.Security;
 
 namespace IAM.Infrastructure.Data;
@@ -17,6 +17,12 @@ public static class SeedData
             var customerRole = new Role { Name = "Customer" };
 
             context.Roles.AddRange(adminRole, managerRole, customerRole);
+            context.SaveChanges();
+        }
+
+        if (!context.Roles.Any(x => x.Name == "Partner"))
+        {
+            context.Roles.Add(new Role { Name = "Partner", Description = "Business partner" });
             context.SaveChanges();
         }
 

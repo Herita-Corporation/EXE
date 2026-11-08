@@ -188,6 +188,116 @@ namespace IAM.Infrastructure.Data.Migrations
                     b.ToTable("PartnerInvoices");
                 });
 
+            modelBuilder.Entity("IAM.Infrastructure.Data.Entities.PartnerLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ConfirmedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ConsentReference")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("FreeEndsAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FreeStartsAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("PublishedVersion")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SourceRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PartnerId");
+
+                    b.HasIndex("SourceRequestId");
+
+                    b.ToTable("PartnerLocations", (string)null);
+                });
+
+            modelBuilder.Entity("IAM.Infrastructure.Data.Entities.PartnerLocationMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("InvitedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("LocationId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("PartnerLocationMembers", (string)null);
+                });
+
+            modelBuilder.Entity("IAM.Infrastructure.Data.Entities.PartnerOwnershipAudit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("NewOwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PreviousOwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("TransferredAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PartnerId");
+
+                    b.ToTable("PartnerOwnershipAudits", (string)null);
+                });
+
             modelBuilder.Entity("IAM.Infrastructure.Data.Entities.PartnerProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -245,6 +355,39 @@ namespace IAM.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("PartnerProfiles");
+                });
+
+            modelBuilder.Entity("IAM.Infrastructure.Data.Entities.PartnerPublication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("PartnerPublications", (string)null);
                 });
 
             modelBuilder.Entity("IAM.Infrastructure.Data.Entities.PartnerRequestImage", b =>
@@ -554,6 +697,44 @@ namespace IAM.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Partner");
+                });
+
+            modelBuilder.Entity("IAM.Infrastructure.Data.Entities.PartnerLocation", b =>
+                {
+                    b.HasOne("IAM.Infrastructure.Data.Entities.PartnerProfile", "Partner")
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IAM.Infrastructure.Data.Entities.PartnerContentRequest", "SourceRequest")
+                        .WithMany()
+                        .HasForeignKey("SourceRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Partner");
+
+                    b.Navigation("SourceRequest");
+                });
+
+            modelBuilder.Entity("IAM.Infrastructure.Data.Entities.PartnerLocationMember", b =>
+                {
+                    b.HasOne("IAM.Infrastructure.Data.Entities.PartnerLocation", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IAM.Infrastructure.Data.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Location");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("IAM.Infrastructure.Data.Entities.PartnerProfile", b =>

@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Task.Infrastructure/Task.Infrastructure.csproj" /><ProjectReference Include="../IAM.Infrastructure/IAM.Infrastructure.csproj" /><ProjectReference Include="../Task.Presentation/Task.Presentation.csproj" /></ItemGroup>
+</Project>

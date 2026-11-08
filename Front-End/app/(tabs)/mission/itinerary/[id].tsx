@@ -41,6 +41,9 @@ import {
   listUserMissions,
 } from "@/api/endpoints/missions";
 import { ApiError } from "@/api/http";
+import { changeTripLifecycle } from "@/api/endpoints/itinerary";
+import { TripLifecycleActions } from "@/components/TripLifecycleActions";
+import { PartnerOffers } from "@/components/PartnerOffers";
 import {
   addItineraryToHistory,
   getItineraryHistory,
@@ -1004,11 +1007,14 @@ export default function ItineraryDetailScreen() {
     setStarting(true);
     try {
       if (!started) {
+        await changeTripLifecycle(id, "START");
         await markItineraryStarted(user.id, id);
         setStarted(true);
         showToast(t("itineraryDetail.startedToast"), "success");
       }
       await startNavigation();
+    } catch (e) {
+      Alert.alert(t("itineraries.title"), e instanceof Error ? e.message : "Unable to start trip");
     } finally {
       setStarting(false);
     }
@@ -1075,6 +1081,8 @@ export default function ItineraryDetailScreen() {
 
         {/* 1 ── Hero + trip summary ── */}
         <View>
+          <TripLifecycleActions tripId={id} />
+          <PartnerOffers tripId={id} />
           <Text style={screenStyles.subtitleText}>
             {t("itineraryDetail.subtitle", { days: data.trip_summary.trip_duration_days })}
           </Text>

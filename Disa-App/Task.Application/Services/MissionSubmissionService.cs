@@ -44,6 +44,8 @@ public class MissionSubmissionService : IMissionSubmissionService
 
         if (mission.Template.RequiresVideo && request.Video == null)
             throw new InvalidOperationException("Nhiệm vụ yêu cầu video được quay trực tiếp trong ứng dụng.");
+        if (request.Video != null && (!request.VideoDurationSeconds.HasValue || request.VideoDurationSeconds.Value < 5))
+            throw new InvalidOperationException("Video phải có ít nhất 5 giây hình ảnh được xác minh trên máy chủ.");
 
         if (mission.Template.RequiresVideo && mission.Template.MinVideoSeconds.HasValue &&
             (!request.VideoDurationSeconds.HasValue ||

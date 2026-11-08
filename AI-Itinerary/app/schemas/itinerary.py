@@ -221,6 +221,7 @@ class ItineraryResponse(BaseModel):
     days: List[DayPlan]
     total_cost: float
     created_at: Optional[str] = None
+    lifecycle: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = {
         "json_schema_extra": {

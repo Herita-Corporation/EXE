@@ -36,6 +36,7 @@ public partial class IAMDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(IAMDbContext).Assembly);
 
         modelBuilder.Entity<PartnerProfile>(e => {
             e.HasKey(x => x.Id);

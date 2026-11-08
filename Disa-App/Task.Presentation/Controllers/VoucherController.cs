@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Task.Application.DTOs.Requests;
 using Task.Application.DTOs.Responses;
 using Task.Application.Interfaces.Services;
+using System.Security.Claims;
 
 namespace Task.Presentation.Controllers;
 
@@ -93,22 +94,28 @@ public class VoucherController : ControllerBase
     }
 
     [HttpGet("balance/{userId}")]
+    [Authorize]
     public async System.Threading.Tasks.Task<IActionResult> GetBalance(Guid userId)
     {
+        if (User.FindFirstValue(ClaimTypes.NameIdentifier) != userId.ToString()) return Forbid();
         var result = await _service.GetBalanceAsync(userId);
         return Ok(result);
     }
 
     [HttpGet("owned/{userId}")]
+    [Authorize]
     public async System.Threading.Tasks.Task<IActionResult> GetOwned(Guid userId)
     {
+        if (User.FindFirstValue(ClaimTypes.NameIdentifier) != userId.ToString()) return Forbid();
         var result = await _service.GetOwnedAsync(userId);
         return Ok(result);
     }
 
     [HttpPost("{id}/redeem")]
+    [Authorize]
     public async System.Threading.Tasks.Task<IActionResult> Redeem(Guid id, RedeemVoucherRequest request)
     {
+        if (User.FindFirstValue(ClaimTypes.NameIdentifier) != request.UserId.ToString()) return Forbid();
         try
         {
             var result = await _service.RedeemAsync(id, request.UserId);

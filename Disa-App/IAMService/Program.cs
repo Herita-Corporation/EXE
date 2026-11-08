@@ -108,10 +108,16 @@ namespace IAMService
     });
 
             builder.Services.AddAuthorization();
+            builder.Services.AddCors(options => options.AddPolicy("DisaFrontend", policy =>
+                policy.WithOrigins(builder.Configuration.GetSection("PartnerVouchers:WebOrigins").Get<string[]>() ?? new[] { "http://localhost:5173", "http://localhost:5020" })
+                    .AllowAnyHeader().AllowAnyMethod()));
 
             builder.Services.AddScoped<BCryptPassworkHasher>();
             builder.Services.AddScoped<JwtTokenGenerator>();
+            builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
             builder.Services.AddHttpContextAccessor();
+            builder.Services.AddHttpClient("Oc3Sync", c => c.Timeout = TimeSpan.FromSeconds(10));
+            builder.Services.AddHostedService<IAMService.Services.PartnerPublicationWorker>();
             builder.Services.AddScoped<IFileStorageService, FileStorageService>();
             builder.Services.AddScoped<IPushNotificationService, ExpoPushNotificationService>();
 

@@ -9,7 +9,8 @@ import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
-import { getItinerary } from "@/api/endpoints/itinerary";
+import { getItinerary, listMyItineraries } from "@/api/endpoints/itinerary";
+import { ApiError } from "@/api/http";
 import { getItineraryHistory, type ItineraryHistoryEntry } from "@/utils/itineraryHistory";
 import { useSmartBack } from "@/utils/backNavigation";
 import { useAuth } from "@/context/AuthContext";
@@ -29,6 +30,7 @@ export default function MyItinerariesScreen() {
   const { user } = useAuth();
   const { t, locale } = useLocale();
   const [loading, setLoading] = useState(true);
+  const [cloudError, setCloudError] = useState("");
   const [items, setItems] = useState<
     { entry: ItineraryHistoryEntry; data: ItineraryResponse }[]
   >([]);
@@ -36,6 +38,17 @@ export default function MyItinerariesScreen() {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setItems([]); setCloudError("");
+    try {
+      const trips = await listMyItineraries();
+      setItems(trips.map(data => ({ data, entry: { id: data.itinerary_id, cities: data.trip_summary.cities, totalCost: data.total_cost, createdAt: data.created_at ?? "" } })));
+      setLoading(false); return;
+    } catch (e) {
+      if (!(e instanceof ApiError) || (e.status !== 404 && e.status !== 405)) {
+        setCloudError(e instanceof Error ? e.message : "Unable to load cloud history"); setLoading(false); return;
+      }
+      setCloudError(locale === "vi" ? "Máy chủ chưa hỗ trợ lịch sử cloud; đang xem dữ liệu thiết bị." : "Cloud history is not deployed; showing this device's history.");
+    }
     const history = await getItineraryHistory(user.id);
     // Sorted newest-first by the local history's own createdAt.
     const results = await Promise.all(
@@ -55,7 +68,7 @@ export default function MyItinerariesScreen() {
       )
     );
     setLoading(false);
-  }, [user]);
+  }, [user, locale]);
 
   useFocusEffect(
     useCallback(() => {
@@ -64,20 +77,20 @@ export default function MyItinerariesScreen() {
   );
 
   const today = todayIso();
+  const group = (data: ItineraryResponse) => data.display_group ?? (data.lifecycle?.status === "COMPLETED" || data.lifecycle?.status === "CANCELLED" || data.trip_summary.end_date < today ? "PAST" : data.trip_summary.start_date > today ? "UPCOMING" : "ONGOING");
   // Calendar dates determine Current/Future/Past. `startedAt` records a user
   // action only; it is not lifecycle truth for a scheduled itinerary.
   const currentItems = items.filter(
     ({ data }) =>
-      data.trip_summary.start_date <= today &&
-      data.trip_summary.end_date >= today
+      group(data) === "ONGOING"
   );
   const future = items
-    .filter(({ data }) => data.trip_summary.start_date > today)
+    .filter(({ data }) => group(data) === "UPCOMING")
     .sort((a, b) =>
       a.data.trip_summary.start_date.localeCompare(b.data.trip_summary.start_date)
     );
   const past = items
-    .filter(({ data }) => data.trip_summary.end_date < today)
+    .filter(({ data }) => group(data) === "PAST")
     .sort((a, b) =>
       b.data.trip_summary.end_date.localeCompare(a.data.trip_summary.end_date)
     );
@@ -120,6 +133,7 @@ export default function MyItinerariesScreen() {
   return (
     <ScreenContainer backgroundColor={colors.surface}>
       <BackHeader title={t("itineraries.title")} onBack={goBack} />
+      {!!cloudError && <Text style={{ padding: 16, color: colors.textMuted }}>{cloudError}</Text>}
       <Text style={styles.subtitle}>
         {t("itineraries.subtitle")}
       </Text>

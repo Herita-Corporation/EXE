@@ -56,6 +56,9 @@ export interface DayPlan {
 }
 
 export interface ItineraryResponse {
+  lifecycle?: { status?: string; version?: number };
+  display_group?: "PAST" | "ONGOING" | "UPCOMING";
+  server_now?: string;
   itinerary_id: string;
   trip_summary: TripSummary;
   budget_breakdown: BudgetBreakdown;

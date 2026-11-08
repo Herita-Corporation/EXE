@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
+import { evidenceImage } from "@/utils/evidenceImage";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as Location from "expo-location";
@@ -236,7 +237,7 @@ export default function MissionDetailScreen() {
   // photo of the mission's place (or the generic region fallback).
   const heroSource =
     mission.evidenceUrl && mission.evidenceType === MISSION_TYPE_PHOTO
-      ? { uri: mission.evidenceUrl }
+      ? evidenceImage(mission.evidenceUrl)
       : getRegionImage(placeFromTitle(mission.title));
   const typeKey = MISSION_TYPE_KEY[mission.type];
   const statusKey = MISSION_STATUS_KEY[mission.status];

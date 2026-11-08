@@ -389,9 +389,17 @@ public class AuthController : ControllerBase
             return BadRequest("Mật khẩu không chính xác");
         }
 
+        // Partner ownership requires a deliberate handoff; do not cascade
+        // away business records or leave an orphaned venue.
+        if (await _context.PartnerProfiles.AnyAsync(p => p.UserId == userId))
+            return Conflict(new { code = "PARTNER_HANDOFF_REQUIRED", message = "Vui lòng chuyển quyền đối tác qua quản trị viên trước khi xóa tài khoản." });
+        if (_configuration.GetValue<bool>("PartnerVouchers:Enabled"))
+        {
+            var memberships = await _context.Set<IAM.Infrastructure.Data.Entities.PartnerLocationMember>().Where(m => m.UserId == userId).ToListAsync();
+            _context.RemoveRange(memberships);
+        }
         if (!string.IsNullOrWhiteSpace(user.AvatarUrl))
             await _fileStorageService.DeleteAsync(user.AvatarUrl);
-
         _context.Users.Remove(user);
         await _context.SaveChangesAsync();
 

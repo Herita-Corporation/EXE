@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Security;
 
 namespace IAM.Infrastructure.Data.Entities;
@@ -27,9 +27,46 @@ public partial class IAMDbContext : DbContext
 
 
 
+    public virtual DbSet<PartnerProfile> PartnerProfiles { get; set; } = null!;
+    public virtual DbSet<PartnerContentRequest> PartnerContentRequests { get; set; } = null!;
+    public virtual DbSet<PartnerRequestImage> PartnerRequestImages { get; set; } = null!;
+    public virtual DbSet<PartnerInvoice> PartnerInvoices { get; set; } = null!;
+    public virtual DbSet<PartnerReviewAudit> PartnerReviewAudits { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<PartnerProfile>(e => {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.UserId).IsUnique();
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.BusinessName).HasMaxLength(250).IsRequired();
+            e.Property(x => x.Email).HasMaxLength(255);
+        });
+        modelBuilder.Entity<PartnerContentRequest>(e => {
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.Partner).WithMany(x => x.Requests).HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Title).HasMaxLength(250).IsRequired();
+            e.Property(x => x.Price).HasPrecision(18,2);
+            e.Property(x => x.Latitude).HasPrecision(10,7);
+            e.Property(x => x.Longitude).HasPrecision(10,7);
+        });
+        modelBuilder.Entity<PartnerRequestImage>(e => {
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.Request).WithMany(x => x.Images).HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<PartnerInvoice>(e => {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.InvoiceNumber).IsUnique();
+            e.Property(x => x.Amount).HasPrecision(18,2);
+            e.HasOne(x => x.Partner).WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<PartnerReviewAudit>(e => {
+            e.HasKey(x => x.Id);
+            e.HasOne(x => x.Request).WithMany().HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
+        });
+
 
         modelBuilder.Entity<User>(entity =>
         {

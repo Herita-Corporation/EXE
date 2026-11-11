@@ -55,7 +55,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_FALLBACK_MODEL: str = "gpt-4.1-mini"
-    OPENAI_MAX_RETRIES: int = 2
+    # One retry switches to the fallback model. More retries make a slow
+    # multi-chunk itinerary disproportionately slower without improving UX.
+    OPENAI_MAX_RETRIES: int = 1
     # Complete multi-day JSON can legitimately take longer than 30 seconds.
     OPENAI_TIMEOUT: int = 90
 

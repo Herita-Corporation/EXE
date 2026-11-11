@@ -98,6 +98,11 @@ class TestCacheKey:
         key2 = service.build_cache_key(["Da Nang"], 10_000_000, 3, [], 2)
         assert key1 != key2
 
+    def test_ignores_city_and_preference_formatting(self, service):
+        key1 = service.build_cache_key([" Da Nang "], 5_000_000, 3, [" Food "])
+        key2 = service.build_cache_key(["da   nang"], 5_000_000, 3, ["food"])
+        assert key1 == key2
+
 
 class TestBudgetProfile:
     def test_large_budget_selects_luxury_and_target_band(self, service):

@@ -12,6 +12,12 @@ export interface LoginResponse {
   refreshToken: string;
 }
 
+export interface GoogleLoginRequest {
+  idToken: string;
+}
+
+export type GoogleLoginResponse = LoginResponse;
+
 export interface RegisterRequest {
   username: string;
   email: string;

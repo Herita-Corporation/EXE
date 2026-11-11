@@ -16,7 +16,9 @@
       "env": {
         "EXPO_PUBLIC_IAM_API_URL": "https://iam.disatravel.id.vn",
         "EXPO_PUBLIC_AITOUR_API_URL": "https://aitour.disatravel.id.vn",
-        "EXPO_PUBLIC_TASK_API_URL": "https://task.disatravel.id.vn"
+        "EXPO_PUBLIC_TASK_API_URL": "https://task.disatravel.id.vn",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "506948056952-rtv6uch08hspdkor2bt313mi6mfvrdco.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "506948056952-bvv50gogt7hfudeu8pll5dkdbthln02r.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -24,7 +26,9 @@
       "env": {
         "EXPO_PUBLIC_IAM_API_URL": "https://iam.disatravel.id.vn",
         "EXPO_PUBLIC_AITOUR_API_URL": "https://aitour.disatravel.id.vn",
-        "EXPO_PUBLIC_TASK_API_URL": "https://task.disatravel.id.vn"
+        "EXPO_PUBLIC_TASK_API_URL": "https://task.disatravel.id.vn",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "506948056952-rtv6uch08hspdkor2bt313mi6mfvrdco.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "506948056952-5uoaa2n5sdqv1kpbv8ipqnt7p6gcckm6.apps.googleusercontent.com"
       }
     }
   },

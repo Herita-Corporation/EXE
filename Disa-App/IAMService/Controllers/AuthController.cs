@@ -148,7 +148,9 @@ public class AuthController : ControllerBase
 
         var clientIds = _configuration
             .GetSection("GoogleAuth:ClientIds")
-            .Get<string[]>();
+            .Get<string[]>()?
+            .Where(clientId => !string.IsNullOrWhiteSpace(clientId))
+            .ToArray();
 
         if (clientIds == null || clientIds.Length == 0)
             return StatusCode(500, "Chưa cấu hình Google Client ID");

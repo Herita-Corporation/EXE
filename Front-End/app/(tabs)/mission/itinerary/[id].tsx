@@ -23,6 +23,7 @@ import { BackHeader } from "@/components/BackHeader";
 import { IconButton } from "@/components/IconButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { Chip } from "@/components/Chip";
+import { PartnerOfferCard } from "@/components/PartnerOfferCard";
 import { formatDate } from "@/utils/date";
 import { haptics } from "@/utils/haptics";
 import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
@@ -49,6 +50,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { getRegionImage } from "@/data/regionImages";
+import { VINH_LAM_OFFER } from "@/mocks/partnerOffer";
 import type { Activity, ActivityAlternative, ItineraryResponse } from "@/types/itinerary";
 import { MISSION_TYPE_PHOTO, MISSION_TYPE_VIDEO, MissionTemplate } from "@/types/missions";
 import { colors, radius, shadow, spacing } from "@/theme/colors";
@@ -947,8 +949,13 @@ export default function ItineraryDetailScreen() {
   return (
     <View style={screenStyles.root}>
       <ScrollView
+        // Keep the scroll viewport itself below the phone's status bar. A
+        // content-only top padding is not enough here: sticky children are
+        // pinned to the viewport's y=0 and would otherwise cover the clock,
+        // signal and battery indicators after the user scrolls.
+        style={{ marginTop: insets.top }}
         contentContainerStyle={{
-          paddingTop: insets.top + spacing(1),
+          paddingTop: spacing(1),
           // Room for the sticky action bar below.
           paddingBottom: insets.bottom + ACTION_BAR_HEIGHT + spacing(3),
           paddingHorizontal: spacing(2),
@@ -998,6 +1005,11 @@ export default function ItineraryDetailScreen() {
               hint={`${t("itineraryDetail.budget")} ${formatVndShort(data.trip_summary.budget)}`}
             />
           </View>
+          {data.trip_summary.trip_duration_days > 1 ? (
+            <View style={screenStyles.stayOffer}>
+              <PartnerOfferCard offer={VINH_LAM_OFFER} compact />
+            </View>
+          ) : null}
         </View>
 
         {/* 2 ── Day filter chips (sticky while scrolling) ── */}
@@ -1223,6 +1235,7 @@ const screenStyles = StyleSheet.create({
   summaryLabel: { color: "rgba(255,255,255,0.7)", fontSize: 11 },
   summaryHint: { color: "rgba(255,255,255,0.55)", fontSize: 10 },
   summaryDivider: { width: 1, height: 36, backgroundColor: "rgba(255,255,255,0.15)" },
+  stayOffer: { marginTop: spacing(1.5) },
   dayChipsWrap: {
     backgroundColor: colors.background,
     paddingVertical: spacing(1.25),

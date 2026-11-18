@@ -1,6 +1,6 @@
-import React, { useRef } from "react";
-import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from "react-native";
-import { Redirect, Tabs, usePathname } from "expo-router";
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Redirect, Tabs, router, usePathname, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -15,50 +15,37 @@ import { colors, radius, shadow, spacing, TAB_BAR_HEIGHT } from "@/theme/colors"
 // tab toward the right edge). Drawing the row ourselves avoids both.
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>>[0];
 
-// The 5 tab roots — bar shows only on these; every sub-screen (mission
-// detail, voucher detail, camera, chat, ...) hides it and relies on its own
-// back button instead. Driven by the actual URL (usePathname) rather than
+// Show the bar on the five dashboards and the legacy mission dashboard.
+// Sub-screens (mission detail, voucher detail, camera, chat, ...) hide it
+// and use their own back buttons. Driven by the URL (usePathname) rather than
 // the tabBar's own `state.routes[i].state`: that nested state only exists
 // once a tab's Stack has mounted (lazy by default), so reading it caused the
 // bar to flicker/hide even on root screens right after switching tabs.
-const ROOT_PATHS = new Set(["/home", "/ai-guide", "/mission", "/voucher", "/account"]);
+const ROOT_PATHS = new Set(["/home", "/ai-guide", "/missions", "/mission", "/voucher", "/account"]);
 
-// Old architecture on Android needs this opt-in for LayoutAnimation; a no-op
-// under the new architecture / Fabric, and on iOS.
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-const TAB_META: Record<string, { focused: keyof typeof Ionicons.glyphMap; unfocused: keyof typeof Ionicons.glyphMap }> = {
-  home: { focused: "home", unfocused: "home-outline" },
-  "ai-guide": { focused: "chatbubble-ellipses", unfocused: "chatbubble-ellipses-outline" },
-  mission: { focused: "trophy", unfocused: "trophy-outline" },
-  voucher: { focused: "pricetag", unfocused: "pricetag-outline" },
-  account: { focused: "person", unfocused: "person-outline" },
+const TAB_META: Record<string, {
+  focused: keyof typeof Ionicons.glyphMap;
+  unfocused: keyof typeof Ionicons.glyphMap;
+  href: Href;
+}> = {
+  home: { focused: "home", unfocused: "home-outline", href: "/(tabs)/home" },
+  "ai-guide": { focused: "chatbubble-ellipses", unfocused: "chatbubble-ellipses-outline", href: "/(tabs)/ai-guide" },
+  missions: { focused: "trophy", unfocused: "trophy-outline", href: "/(tabs)/missions" },
+  voucher: { focused: "pricetag", unfocused: "pricetag-outline", href: "/(tabs)/voucher" },
+  account: { focused: "person", unfocused: "person-outline", href: "/(tabs)/account" },
 };
 
-function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
+function CustomTabBar({ state, descriptors, emitter }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const { t } = useLocale();
   const tabLabels: Record<string, string> = {
     home: t("tabs.home"),
     "ai-guide": t("tabs.aiGuide"),
-    mission: t("tabs.mission"),
+    missions: t("tabs.mission"),
     voucher: t("tabs.voucher"),
     account: t("tabs.account"),
   };
-
-  // The active pill is wider than a plain icon, so switching tabs changes
-  // every item's width — which, with justifyContent: space-between, shifts
-  // every other item's x position too. Triggering a LayoutAnimation right
-  // before that width/position change commits turns it into a smooth slide
-  // instead of an instant jump.
-  const prevIndexRef = useRef(state.index);
-  if (prevIndexRef.current !== state.index) {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    prevIndexRef.current = state.index;
-  }
 
   if (!ROOT_PATHS.has(pathname)) {
     return null;
@@ -69,34 +56,49 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       {state.routes.map((route, index) => {
         const meta = TAB_META[route.name];
         if (!meta) return null;
-        const isFocused = state.index === index;
+        const isFocused = state.index === index || (
+          route.name === "missions" && state.routes[state.index]?.name === "mission"
+        );
 
         const onPress = () => {
-          const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+          const event = emitter.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
           if (event.defaultPrevented) return;
           if (!isFocused) haptics.tap();
-          // Always land on that tab's own root screen, not whatever it was
-          // last showing — a tab can be left mid-stack by a one-off deep
-          // link (e.g. Home's quick actions push straight into
-          // mission/create), and footer taps should still mean "take me to
-          // this tab's home", not "resume where I left off". navigate()
-          // with a nested `screen` target pops back to an existing instance
-          // of that screen instead of pushing a duplicate, so this both
-          // switches tabs and resets the nested stack in one action. "home"
-          // has no nested Stack, so it navigates directly.
-          if (route.name === "home") {
-            navigation.navigate("home");
-          } else {
-            navigation.navigate(route.name, { screen: "index" });
+          // The trophy opens the leaf missions screen. It never selects the
+          // mission feature stack, which may still show an itinerary or event.
+          if (route.name === "missions") {
+            router.navigate(meta.href);
+            return;
           }
+          // Other tabs still return to their own root screens.
+          const navigation = descriptors[route.key].navigation;
+          const nestedState = navigation.getState().routes.find((item) => item.key === route.key)?.state;
+          if (nestedState?.type === "stack" && nestedState.key) {
+            navigation.dispatch({
+              type: "POP_TO",
+              target: nestedState.key,
+              source: nestedState.routes[nestedState.index ?? 0]?.key,
+              payload: { name: "index" },
+            });
+          }
+          // The full href also selects index when the stack is unmounted
+          // or was first entered through a Home quick action.
+          router.navigate(meta.href);
         };
 
         return (
-          <Pressable key={route.key} onPress={onPress} hitSlop={8}>
+          <Pressable
+            key={route.key}
+            onPress={onPress}
+            style={[styles.tabButton, isFocused && styles.tabButtonActive]}
+            accessibilityRole="tab"
+            accessibilityLabel={tabLabels[route.name]}
+            accessibilityState={{ selected: isFocused }}
+          >
             {isFocused ? (
               <View style={styles.activePill}>
                 <Ionicons name={meta.focused} size={18} color="#FFFFFF" />
-                <Text style={styles.activePillLabel}>{tabLabels[route.name]}</Text>
+                <Text style={styles.activePillLabel} numberOfLines={1}>{tabLabels[route.name]}</Text>
               </View>
             ) : (
               <Ionicons name={meta.unfocused} size={22} color={colors.textMuted} />
@@ -123,9 +125,11 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="home" options={{ title: t("tabs.home") }} />
       <Tabs.Screen name="ai-guide" options={{ title: t("tabs.aiGuide") }} />
-      <Tabs.Screen name="mission" options={{ title: t("tabs.mission") }} />
+      <Tabs.Screen name="missions" options={{ title: t("tabs.mission") }} />
       <Tabs.Screen name="voucher" options={{ title: t("tabs.voucher") }} />
       <Tabs.Screen name="account" options={{ title: t("tabs.account") }} />
+      {/* Feature routes stay reachable without sharing the trophy tab's state. */}
+      <Tabs.Screen name="mission" options={{ title: t("tabs.mission") }} />
     </Tabs>
   );
 }
@@ -148,7 +152,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     elevation: 6,
   },
+  tabButton: {
+    flex: 1,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabButtonActive: { flex: 2.2 },
   activePill: {
+    maxWidth: "100%",
     flexDirection: "row",
     alignItems: "center",
     gap: spacing(0.75),
@@ -157,5 +170,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(1),
     paddingHorizontal: spacing(1.75),
   },
-  activePillLabel: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  activePillLabel: { color: "#FFFFFF", fontSize: 13, fontWeight: "700", flexShrink: 1 },
 });

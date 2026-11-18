@@ -3,6 +3,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputInstance,
   TextInputProps,
   View,
 } from "react-native";
@@ -16,7 +17,7 @@ interface Props extends TextInputProps {
   /** e.g. a password show/hide eye button. */
   rightElement?: React.ReactNode;
   /** Forwarded to the TextInput (React 19 ref-as-prop) for focus chaining. */
-  ref?: React.Ref<TextInput>;
+  ref?: React.Ref<TextInputInstance>;
 }
 
 export function Input({

@@ -31,6 +31,7 @@ export const en = {
     collection: "Collection",
     events: "Events",
     more: "More",
+    partners: "Partners",
     specialOffers: "Special Offers",
     viewAll: "View all",
     popularDestinations: "Popular Destinations in Vietnam",
@@ -45,6 +46,17 @@ export const en = {
     loungeTitle: "Airport Lounge",
     loungeLocation: "Tan Son Nhat T2",
     loungeOffer: "Complimentary Access",
+  },
+  partnerOffer: {
+    roomDiscount: "{discount}% off your stay",
+    diningDiscount: "{discount}% off your dining bill",
+    viewVoucher: "View details",
+    viewPartnerVouchers: "View this partner's vouchers",
+    staySuggestion: "Suggested stay",
+    points: "{points} points",
+    bookingTerms: "Applies to room reservations booked directly with the hotel.",
+    diningTerms: "Applies to dine-in orders at the restaurant.",
+    redemptionPending: "Awaiting launch",
   },
   account: {
     myAccount: "My Account",
@@ -221,6 +233,7 @@ export const en = {
     notificationsFailedMessage: "Permission was denied, or this isn't a physical device.",
   },
   voucher: {
+    catalogTitle: "Redeem vouchers",
     filterAll: "All Offers",
     filterHotels: "Hotels",
     filterDining: "Dining",
@@ -494,6 +507,7 @@ export const en = {
     remove: "Delete itinerary",
   },
   voucherDetail: {
+    title: "Voucher details",
     notFound: "Voucher not found.",
     expires: "Expires {date}",
     code: "Voucher code:",
@@ -564,6 +578,7 @@ export const vi: Translations = {
     collection: "Bộ sưu tập",
     events: "Sự kiện",
     more: "Thêm",
+    partners: "Đối tác",
     specialOffers: "Ưu đãi đặc biệt",
     viewAll: "Xem tất cả",
     popularDestinations: "Điểm đến nổi bật tại Việt Nam",
@@ -578,6 +593,17 @@ export const vi: Translations = {
     loungeTitle: "Phòng chờ sân bay",
     loungeLocation: "Tân Sơn Nhất T2",
     loungeOffer: "Miễn phí sử dụng",
+  },
+  partnerOffer: {
+    roomDiscount: "Giảm {discount}% tiền phòng",
+    diningDiscount: "Giảm {discount}% hóa đơn ăn uống",
+    viewVoucher: "Xem chi tiết",
+    viewPartnerVouchers: "Xem voucher của đối tác này",
+    staySuggestion: "Gợi ý lưu trú",
+    points: "{points} điểm",
+    bookingTerms: "Áp dụng khi đặt phòng trực tiếp với khách sạn.",
+    diningTerms: "Áp dụng khi dùng bữa tại nhà hàng.",
+    redemptionPending: "Chờ mở đổi",
   },
   account: {
     myAccount: "Tài khoản của tôi",
@@ -754,6 +780,7 @@ export const vi: Translations = {
     notificationsFailedMessage: "Quyền bị từ chối, hoặc đây không phải thiết bị thật.",
   },
   voucher: {
+    catalogTitle: "Đổi voucher",
     filterAll: "Tất cả ưu đãi",
     filterHotels: "Khách sạn",
     filterDining: "Ẩm thực",
@@ -1027,6 +1054,7 @@ export const vi: Translations = {
     remove: "Xóa lịch trình",
   },
   voucherDetail: {
+    title: "Chi tiết voucher",
     notFound: "Không tìm thấy voucher.",
     expires: "Hết hạn {date}",
     code: "Mã voucher:",

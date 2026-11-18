@@ -8,6 +8,7 @@ import { Card } from "@/components/Card";
 import { Avatar } from "@/components/Avatar";
 import { SectionHeader } from "@/components/SectionHeader";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
+import { PartnerLogoStrip } from "@/components/PartnerLogoStrip";
 import { VoucherIcon } from "@/components/VoucherIcon";
 import { useAuth } from "@/context/AuthContext";
 import { useGamification } from "@/hooks/useGamification";
@@ -102,10 +103,12 @@ export default function HomeScreen() {
         ))}
       </View>
 
+      <PartnerLogoStrip />
+
       <SectionHeader
         title={t("home.featuredMissions")}
         actionLabel={t("home.viewAll")}
-        onAction={() => router.push("/(tabs)/mission")}
+        onAction={() => router.navigate("/(tabs)/missions")}
       />
       <ScrollView
         horizontal

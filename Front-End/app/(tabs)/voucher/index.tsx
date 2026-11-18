@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { remoteImage } from "@/data/regionImages";
@@ -8,6 +8,8 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { GradientHero } from "@/components/GradientHero";
 import { VoucherCategoryPill, VoucherIcon } from "@/components/VoucherIcon";
+import { PartnerOfferCard } from "@/components/PartnerOfferCard";
+import { PARTNER_OFFERS } from "@/mocks/partnerOffer";
 import { ALL_CATEGORY_ICON, categoryStyle } from "@/utils/voucherCategory";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -28,8 +30,8 @@ import { brand, colors, radius, spacing } from "@/theme/colors";
 // same as other catalog content) — only the displayed Chip label is
 // translated, via this lookup, so the comparison against v.category still
 // works regardless of the selected app language.
-const FILTER_KEYS: Record<string, TranslationKey> = {
-  "All Offers": "voucher.filterAll",
+const ALL_OFFERS = "All Offers";
+const CATEGORY_KEYS: Record<string, TranslationKey> = {
   Hotels: "voucher.filterHotels",
   Dining: "voucher.filterDining",
   Experience: "voucher.filterExperience",
@@ -37,15 +39,16 @@ const FILTER_KEYS: Record<string, TranslationKey> = {
   Travel: "voucher.filterTravel",
   Transport: "voucher.filterTransport",
 };
-const FILTERS = Object.keys(FILTER_KEYS);
+const CATEGORIES = Object.entries(CATEGORY_KEYS);
 
 export default function VoucherScreen() {
+  const { partner } = useLocalSearchParams<{ partner?: string }>();
   const { user } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [balance, setBalance] = useState<PointsBalance | null>(null);
-  const [filter, setFilter] = useState("All Offers");
+  const [category, setCategory] = useState(ALL_OFFERS);
   const [error, setError] = useState<string | null>(null);
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,8 +81,18 @@ export default function VoucherScreen() {
     }, [load])
   );
 
-  const filtered =
-    filter === "All Offers" ? vouchers : vouchers.filter((v) => v.category === filter);
+  const selectedPartner = PARTNER_OFFERS.find((offer) => offer.partnerId === partner);
+  const filtered = selectedPartner
+    ? []
+    : vouchers.filter((voucher) => category === ALL_OFFERS || voucher.category === category);
+  const partnerOffers = selectedPartner
+    ? [selectedPartner]
+    : PARTNER_OFFERS.filter((offer) => category === ALL_OFFERS || offer.category === category);
+
+  function selectCategory(nextCategory: string) {
+    setCategory(nextCategory);
+    if (partner !== undefined) router.setParams({ partner: undefined });
+  }
 
   function onRedeem(v: Voucher) {
     if (!user) return;
@@ -116,7 +129,10 @@ export default function VoucherScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.navy} />
       }
     >
-      <ScreenHeader title={t("tabs.voucher")} subtitle={t("voucher.exploreExperiences")} />
+      <ScreenHeader
+        title={t("voucher.catalogTitle")}
+        subtitle={selectedPartner?.name ?? t("voucher.exploreExperiences")}
+      />
 
       <GradientHero style={styles.balanceCard} markStyle={{ opacity: 0.1 }}>
         <Text style={styles.balanceLabel}>{t("voucher.totalVoyagerBalance")}</Text>
@@ -130,7 +146,7 @@ export default function VoucherScreen() {
           </Pressable>
           <Pressable
             style={[styles.balanceBtn, styles.balanceBtnGold]}
-            onPress={() => router.push("/(tabs)/mission")}
+            onPress={() => router.navigate("/(tabs)/missions")}
           >
             <Ionicons name="flash" size={16} color={colors.onAmber} />
             <Text style={styles.balanceBtnText}>{t("voucher.earnMore")}</Text>
@@ -138,7 +154,7 @@ export default function VoucherScreen() {
         </View>
       </GradientHero>
 
-      <ErrorBanner message={error} />
+      <ErrorBanner message={selectedPartner ? null : error} />
 
       <ScrollView
         horizontal
@@ -146,25 +162,41 @@ export default function VoucherScreen() {
         style={styles.filterRow}
         contentContainerStyle={styles.filterContent}
       >
-        {FILTERS.map((f) => (
+        <Chip
+          label={t("voucher.filterAll")}
+          selected={!selectedPartner && category === ALL_OFFERS}
+          icon={ALL_CATEGORY_ICON}
+          onPress={() => selectCategory(ALL_OFFERS)}
+        />
+        {CATEGORIES.map(([value, label]) => (
           <Chip
-            key={f}
-            label={t(FILTER_KEYS[f])}
-            selected={filter === f}
-            icon={f === "All Offers" ? ALL_CATEGORY_ICON : categoryStyle(f).icon}
-            iconColor={f === "All Offers" ? colors.navy : categoryStyle(f).color}
-            onPress={() => setFilter(f)}
-            style={{ marginRight: spacing(1) }}
+            key={value}
+            label={t(label)}
+            selected={!selectedPartner && category === value}
+            icon={categoryStyle(value).icon}
+            iconColor={categoryStyle(value).color}
+            onPress={() => selectCategory(value)}
+          />
+        ))}
+        {PARTNER_OFFERS.map(({ partnerId, name, logo }) => (
+          <Chip
+            key={partnerId}
+            label={name}
+            selected={selectedPartner?.partnerId === partnerId}
+            icon={logo.icon}
+            iconColor={logo.color}
+            onPress={() => router.setParams({ partner: partnerId })}
           />
         ))}
       </ScrollView>
 
-      {loading ? (
+      {partnerOffers.map((offer) => <PartnerOfferCard key={offer.partnerId} offer={offer} />)}
+      {!selectedPartner && loading ? (
         <>
           <SkeletonCard />
           <SkeletonCard />
         </>
-      ) : filtered.length === 0 && !error ? (
+      ) : filtered.length === 0 && partnerOffers.length === 0 && !error ? (
         <EmptyState icon="pricetags-outline" title={t("voucher.noVouchers")} />
       ) : null}
 
@@ -229,8 +261,8 @@ const styles = StyleSheet.create({
   // fixed separately below via filterContent — but that only fixed the
   // children; the row's own box was still oversized, leaving blank space
   // around the now-normal-sized chips).
-  filterRow: { marginHorizontal: -spacing(2.5), paddingLeft: spacing(2.5), flexGrow: 0 },
-  filterContent: { alignItems: "center" },
+  filterRow: { marginHorizontal: -spacing(2.5), flexGrow: 0 },
+  filterContent: { alignItems: "center", gap: spacing(1), paddingHorizontal: spacing(2.5) },
   voucherHead: { flexDirection: "row", alignItems: "center", gap: spacing(1.5) },
   voucherTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
   voucherDescription: { fontSize: 13, lineHeight: 17, color: colors.textMuted },

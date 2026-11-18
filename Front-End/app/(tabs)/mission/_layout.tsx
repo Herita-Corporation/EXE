@@ -2,6 +2,10 @@ import React from "react";
 import { Stack } from "expo-router";
 import { colors } from "@/theme/colors";
 
+export const unstable_settings = {
+  anchor: "index",
+};
+
 export default function MissionLayout() {
   return (
     <Stack

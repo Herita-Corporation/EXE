@@ -4,18 +4,17 @@ import { router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { Card } from "@/components/Card";
 import { Avatar } from "@/components/Avatar";
 import { SectionHeader } from "@/components/SectionHeader";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { PartnerLogoStrip } from "@/components/PartnerLogoStrip";
-import { VoucherIcon } from "@/components/VoucherIcon";
+import { PartnerOfferBanner } from "@/components/PartnerOfferBanner";
 import { useAuth } from "@/context/AuthContext";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { TranslationKey } from "@/i18n/LocaleContext";
-import { HOME_OFFERS } from "@/mocks/homeOffers";
 import { FEATURED_MISSIONS } from "@/mocks/featuredMissions";
+import { PARTNER_OFFERS } from "@/mocks/partnerOffer";
 import { colors, isDark, radius, spacing } from "@/theme/colors";
 import { GradientHero } from "@/components/GradientHero";
 
@@ -35,6 +34,8 @@ const QUICK_ACTIONS: Array<{
   { key: "events", labelKey: "home.events", icon: "calendar-outline", href: "/(tabs)/mission/events?from=home" },
   { key: "translate", labelKey: "extra.translate", icon: "language-outline", href: "/(tabs)/ai-guide" },
 ];
+
+const [featuredOffer, ...otherOffers] = PARTNER_OFFERS;
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -103,7 +104,21 @@ export default function HomeScreen() {
         ))}
       </View>
 
-      <PartnerLogoStrip />
+      <PartnerLogoStrip offers={PARTNER_OFFERS} />
+
+      <View style={styles.offers}>
+        <SectionHeader
+          title={t("home.ongoingOffers")}
+          actionLabel={t("home.viewAll")}
+          onAction={() => router.push("/(tabs)/voucher")}
+        />
+        <PartnerOfferBanner offer={featuredOffer} featured />
+        <View style={styles.otherOffers}>
+          {otherOffers.map((offer) => (
+            <PartnerOfferBanner key={offer.partnerId} offer={offer} />
+          ))}
+        </View>
+      </View>
 
       <SectionHeader
         title={t("home.featuredMissions")}
@@ -130,31 +145,6 @@ export default function HomeScreen() {
               ])
             }
           />
-        ))}
-      </ScrollView>
-
-      <SectionHeader
-        title={t("home.specialOffers")}
-        actionLabel={t("home.viewAll")}
-        onAction={() => router.push("/(tabs)/voucher")}
-      />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.carousel}
-        contentContainerStyle={styles.carouselContent}
-      >
-        {HOME_OFFERS.map((offer) => (
-          <Pressable key={offer.id} onPress={() => router.push("/(tabs)/voucher")}>
-            <Card variant="elevated" style={styles.offerCard}>
-              <VoucherIcon category={offer.category} icon={offer.icon} size={48} />
-              <View style={styles.offerInfo}>
-                <Text style={styles.offerTitle} numberOfLines={1}>{t(offer.titleKey)}</Text>
-                <Text style={styles.offerLocation} numberOfLines={1}>{t(offer.locationKey)}</Text>
-                <Text style={styles.offerText} numberOfLines={1}>{t(offer.offerKey)}</Text>
-              </View>
-            </Card>
-          </Pressable>
         ))}
       </ScrollView>
     </ScreenContainer>
@@ -215,6 +205,8 @@ const styles = StyleSheet.create({
   },
   quickLabel: { fontSize: 11, color: colors.text, textAlign: "center", fontWeight: "600" },
 
+  offers: { gap: spacing(1.25) },
+  otherOffers: { flexDirection: "row", flexWrap: "wrap", gap: spacing(1.25) },
 
   // Bleeds to the screen edges so cards scroll off-screen; first card is
   // re-inset by the content container's paddingLeft.
@@ -225,16 +217,4 @@ const styles = StyleSheet.create({
     paddingBottom: spacing(1.5),
     gap: spacing(1.5),
   },
-
-  offerCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing(1.5),
-    width: 240,
-    padding: spacing(1.5),
-  },
-  offerInfo: { flex: 1, gap: 1 },
-  offerTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-  offerLocation: { fontSize: 12, color: colors.textMuted },
-  offerText: { fontSize: 13, fontWeight: "700", color: colors.link, marginTop: 2 },
 });

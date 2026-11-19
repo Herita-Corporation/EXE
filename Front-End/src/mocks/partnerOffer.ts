@@ -1,81 +1,128 @@
-import type { Ionicons } from "@expo/vector-icons";
 import type { ImageSource } from "expo-image";
+import type { Locale } from "@/i18n/LocaleContext";
 
-export const PARTNER_CATEGORY_COPY = {
-  Hotels: {
-    label: "voucher.filterHotels",
-    headline: "partnerOffer.roomDiscount",
-    terms: "partnerOffer.bookingTerms",
-  },
-  Dining: {
-    label: "voucher.filterDining",
-    headline: "partnerOffer.diningDiscount",
-    terms: "partnerOffer.diningTerms",
-  },
+export const PARTNER_CATEGORY_LABELS = {
+  Hotels: "voucher.filterHotels",
+  Dining: "voucher.filterDining",
 } as const;
+
+interface CampaignCopy {
+  title: string;
+  benefit: string;
+  terms: string;
+}
 
 export interface PartnerOffer {
   partnerId: string;
   name: string;
-  category: keyof typeof PARTNER_CATEGORY_COPY;
-  discountPercent: number;
+  category: keyof typeof PARTNER_CATEGORY_LABELS;
+  campaign: Record<Locale, CampaignCopy>;
   pointsCost: number;
   image: ImageSource | number;
-  logo: {
-    wordmark: string;
-    descriptor: string;
-    icon: keyof typeof Ionicons.glyphMap;
-    color: string;
-    cornerRatio: number;
-  };
+  logo: ImageSource | number;
 }
 
-export const VINH_LAM_OFFER: PartnerOffer = {
-  partnerId: "vinh-lam-hotel",
-  name: "Vịnh Lam Hotel",
+export const FEATURED_PARTNER_OFFER: PartnerOffer = {
+  partnerId: "vinpearl",
+  name: "Vinpearl",
   category: "Hotels",
-  discountPercent: 15,
-  pointsCost: 600,
-  image: require("@/assets/images/partner-hotel-demo.jpg"),
-  logo: {
-    wordmark: "Vịnh Lam",
-    descriptor: "Hotel",
-    icon: "water-outline",
-    color: "#176761",
-    cornerRatio: 0.5,
+  campaign: {
+    vi: {
+      title: "Thức dậy bên biển",
+      benefit: "Tặng bữa sáng cho 2 khách",
+      terms: "Áp dụng khi đặt gói nghỉ dưỡng cho 2 khách ở cùng phòng.",
+    },
+    en: {
+      title: "Wake up by the sea",
+      benefit: "Breakfast for two included",
+      terms: "Applies to a resort package for two guests sharing a room.",
+    },
   },
+  pointsCost: 600,
+  image: require("@/assets/images/partners/vinpearl-cover.jpg"),
+  logo: require("@/assets/images/partners/vinpearl-logo.png"),
 };
 
 export const PARTNER_OFFERS: readonly PartnerOffer[] = [
-  VINH_LAM_OFFER,
+  FEATURED_PARTNER_OFFER,
   {
-    partnerId: "bep-tram-muoi",
-    name: "Bếp Trầm & Muối",
-    category: "Dining",
-    discountPercent: 10,
-    pointsCost: 400,
-    image: require("@/assets/images/tram-muoi-cover.jpg"),
-    logo: {
-      wordmark: "Trầm & Muối",
-      descriptor: "Bếp Việt",
-      icon: "flame",
-      color: "#A54B2C",
-      cornerRatio: 0.24,
+    partnerId: "muong-thanh",
+    name: "Mường Thanh",
+    category: "Hotels",
+    campaign: {
+      vi: {
+        title: "Hai đêm khám phá phố",
+        benefit: "Giảm 200.000₫",
+        terms: "Áp dụng vào giá phòng khi đặt từ 2 đêm liên tiếp tại cùng khách sạn.",
+      },
+      en: {
+        title: "Two nights in town",
+        benefit: "Save ₫200,000",
+        terms: "Applies to the room rate when booking at least two consecutive nights at the same hotel.",
+      },
     },
+    pointsCost: 500,
+    image: require("@/assets/images/partners/muong-thanh-cover.jpg"),
+    logo: require("@/assets/images/partners/muong-thanh-logo.png"),
   },
   {
-    partnerId: "may-tang-retreat",
-    name: "Mây Tầng Retreat",
+    partnerId: "all-accor",
+    name: "ALL Accor",
     category: "Hotels",
-    discountPercent: 20,
-    pointsCost: 800,
-    image: require("@/assets/images/may-tang-cover.jpg"),
-    logo: {
-      wordmark: "Mây Tầng",
-      descriptor: "Retreat",
-      icon: "cloud-outline",
-      color: "#59468E",
-      cornerRatio: 0.36,
+    campaign: {
+      vi: {
+        title: "Ngủ nướng cuối tuần",
+        benefit: "Trả phòng tới 15h",
+        terms: "Áp dụng cho kỳ nghỉ cuối tuần, tùy tình trạng phòng tại thời điểm nhận phòng.",
+      },
+      en: {
+        title: "Sleep in this weekend",
+        benefit: "3 p.m. checkout",
+        terms: "Applies to weekend stays, subject to availability at check-in.",
+      },
     },
+    pointsCost: 800,
+    image: require("@/assets/images/partners/all-accor-cover.jpg"),
+    logo: require("@/assets/images/partners/all-accor-logo.png"),
+  },
+  {
+    partnerId: "pizza-4ps",
+    name: "Pizza 4P’s",
+    category: "Dining",
+    campaign: {
+      vi: {
+        title: "Hẹn nhau ăn pizza",
+        benefit: "Tặng 1 phần burrata",
+        terms: "Áp dụng khi dùng tại nhà hàng và gọi từ 2 bánh pizza.",
+      },
+      en: {
+        title: "Let’s get pizza",
+        benefit: "Free burrata",
+        terms: "Dine in and order at least two pizzas to receive one serving of burrata.",
+      },
+    },
+    pointsCost: 400,
+    image: require("@/assets/images/partners/pizza-4ps-cover.jpg"),
+    logo: require("@/assets/images/partners/pizza-4ps-logo.png"),
+  },
+  {
+    partnerId: "gogi-house",
+    name: "GoGi House",
+    category: "Dining",
+    campaign: {
+      vi: {
+        title: "Rủ hội bạn đi nướng",
+        benefit: "Đi 4, trả tiền 3",
+        terms: "Áp dụng cho nhóm 4 người lớn cùng chọn một hạng buffet.",
+      },
+      en: {
+        title: "BBQ with the crew",
+        benefit: "Four dine, three pay",
+        terms: "Applies to four adults ordering the same buffet tier.",
+      },
+    },
+    pointsCost: 450,
+    image: require("@/assets/images/partners/gogi-house-cover.jpg"),
+    logo: require("@/assets/images/partners/gogi-house-logo.png"),
   },
 ];

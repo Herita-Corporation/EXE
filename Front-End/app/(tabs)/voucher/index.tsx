@@ -3,19 +3,18 @@ import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } 
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { remoteImage } from "@/data/regionImages";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { GradientHero } from "@/components/GradientHero";
-import { VoucherCategoryPill, VoucherIcon } from "@/components/VoucherIcon";
+import { VoucherIcon } from "@/components/VoucherIcon";
+import { VoucherTicket } from "@/components/VoucherTicket";
 import { PartnerOfferCard } from "@/components/PartnerOfferCard";
 import { PARTNER_OFFERS } from "@/mocks/partnerOffer";
 import { ALL_CATEGORY_ICON, categoryStyle } from "@/utils/voucherCategory";
-import { Card } from "@/components/Card";
-import { Button } from "@/components/Button";
 import { Chip } from "@/components/Chip";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { SkeletonCard } from "@/components/Skeleton";
+import { formatDate } from "@/utils/date";
 import { haptics } from "@/utils/haptics";
 import * as vouchersApi from "@/api/endpoints/vouchers";
 import { ApiError } from "@/api/http";
@@ -42,13 +41,12 @@ const CATEGORY_KEYS: Record<string, TranslationKey> = {
 const CATEGORIES = Object.entries(CATEGORY_KEYS);
 
 export default function VoucherScreen() {
-  const { partner } = useLocalSearchParams<{ partner?: string }>();
+  const { partner, category: categoryParam } = useLocalSearchParams<{ partner?: string; category?: string }>();
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [balance, setBalance] = useState<PointsBalance | null>(null);
-  const [category, setCategory] = useState(ALL_OFFERS);
   const [error, setError] = useState<string | null>(null);
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,6 +79,7 @@ export default function VoucherScreen() {
     }, [load])
   );
 
+  const category = CATEGORIES.find(([value]) => value === categoryParam)?.[0] ?? ALL_OFFERS;
   const selectedPartner = PARTNER_OFFERS.find((offer) => offer.partnerId === partner);
   const filtered = selectedPartner
     ? []
@@ -90,8 +89,10 @@ export default function VoucherScreen() {
     : PARTNER_OFFERS.filter((offer) => category === ALL_OFFERS || offer.category === category);
 
   function selectCategory(nextCategory: string) {
-    setCategory(nextCategory);
-    if (partner !== undefined) router.setParams({ partner: undefined });
+    router.setParams({
+      partner: undefined,
+      category: nextCategory === ALL_OFFERS ? undefined : nextCategory,
+    });
   }
 
   function onRedeem(v: Voucher) {
@@ -178,62 +179,48 @@ export default function VoucherScreen() {
             onPress={() => selectCategory(value)}
           />
         ))}
-        {PARTNER_OFFERS.map(({ partnerId, name, logo }) => (
+        {PARTNER_OFFERS.map(({ partnerId, name, category }) => (
           <Chip
             key={partnerId}
             label={name}
             selected={selectedPartner?.partnerId === partnerId}
-            icon={logo.icon}
-            iconColor={logo.color}
+            icon={categoryStyle(category).icon}
+            iconColor={categoryStyle(category).color}
             onPress={() => router.setParams({ partner: partnerId })}
           />
         ))}
       </ScrollView>
 
-      {partnerOffers.map((offer) => <PartnerOfferCard key={offer.partnerId} offer={offer} />)}
-      {!selectedPartner && loading ? (
-        <>
-          <SkeletonCard />
-          <SkeletonCard />
-        </>
-      ) : filtered.length === 0 && partnerOffers.length === 0 && !error ? (
-        <EmptyState icon="pricetags-outline" title={t("voucher.noVouchers")} />
-      ) : null}
+      <View style={styles.voucherList}>
+        {partnerOffers.map((offer) => <PartnerOfferCard key={offer.partnerId} offer={offer} />)}
+        {!selectedPartner && loading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : filtered.length === 0 && partnerOffers.length === 0 && !error ? (
+          <EmptyState icon="pricetags-outline" title={t("voucher.noVouchers")} />
+        ) : null}
 
-      {filtered.map((v) => (
-        <Pressable key={v.id} onPress={() => router.push(`/(tabs)/voucher/${v.id}`)}>
-          <Card
-            variant="media"
-            imageSource={remoteImage(v.imageUrl)}
-            imageHeight={150}
-            overlay={<VoucherCategoryPill category={v.category} />}
-          >
-            <View style={styles.voucherHead}>
-              <VoucherIcon category={v.category} size={44} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.voucherTitle} numberOfLines={1}>{v.title}</Text>
-                <Text style={styles.voucherDescription} numberOfLines={2}>{v.description}</Text>
-              </View>
-            </View>
-            <View style={styles.voucherDivider} />
-            <View style={styles.voucherFooterRow}>
-              <View style={styles.pointsRow}>
-                <View style={styles.pointsIcon}>
-                  <Ionicons name="star" size={12} color={colors.gold} />
-                </View>
-                <Text style={styles.pointsText}>{v.pointsCost.toLocaleString()} {t("voucher.pointsSuffix")}</Text>
-              </View>
-              <Button
-                title={t("voucher.redeem")}
-                size="sm"
-                loading={redeemingId === v.id}
-                disabled={v.pointsCost > availablePoints}
-                onPress={() => onRedeem(v)}
-              />
-            </View>
-          </Card>
-        </Pressable>
-      ))}
+        {filtered.map((voucher) => {
+          const expires = voucher.expiresAt
+            ? t("voucherDetail.expires", { date: formatDate(voucher.expiresAt, locale) })
+            : "";
+          return (
+            <VoucherTicket
+              key={voucher.id}
+              logo={<VoucherIcon category={voucher.category} size={40} />}
+              title={voucher.title}
+              meta={[voucher.discountLabel, expires].filter(Boolean).join(" · ")}
+              points={voucher.pointsCost}
+              onOpen={() => router.push(`/(tabs)/voucher/${voucher.id}`)}
+              onRedeem={() => onRedeem(voucher)}
+              loading={redeemingId === voucher.id}
+              disabled={voucher.pointsCost > availablePoints}
+            />
+          );
+        })}
+      </View>
     </ScreenContainer>
   );
 }
@@ -263,19 +250,5 @@ const styles = StyleSheet.create({
   // around the now-normal-sized chips).
   filterRow: { marginHorizontal: -spacing(2.5), flexGrow: 0 },
   filterContent: { alignItems: "center", gap: spacing(1), paddingHorizontal: spacing(2.5) },
-  voucherHead: { flexDirection: "row", alignItems: "center", gap: spacing(1.5) },
-  voucherTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
-  voucherDescription: { fontSize: 13, lineHeight: 17, color: colors.textMuted },
-  voucherDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing(0.5) },
-  pointsIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.goldMuted,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  voucherFooterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  pointsRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  pointsText: { fontSize: 13, fontWeight: "800", color: colors.navy },
+  voucherList: { gap: spacing(1.25) },
 });

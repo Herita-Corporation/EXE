@@ -1,55 +1,20 @@
 import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useLocale } from "@/i18n/LocaleContext";
-import { PARTNER_OFFERS, type PartnerOffer } from "@/mocks/partnerOffer";
-import { colors, radius, spacing } from "@/theme/colors";
+import { StyleSheet, Text, View } from "react-native";
+import { PartnerLogoMark } from "@/components/PartnerLogoMark";
+import type { PartnerOffer } from "@/mocks/partnerOffer";
+import { brand, colors, radius, spacing } from "@/theme/colors";
 
-export function PartnerLogoMark({ logo, size = 28 }: { logo: PartnerOffer["logo"]; size?: number }) {
-  return (
-    <View
-      style={[
-        styles.mark,
-        { width: size, height: size, borderRadius: size * logo.cornerRatio, backgroundColor: logo.color },
-      ]}
-    >
-      <Ionicons name={logo.icon} size={size * 0.59} color="#FFFFFF" />
-    </View>
-  );
-}
-
-export function PartnerLogoStrip() {
-  const { t } = useLocale();
-
+export function PartnerLogoStrip({ offers }: { offers: readonly PartnerOffer[] }) {
   return (
     <View style={styles.strip}>
-      <Text accessibilityRole="header" style={styles.label}>{t("home.partners")}</Text>
-      <View style={styles.divider} />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.scroller}
-        contentContainerStyle={styles.logos}
-      >
-        {PARTNER_OFFERS.map(({ partnerId, name, logo }) => (
-          <Pressable
-            key={partnerId}
-            accessibilityRole="link"
-            accessibilityLabel={name}
-            accessibilityHint={t("partnerOffer.viewPartnerVouchers")}
-            onPress={() => router.navigate({
-              pathname: "/(tabs)/voucher",
-              params: { partner: partnerId },
-            })}
-            style={({ pressed }) => [styles.logo, pressed && styles.pressed]}
-          >
-            <PartnerLogoMark logo={logo} />
-            <Text style={[styles.name, { color: logo.color }]}>{logo.wordmark}</Text>
-            <Text style={[styles.descriptor, { color: logo.color }]}>{logo.descriptor}</Text>
-          </Pressable>
+      <Text accessibilityRole="header" style={styles.label}>Trusted by</Text>
+      <View style={styles.logos}>
+        {offers.map(({ partnerId, name, logo }) => (
+          <View key={partnerId} style={styles.slot}>
+            <PartnerLogoMark source={logo} label={name} style={styles.logo} />
+          </View>
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -57,28 +22,25 @@ export function PartnerLogoStrip() {
 const styles = StyleSheet.create({
   strip: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    paddingHorizontal: spacing(1),
-    paddingVertical: spacing(0.5),
+    gap: spacing(1),
+    paddingHorizontal: spacing(1.5),
+    paddingVertical: spacing(1.25),
+    backgroundColor: brand.white,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
   },
-  label: { color: colors.textMuted, fontSize: 12, fontWeight: "700", fontStyle: "italic" },
-  divider: { height: 32, width: 1, backgroundColor: colors.border, marginHorizontal: spacing(0.75) },
-  scroller: { flex: 1 },
-  logos: { flexGrow: 1, alignItems: "center", justifyContent: "space-between", gap: spacing(0.5) },
-  logo: {
-    minHeight: 64,
-    minWidth: 72,
+  label: { color: brand.navy, fontSize: 13, fontStyle: "italic", fontWeight: "700" },
+  logos: {
+    flexBasis: 330,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing(0.25),
-    gap: 2,
+    gap: spacing(1),
   },
-  mark: { alignItems: "center", justifyContent: "center" },
-  name: { fontSize: 10.5, fontWeight: "800", letterSpacing: 0.25, textTransform: "uppercase" },
-  descriptor: { fontSize: 8, fontWeight: "600", letterSpacing: 1.15, textTransform: "uppercase" },
-  pressed: { opacity: 0.65 },
+  slot: { flex: 1, minWidth: 0, alignItems: "center" },
+  logo: { width: "100%", maxWidth: 120, height: 40 },
 });

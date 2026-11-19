@@ -50,7 +50,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { getRegionImage } from "@/data/regionImages";
-import { VINH_LAM_OFFER } from "@/mocks/partnerOffer";
+import { FEATURED_PARTNER_OFFER } from "@/mocks/partnerOffer";
 import type { Activity, ActivityAlternative, ItineraryResponse } from "@/types/itinerary";
 import { MISSION_TYPE_PHOTO, MISSION_TYPE_VIDEO, MissionTemplate } from "@/types/missions";
 import { colors, radius, shadow, spacing } from "@/theme/colors";
@@ -1007,7 +1007,7 @@ export default function ItineraryDetailScreen() {
           </View>
           {data.trip_summary.trip_duration_days > 1 ? (
             <View style={screenStyles.stayOffer}>
-              <PartnerOfferCard offer={VINH_LAM_OFFER} compact />
+              <PartnerOfferCard offer={FEATURED_PARTNER_OFFER} compact />
             </View>
           ) : null}
         </View>

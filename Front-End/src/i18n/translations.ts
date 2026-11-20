@@ -38,6 +38,7 @@ export const en = {
   partnerOffer: {
     viewVoucher: "View sample voucher",
     viewPartnerVouchers: "View this partner's sample voucher",
+    carouselPosition: "Offer {current} of {count}",
     staySuggestion: "Suggested stay",
     points: "{points} points",
     redemptionPending: "Sample voucher · Redemption pending",
@@ -570,6 +571,7 @@ export const vi: Translations = {
   partnerOffer: {
     viewVoucher: "Xem voucher mẫu",
     viewPartnerVouchers: "Xem voucher mẫu của đối tác này",
+    carouselPosition: "Ưu đãi {current} trên {count}",
     staySuggestion: "Gợi ý lưu trú",
     points: "{points} điểm",
     redemptionPending: "Voucher mẫu · Chờ mở đổi",

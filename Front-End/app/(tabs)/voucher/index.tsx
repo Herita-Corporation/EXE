@@ -179,16 +179,6 @@ export default function VoucherScreen() {
             onPress={() => selectCategory(value)}
           />
         ))}
-        {PARTNER_OFFERS.map(({ partnerId, name, category }) => (
-          <Chip
-            key={partnerId}
-            label={name}
-            selected={selectedPartner?.partnerId === partnerId}
-            icon={categoryStyle(category).icon}
-            iconColor={categoryStyle(category).color}
-            onPress={() => router.setParams({ partner: partnerId })}
-          />
-        ))}
       </ScrollView>
 
       <View style={styles.voucherList}>

@@ -37,7 +37,6 @@ export function VoucherTicket({
     <View style={styles.ticket}>
       <View style={styles.brand}>
         {logo}
-        {partnerName ? <Text style={styles.partnerName}>{partnerName}</Text> : null}
       </View>
       <View pointerEvents="none" style={styles.perforation}>
         <View style={[styles.notch, styles.topNotch]} />
@@ -91,12 +90,10 @@ const styles = StyleSheet.create({
     width: 88,
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing(0.75),
     paddingHorizontal: spacing(0.75),
     paddingVertical: spacing(1.25),
     backgroundColor: colors.surfaceAlt,
   },
-  partnerName: { fontSize: 12, lineHeight: 16, fontWeight: "700", textAlign: "center", color: colors.navy },
   perforation: { width: 1, borderLeftWidth: 1, borderStyle: "dashed", borderColor: colors.border },
   notch: {
     position: "absolute",

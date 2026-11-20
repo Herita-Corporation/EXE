@@ -8,7 +8,7 @@ import { Avatar } from "@/components/Avatar";
 import { SectionHeader } from "@/components/SectionHeader";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { PartnerLogoStrip } from "@/components/PartnerLogoStrip";
-import { PartnerOfferBanner } from "@/components/PartnerOfferBanner";
+import { PartnerOfferCarousel } from "@/components/PartnerOfferCarousel";
 import { useAuth } from "@/context/AuthContext";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
@@ -34,8 +34,6 @@ const QUICK_ACTIONS: Array<{
   { key: "events", labelKey: "home.events", icon: "calendar-outline", href: "/(tabs)/mission/events?from=home" },
   { key: "translate", labelKey: "extra.translate", icon: "language-outline", href: "/(tabs)/ai-guide" },
 ];
-
-const [featuredOffer, ...otherOffers] = PARTNER_OFFERS;
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -112,12 +110,7 @@ export default function HomeScreen() {
           actionLabel={t("home.viewAll")}
           onAction={() => router.push("/(tabs)/voucher")}
         />
-        <PartnerOfferBanner offer={featuredOffer} featured />
-        <View style={styles.otherOffers}>
-          {otherOffers.map((offer) => (
-            <PartnerOfferBanner key={offer.partnerId} offer={offer} />
-          ))}
-        </View>
+        <PartnerOfferCarousel offers={PARTNER_OFFERS} />
       </View>
 
       <SectionHeader
@@ -206,7 +199,6 @@ const styles = StyleSheet.create({
   quickLabel: { fontSize: 11, color: colors.text, textAlign: "center", fontWeight: "600" },
 
   offers: { gap: spacing(1.25) },
-  otherOffers: { flexDirection: "row", flexWrap: "wrap", gap: spacing(1.25) },
 
   // Bleeds to the screen edges so cards scroll off-screen; first card is
   // re-inset by the content container's paddingLeft.

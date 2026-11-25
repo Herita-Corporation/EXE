@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { StyleSheet, TextInput, View, type TextInputInstance } from "react-native";
 import { colors, radius, spacing } from "@/theme/colors";
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
 
 /** Boxed digit-by-digit OTP input with auto-advance/auto-backspace. */
 export function OtpInput({ value, onChange, length = 6 }: Props) {
-  const refs = useRef<Array<TextInput | null>>([]);
+  const refs = useRef<Array<TextInputInstance | null>>([]);
   const digits = Array.from({ length }, (_, i) => value[i] ?? "");
 
   function setDigit(index: number, char: string) {

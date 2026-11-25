@@ -33,9 +33,15 @@ public partial class IAMDbContext : DbContext
     public virtual DbSet<PartnerInvoice> PartnerInvoices { get; set; } = null!;
     public virtual DbSet<PartnerReviewAudit> PartnerReviewAudits { get; set; } = null!;
 
+    public virtual DbSet<PendingPhoneRegistration>
+        PendingPhoneRegistrations
+    { get; set; }
+
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(IAMDbContext).Assembly);
 
         modelBuilder.Entity<PartnerProfile>(e => {
             e.HasKey(x => x.Id);
@@ -269,6 +275,49 @@ public partial class IAMDbContext : DbContext
                 .HasDefaultValueSql("(getdate())");
 
             entity.HasIndex(e => e.City);
+        });
+        // ==========================================
+        // PENDING PHONE REGISTRATION - SMS OTP
+        // ==========================================
+
+        modelBuilder.Entity<PendingPhoneRegistration>(entity =>
+        {
+            entity.Property(e => e.OtpHash)
+    .HasMaxLength(64)
+    .IsRequired();
+
+            entity.Property(e => e.OtpAttempts)
+                .HasDefaultValue(0);
+            entity.ToTable("PendingPhoneRegistrations");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("(newid())");
+
+            entity.Property(e => e.Username)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(e => e.Email)
+                .HasMaxLength(255)
+                .IsRequired();
+
+            entity.Property(e => e.PhoneNumber)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(e => e.PasswordHash)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedAt)
+                .IsRequired();
+
+            entity.Property(e => e.ExpiresAt)
+                .IsRequired();
+
+            entity.HasIndex(e => e.PhoneNumber)
+                .IsUnique();
         });
     }
 }

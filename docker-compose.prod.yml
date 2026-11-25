@@ -61,7 +61,7 @@ services:
       - ./Disa-App/DATABASE:/scripts:ro
     networks:
       - disa-network
-    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -b -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql && /opt/mssql-tools18/bin/sqlcmd -b -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/IAMDb_GoogleId.sql"]
+    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -b -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql && /opt/mssql-tools18/bin/sqlcmd -b -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/IAMDb_GoogleId.sql && /opt/mssql-tools18/bin/sqlcmd -b -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/PremiumTask.sql"]
 
   # ── PostgreSQL + pgvector (AI-Itinerary database) ───────────────────────────
   postgres:
@@ -188,6 +188,15 @@ services:
       GoogleAuth__ClientIds__1: "${GOOGLE_ANDROID_CLIENT_ID:-506948056952-bvv50gogt7hfudeu8pll5dkdbthln02r.apps.googleusercontent.com}"
       GoogleAuth__ClientIds__2: "${GOOGLE_ANDROID_PLAY_CLIENT_ID:-506948056952-5uoaa2n5sdqv1kpbv8ipqnt7p6gcckm6.apps.googleusercontent.com}"
       GoogleAuth__ClientIds__3: "${GOOGLE_IOS_CLIENT_ID:-}"
+      SePay__Environment: "${SEPAY_ENVIRONMENT:-TEST}"
+      SePay__BankCode: "${SEPAY_BANK_CODE:-}"
+      SePay__BankAccount: "${SEPAY_BANK_ACCOUNT:-}"
+      SePay__AccountName: "${SEPAY_ACCOUNT_NAME:-}"
+      SePay__WebhookSecret: "${SEPAY_WEBHOOK_SECRET:-}"
+      Premium__ApplyMigrationsOnStartup: "${PREMIUM_APPLY_MIGRATIONS_ON_STARTUP:-false}"
+      Twilio__AccountSid: "${TWILIO_ACCOUNT_SID:-}"
+      Twilio__AuthToken: "${TWILIO_AUTH_TOKEN:-}"
+      Twilio__VerifyServiceSid: "${TWILIO_VERIFY_SERVICE_SID:-}"
       Smtp__User: "disatravel.support@gmail.com"
       Smtp__Password: "${SMTP_PASSWORD:-}"
       Smtp__FromAddress: "disatravel.support@gmail.com"
@@ -240,6 +249,7 @@ services:
       Jwt__Key: "${JWT_SECRET_KEY}"
       Jwt__Issuer: IAMService
       Jwt__Audience: IAMClient
+      Premium__IamBaseUrl: http://iam-service:8080
     volumes:
       - task_uploads:/app/Uploads
     depends_on:

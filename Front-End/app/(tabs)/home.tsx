@@ -17,6 +17,8 @@ import { HOME_OFFERS } from "@/mocks/homeOffers";
 import { FEATURED_MISSIONS } from "@/mocks/featuredMissions";
 import { colors, isDark, radius, spacing } from "@/theme/colors";
 import { GradientHero } from "@/components/GradientHero";
+import { PartnerOffers } from "@/components/PartnerOffers";
+import { PremiumHomeCard } from "@/components/PremiumEntry";
 
 // One consistent tile style for every action (soft blue tile, navy icon)
 // instead of a different solid color per action — the old rainbow grid was
@@ -85,6 +87,8 @@ export default function HomeScreen() {
         </View>
       </GradientHero>
 
+      <PartnerOffers />
+      <PremiumHomeCard />
       <View style={styles.quickRow}>
         {QUICK_ACTIONS.map((action) => (
           <Pressable

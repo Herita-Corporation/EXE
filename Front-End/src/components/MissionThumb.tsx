@@ -1,4 +1,5 @@
 import React from "react";
+import { evidenceImage } from "@/utils/evidenceImage";
 import { StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,7 +25,7 @@ export function MissionThumb({
   if (evidenceUrl && evidenceType === MISSION_TYPE_PHOTO) {
     return (
       <Image
-        source={{ uri: evidenceUrl }}
+        source={evidenceImage(evidenceUrl)}
         style={[styles.thumb, { width: size, height: size }]}
         contentFit="cover"
       />

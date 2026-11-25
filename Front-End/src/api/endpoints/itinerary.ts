@@ -39,6 +39,10 @@ export function getItinerary(itineraryId: string) {
   );
 }
 
+export const listMyItineraries = () => request<ItineraryResponse[]>("aiTour", "/api/v1/itinerary");
+export const changeTripLifecycle = (id: string, action: "START" | "COMPLETE" | "CANCEL") => request<{ status: string }>("aiTour", `/api/v1/itinerary/${id}/lifecycle`, { method: "POST", data: { action } });
+export const getTripSummary = (id: string) => request<{ estimated_total: number; self_reported_actual_total: number; lifecycle: { status?: string } }>("aiTour", `/api/v1/itinerary/${id}/summary`);
+
 export function deleteItinerary(itineraryId: string) {
   return request<{ success: boolean }>(
     "aiTour",

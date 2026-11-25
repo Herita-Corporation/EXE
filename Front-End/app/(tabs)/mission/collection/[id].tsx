@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { evidenceImage } from "@/utils/evidenceImage";
 import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
@@ -90,7 +91,7 @@ export default function ItineraryCollectionScreen() {
                     <Ionicons name="play-circle" size={40} color="#FFFFFF" />
                   </View>
                 ) : (
-                  <Image source={{ uri: item.evidenceUrl! }} style={styles.tileImage} contentFit="cover" />
+                  <Image source={evidenceImage(item.evidenceUrl!)} style={styles.tileImage} contentFit="cover" />
                 )}
                 <View style={styles.tileCaption}>
                   <Text style={styles.tileTitle} numberOfLines={1}>
@@ -109,7 +110,7 @@ export default function ItineraryCollectionScreen() {
       <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
         <Pressable style={styles.previewBackdrop} onPress={() => setPreview(null)}>
           {preview?.evidenceUrl ? (
-            <Image source={{ uri: preview.evidenceUrl }} style={styles.previewImage} contentFit="contain" />
+            <Image source={evidenceImage(preview.evidenceUrl)} style={styles.previewImage} contentFit="contain" />
           ) : null}
           <Text style={[styles.previewCaption, { bottom: insets.bottom + spacing(4) }]} numberOfLines={2}>
             {preview?.title}

@@ -57,13 +57,13 @@ export default function PartnerVoucherScreen() {
           </View>
           <Text style={styles.benefit}>{offer.benefit[locale]}</Text>
           <Text style={styles.copy}>{offer.address}</Text>
-          {offer.expired && (
-            <Badge label={t("partnerOffer.expired")} tone="warning" />
+          {offer.soldOut && (
+            <Badge label={t("partnerOffer.soldOut")} />
           )}
         </View>
       </Card>
 
-      {!offer.expired && (
+      {!offer.soldOut && (
         <>
           <SectionHeader title={t("voucherDetail.terms")} />
           <Card style={styles.terms}>

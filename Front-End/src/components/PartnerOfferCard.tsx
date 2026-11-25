@@ -14,7 +14,7 @@ export function PartnerOfferCard({ offer, compact = false }: { offer: PartnerOff
   const { locale, t } = useLocale();
   const openPartnerOffer = usePartnerOfferLink();
   const benefit = offer.benefit[locale];
-  const expired = offer.expired === true;
+  const { soldOut } = offer;
   const openVoucher = () => router.push({
     pathname: "/partner-voucher",
     params: { partner: offer.partnerId },
@@ -26,11 +26,12 @@ export function PartnerOfferCard({ offer, compact = false }: { offer: PartnerOff
         logo={<PartnerLogoMark source={offer.logo} />}
         title={offer.name}
         benefit={benefit}
-        meta={t(expired ? "partnerOffer.expired" : "partnerOffer.onWebsite")}
-        redeemLabel={t(expired ? "partnerOffer.viewVoucher" : "partnerOffer.bookOnBooking")}
-        redeemIcon={expired ? "chevron-forward" : "open-outline"}
+        meta={t(soldOut ? "partnerOffer.soldOut" : "partnerOffer.onWebsite")}
+        muted={soldOut}
+        redeemLabel={t(soldOut ? "partnerOffer.viewVoucher" : "partnerOffer.bookOnBooking")}
+        redeemIcon={soldOut ? "chevron-forward" : "open-outline"}
         onOpen={openVoucher}
-        onRedeem={expired ? openVoucher : () => openPartnerOffer({ redemptionUrl: offer.redemptionUrl })}
+        onRedeem={soldOut ? openVoucher : () => openPartnerOffer({ redemptionUrl: offer.redemptionUrl })}
       />
     );
   }
@@ -49,7 +50,7 @@ export function PartnerOfferCard({ offer, compact = false }: { offer: PartnerOff
             <Text style={styles.context}>{t("partnerOffer.destinationSuggestion")}</Text>
             <Text style={styles.name}>{offer.name}</Text>
             <Text style={styles.address}>{offer.address}</Text>
-            {!expired && <Text style={styles.benefit}>{benefit}</Text>}
+            {!soldOut && <Text style={styles.benefit}>{benefit}</Text>}
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.navy} />
         </View>

@@ -45,6 +45,7 @@ export const en = {
     onWebsite: "Continue on Booking.com",
     bookingTerms: "Book on Booking.com using a phone. Check the rate for your dates before confirming.",
     expired: "This voucher has expired.",
+    soldOut: "No redemptions left",
     openFailed: "Could not open the offer page. Please try again.",
   },
   premium: {
@@ -680,6 +681,7 @@ export const vi: Translations = {
     onWebsite: "Tiếp tục trên Booking.com",
     bookingTerms: "Đặt phòng trên Booking.com bằng điện thoại. Kiểm tra giá cho ngày lưu trú trước khi xác nhận.",
     expired: "Voucher đã hết hạn.",
+    soldOut: "Đã hết lượt dùng",
     openFailed: "Không thể mở trang ưu đãi. Vui lòng thử lại.",
   },
   premium: {

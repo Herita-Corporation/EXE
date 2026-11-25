@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/Button";
 import { useLocale } from "@/i18n/LocaleContext";
-import { colors, radius, spacing } from "@/theme/colors";
+import { brand, colors, isDark, radius, spacing } from "@/theme/colors";
 
 interface Props {
   logo: React.ReactNode;
@@ -16,6 +16,7 @@ interface Props {
   redeemIcon?: keyof typeof Ionicons.glyphMap;
   onOpen: () => void;
   onRedeem: () => void;
+  muted?: boolean;
   disabled?: boolean;
   loading?: boolean;
 }
@@ -31,6 +32,7 @@ export function VoucherTicket({
   redeemIcon,
   onOpen,
   onRedeem,
+  muted,
   disabled,
   loading,
 }: Props) {
@@ -38,9 +40,9 @@ export function VoucherTicket({
   const actionLabel = redeemLabel ?? t("voucher.redeemShort");
 
   return (
-    <View style={styles.ticket}>
+    <View style={[styles.ticket, muted && styles.mutedTicket]}>
       <View style={styles.brand}>
-        {logo}
+        {muted ? <View style={styles.mutedLogo}>{logo}</View> : logo}
       </View>
       <View pointerEvents="none" style={styles.perforation}>
         <View style={[styles.notch, styles.topNotch]} />
@@ -53,9 +55,9 @@ export function VoucherTicket({
           onPress={onOpen}
           style={({ pressed }) => pressed && styles.pressed}
         >
-          <Text style={styles.title} numberOfLines={2}>{title}</Text>
-          {benefit ? <Text style={styles.benefit}>{benefit}</Text> : null}
-          {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+          <Text style={[styles.title, muted && styles.mutedCopy]} numberOfLines={2}>{title}</Text>
+          {benefit ? <Text style={[styles.benefit, muted && styles.mutedCopy]}>{benefit}</Text> : null}
+          {meta ? <Text style={[styles.meta, muted && styles.status]}>{meta}</Text> : null}
         </Pressable>
         <View style={styles.footer}>
           {points !== undefined && (
@@ -73,7 +75,7 @@ export function VoucherTicket({
             iconPosition="right"
             size="sm"
             shape="rounded"
-            variant="secondary"
+            variant={muted ? "outline" : "secondary"}
             style={styles.button}
             onPress={onRedeem}
             disabled={disabled}
@@ -94,6 +96,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     overflow: "hidden",
   },
+  mutedTicket: { backgroundColor: colors.surfaceAlt },
+  mutedLogo: { opacity: 0.48 },
+  mutedCopy: { color: isDark ? colors.textMuted : brand.slate },
   brand: {
     width: 88,
     alignItems: "center",
@@ -120,6 +125,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 15, lineHeight: 20, fontWeight: "800", color: colors.text },
   benefit: { fontSize: 13, lineHeight: 18, fontWeight: "700", color: colors.navy, marginTop: 2 },
   meta: { fontSize: 12, lineHeight: 16, color: colors.textMuted, marginTop: 2 },
+  status: { color: colors.text, fontWeight: "700" },
   footer: {
     flexDirection: "row",
     alignItems: "center",

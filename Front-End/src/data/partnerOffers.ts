@@ -7,8 +7,8 @@ export const PARTNER_CATEGORY_LABELS = {
 } as const;
 
 type PartnerVoucher =
-  | { redemptionUrl: `https://${string}`; expired?: false }
-  | { expired: true; redemptionUrl?: never };
+  | { redemptionUrl: `https://${string}`; soldOut?: false }
+  | { soldOut: true; redemptionUrl?: never };
 
 export type PartnerOffer = PartnerVoucher & {
   partnerId: string;
@@ -21,9 +21,9 @@ export type PartnerOffer = PartnerVoucher & {
   logo: ImageSource | number;
 };
 
-export function isPartnerOfferActive(offer: { expired?: boolean; expiresOn?: string }): boolean {
+export function isPartnerOfferActive(offer: { soldOut?: boolean; expiresOn?: string }): boolean {
   // Published end dates are inclusive in Vietnam time.
-  return !offer.expired && (!offer.expiresOn || Date.now() <= Date.parse(`${offer.expiresOn}T23:59:59.999+07:00`));
+  return !offer.soldOut && (!offer.expiresOn || Date.now() <= Date.parse(`${offer.expiresOn}T23:59:59.999+07:00`));
 }
 
 export const PARTNER_OFFERS: readonly PartnerOffer[] = [
@@ -51,7 +51,7 @@ export const PARTNER_OFFERS: readonly PartnerOffer[] = [
       vi: "Giảm 10% và tặng buffet sáng",
       en: "10% off with buffet breakfast included",
     },
-    expired: true,
+    soldOut: true,
     image: require("@/assets/images/partners/lat-valley-villa-cover.jpg"),
     logo: require("@/assets/images/partners/lat-valley-villa-logo.png"),
   },
@@ -65,7 +65,7 @@ export const PARTNER_OFFERS: readonly PartnerOffer[] = [
       vi: "Giảm 10% trên tổng hóa đơn",
       en: "10% off the total bill",
     },
-    expired: true,
+    soldOut: true,
     image: require("@/assets/images/partners/sus-house-coffee-cover.jpg"),
     logo: require("@/assets/images/partners/sus-house-coffee-logo.png"),
   },

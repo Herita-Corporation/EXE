@@ -23,6 +23,7 @@ import { useToast } from "@/context/ToastContext";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { TranslationKey } from "@/i18n/LocaleContext";
 import { brand, colors, radius, spacing } from "@/theme/colors";
+import { PartnerOffers } from "@/components/PartnerOffers";
 
 // Filter values match voucher.category from real DATA (kept in English,
 // same as other catalog content) — only the displayed Chip label is
@@ -117,6 +118,7 @@ export default function VoucherScreen() {
       }
     >
       <ScreenHeader title={t("tabs.voucher")} subtitle={t("voucher.exploreExperiences")} />
+      <PartnerOffers />
 
       <GradientHero style={styles.balanceCard} markStyle={{ opacity: 0.1 }}>
         <Text style={styles.balanceLabel}>{t("voucher.totalVoyagerBalance")}</Text>

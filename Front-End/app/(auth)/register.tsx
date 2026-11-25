@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, type TextInputInstance, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -28,12 +28,12 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const phoneRef = useRef<TextInput>(null);
-  const emailRef = useRef<TextInput>(null);
-  const passwordRef = useRef<TextInput>(null);
-  const confirmRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInputInstance>(null);
+  const emailRef = useRef<TextInputInstance>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
+  const confirmRef = useRef<TextInputInstance>(null);
   // Shared props that move the keyboard's "Next" key to the following field.
-  const next = (target: React.RefObject<TextInput | null>) => ({
+  const next = (target: React.RefObject<TextInputInstance | null>) => ({
     returnKeyType: "next" as const,
     submitBehavior: "submit" as const,
     onSubmitEditing: () => target.current?.focus(),

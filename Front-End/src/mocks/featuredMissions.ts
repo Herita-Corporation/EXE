@@ -7,7 +7,7 @@
 // (src/assets/images/missions/). Most are CC BY-SA, which requires credit —
 // `credit` records the attribution (not shown on the card).
 
-import type { ImageSourcePropType } from "react-native";
+import type { ImageProps } from "expo-image";
 import type { Ionicons } from "@expo/vector-icons";
 
 export type FeaturedMissionKind = "photo" | "video" | "checkin";
@@ -20,7 +20,7 @@ export interface FeaturedMission {
   rewardXP: number;
   rewardCoins: number;
   difficulty: 1 | 2 | 3;
-  image: ImageSourcePropType;
+  image: ImageProps["source"];
   /** Photo attribution: "Author · License". */
   credit: string;
 }

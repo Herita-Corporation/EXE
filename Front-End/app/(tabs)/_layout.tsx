@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
-import { Redirect, Tabs, usePathname } from "expo-router";
+import { Redirect, Tabs, usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -33,9 +33,10 @@ const TAB_META: Record<string, { focused: keyof typeof Ionicons.glyphMap; unfocu
   account: { focused: "person", unfocused: "person-outline" },
 };
 
-function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
+function CustomTabBar({ state, emitter }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const router = useRouter();
   const { t } = useLocale();
   const tabLabels: Record<string, string> = {
     home: t("tabs.home"),
@@ -68,23 +69,12 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
         const isFocused = state.index === index;
 
         const onPress = () => {
-          const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+          const event = emitter.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
           if (event.defaultPrevented) return;
           if (!isFocused) haptics.tap();
-          // Always land on that tab's own root screen, not whatever it was
-          // last showing — a tab can be left mid-stack by a one-off deep
-          // link (e.g. Home's quick actions push straight into
-          // mission/create), and footer taps should still mean "take me to
-          // this tab's home", not "resume where I left off". navigate()
-          // with a nested `screen` target pops back to an existing instance
-          // of that screen instead of pushing a duplicate, so this both
-          // switches tabs and resets the nested stack in one action. "home"
-          // has no nested Stack, so it navigates directly.
-          if (route.name === "home") {
-            navigation.navigate("home");
-          } else {
-            navigation.navigate(route.name, { screen: "index" });
-          }
+          // SDK 58 treats nested `screen` params as ordinary parameters.
+          // A complete href takes the user back to the selected tab's root.
+          router.navigate(`/(tabs)/${route.name}`);
         };
 
         return (

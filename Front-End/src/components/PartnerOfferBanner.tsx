@@ -10,12 +10,12 @@ import { brand, radius, spacing } from "@/theme/colors";
 
 export function PartnerOfferBanner({ offer }: { offer: PartnerOffer }) {
   const { locale, t } = useLocale();
-  const { title, benefit } = offer.campaign[locale];
+  const benefit = offer.benefit[locale];
 
   return (
     <Pressable
       accessibilityRole="link"
-      accessibilityLabel={`${offer.name}. ${title}. ${benefit}`}
+      accessibilityLabel={`${offer.name}. ${benefit}`}
       accessibilityHint={t("partnerOffer.viewPartnerVouchers")}
       onPress={() => router.navigate({
         pathname: "/(tabs)/voucher",
@@ -36,7 +36,7 @@ export function PartnerOfferBanner({ offer }: { offer: PartnerOffer }) {
           <PartnerLogoMark source={offer.logo} style={styles.logo} />
         </View>
         <View style={styles.campaignCopy}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title}>{offer.name}</Text>
           <Text style={styles.benefit}>{benefit}</Text>
         </View>
         <View style={styles.action}>

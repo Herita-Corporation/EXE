@@ -13,7 +13,8 @@ import { colors, spacing } from "@/theme/colors";
 export function PartnerOfferCard({ offer, compact = false }: { offer: PartnerOffer; compact?: boolean }) {
   const { locale, t } = useLocale();
   const openPartnerOffer = usePartnerOfferLink();
-  const { title, benefit } = offer.campaign[locale];
+  const benefit = offer.benefit[locale];
+  const expired = offer.expired === true;
   const openVoucher = () => router.push({
     pathname: "/partner-voucher",
     params: { partner: offer.partnerId },
@@ -23,14 +24,13 @@ export function PartnerOfferCard({ offer, compact = false }: { offer: PartnerOff
     return (
       <VoucherTicket
         logo={<PartnerLogoMark source={offer.logo} />}
-        partnerName={offer.name}
-        title={title}
+        title={offer.name}
         benefit={benefit}
-        meta={t("partnerOffer.onWebsite")}
-        redeemLabel={t("partnerOffer.redeem")}
-        redeemIcon="open-outline"
+        meta={t(expired ? "partnerOffer.expired" : "partnerOffer.onWebsite")}
+        redeemLabel={t(expired ? "partnerOffer.viewVoucher" : "partnerOffer.bookOnBooking")}
+        redeemIcon={expired ? "chevron-forward" : "open-outline"}
         onOpen={openVoucher}
-        onRedeem={() => openPartnerOffer(offer)}
+        onRedeem={expired ? openVoucher : () => openPartnerOffer({ redemptionUrl: offer.redemptionUrl })}
       />
     );
   }
@@ -38,7 +38,7 @@ export function PartnerOfferCard({ offer, compact = false }: { offer: PartnerOff
   return (
     <Pressable
       accessibilityRole="link"
-      accessibilityLabel={`${offer.name}. ${title}. ${benefit}`}
+      accessibilityLabel={`${t("partnerOffer.destinationSuggestion")}. ${offer.name}. ${offer.address}`}
       onPress={openVoucher}
       style={({ pressed }) => pressed && styles.pressed}
     >
@@ -46,10 +46,10 @@ export function PartnerOfferCard({ offer, compact = false }: { offer: PartnerOff
         <View style={styles.summary}>
           <PartnerLogoMark source={offer.logo} />
           <View style={styles.summaryCopy}>
-            <Text style={styles.context}>{t("partnerOffer.staySuggestion")}</Text>
+            <Text style={styles.context}>{t("partnerOffer.destinationSuggestion")}</Text>
             <Text style={styles.name}>{offer.name}</Text>
-            <Text style={styles.offer}>{title}</Text>
-            <Text style={styles.benefit}>{benefit}</Text>
+            <Text style={styles.address}>{offer.address}</Text>
+            {!expired && <Text style={styles.benefit}>{benefit}</Text>}
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.navy} />
         </View>
@@ -64,6 +64,6 @@ const styles = StyleSheet.create({
   summaryCopy: { flex: 1, gap: 2 },
   context: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
   name: { color: colors.navy, fontSize: 16, fontWeight: "800" },
-  offer: { color: colors.text, fontSize: 13, lineHeight: 18 },
+  address: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   benefit: { color: colors.navy, fontSize: 13, lineHeight: 18, fontWeight: "700" },
 });

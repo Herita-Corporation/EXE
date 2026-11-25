@@ -8,6 +8,7 @@ import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { PartnerRecommendations } from "@/components/PartnerRecommendations";
 import { PremiumMissionRow } from "@/components/PremiumMissionRow";
 import { PremiumAccessGate } from "@/components/PremiumAccessGate";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -61,6 +62,7 @@ function PremiumGroupDetailContent() {
       <ErrorBanner message={error} />
       {loading ? <ActivityIndicator color={colors.navy} /> : group ? (
         <>
+          <PartnerRecommendations destinations={[group.provinceName]} />
           <Card>
             <View style={styles.groupHeader}>
               <Text style={styles.title}>{t("premium.members")}</Text>

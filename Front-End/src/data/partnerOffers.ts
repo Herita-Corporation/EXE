@@ -6,131 +6,83 @@ export const PARTNER_CATEGORY_LABELS = {
   Dining: "voucher.filterDining",
 } as const;
 
-interface CampaignCopy {
-  title: string;
-  benefit: string;
-  terms: string;
-}
+type PartnerVoucher =
+  | { redemptionUrl: `https://${string}`; expired?: false }
+  | { expired: true; redemptionUrl?: never };
 
-export interface PartnerOffer {
+export type PartnerOffer = PartnerVoucher & {
   partnerId: string;
   name: string;
+  address: string;
+  destinations: readonly string[];
   category: keyof typeof PARTNER_CATEGORY_LABELS;
-  campaign: Record<Locale, CampaignCopy>;
-  redemptionUrl: `https://${string}`;
-  expiresOn?: string;
+  benefit: Record<Locale, string>;
   image: ImageSource | number;
   logo: ImageSource | number;
-}
-
-export function isPartnerOfferActive(offer: Pick<PartnerOffer, "expiresOn">): boolean {
-  // Published end dates are inclusive in Vietnam time.
-  return !offer.expiresOn || Date.now() <= Date.parse(`${offer.expiresOn}T23:59:59.999+07:00`);
-}
-
-export const FEATURED_PARTNER_OFFER: PartnerOffer = {
-  partnerId: "vinpearl",
-  name: "Vinpearl",
-  category: "Hotels",
-  campaign: {
-    vi: {
-      title: "Combo Ocean Symphony Nha Trang",
-      benefit: "Gói 3N2Đ hoặc 4N3Đ kèm bữa tối",
-      terms: "Chọn giá Ocean Symphony khi đặt tại Vinpearl Resort Nha Trang hoặc Vinpearl Resort & Spa Nha Trang Bay. Gói có buffet sáng và một bữa tối cho 2 khách người lớn mỗi phòng.",
-    },
-    en: {
-      title: "Ocean Symphony in Nha Trang",
-      benefit: "A 2- or 3-night stay with dinner",
-      terms: "Select the Ocean Symphony rate at Vinpearl Resort Nha Trang or Vinpearl Resort & Spa Nha Trang Bay. The package includes breakfast and one dinner for two adults per room.",
-    },
-  },
-  redemptionUrl: "https://vinpearl.com/vi/uu-dai-combo-ocean-symphony-nha-trang",
-  expiresOn: "2026-12-31",
-  image: require("@/assets/images/partners/vinpearl-cover.jpg"),
-  logo: require("@/assets/images/partners/vinpearl-logo.png"),
 };
 
+export function isPartnerOfferActive(offer: { expired?: boolean; expiresOn?: string }): boolean {
+  // Published end dates are inclusive in Vietnam time.
+  return !offer.expired && (!offer.expiresOn || Date.now() <= Date.parse(`${offer.expiresOn}T23:59:59.999+07:00`));
+}
+
 export const PARTNER_OFFERS: readonly PartnerOffer[] = [
-  FEATURED_PARTNER_OFFER,
   {
-    partnerId: "muong-thanh",
-    name: "Mường Thanh",
+    partnerId: "emerald-phu-quoc",
+    name: "Emerald Boutique Hotel Phú Quốc",
+    address: "S09-10/SS24 Sonasea Villas và Resort, ấp Đường Bào, đặc khu Phú Quốc, An Giang 92513, Việt Nam",
+    destinations: ["An Giang", "Phú Quốc", "Kiên Giang"],
     category: "Hotels",
-    campaign: {
-      vi: {
-        title: "Voucher Deluxe Mường Thanh Mộc Châu",
-        benefit: "Phòng Deluxe King/Twin kèm bữa sáng cho 2 khách",
-        terms: "Áp dụng tại Mường Thanh Holiday Mộc Châu. Liên hệ LifeLink từ trang voucher để xác nhận phòng trống và phụ thu theo ngày trước khi mua.",
-      },
-      en: {
-        title: "Muong Thanh Moc Chau Deluxe voucher",
-        benefit: "Deluxe King or Twin room with breakfast for two",
-        terms: "Valid at Muong Thanh Holiday Moc Chau. Contact LifeLink from the voucher page to confirm room availability and any surcharges for your dates before purchasing.",
-      },
+    benefit: {
+      vi: "Giảm 10% khi đặt trên Booking.com bằng điện thoại",
+      en: "10% off when you book on Booking.com on your phone",
     },
-    redemptionUrl: "https://www.lifelink.vn/e-voucher/moc-chau-muong-thanh-moc-chau-4-sao-nghi-duong-phong-deluxe-king-hoac-twin-p153096",
-    image: require("@/assets/images/partners/muong-thanh-cover.jpg"),
-    logo: require("@/assets/images/partners/muong-thanh-logo.png"),
+    redemptionUrl: "https://www.booking.com/hotel/vn/emerald-boutique-phu-quoc.html",
+    image: require("@/assets/images/partners/emerald-phu-quoc-cover.jpg"),
+    logo: require("@/assets/images/partners/emerald-phu-quoc-logo.png"),
   },
   {
-    partnerId: "all-accor",
-    name: "ALL Accor",
+    partnerId: "lat-valley-villa",
+    name: "Lat Valley Villa",
+    address: "02 Đường Khởi Nghĩa Bắc Sơn, Xuân Hương - Đà Lạt, Lâm Đồng 670000, Việt Nam",
+    destinations: ["Lâm Đồng", "Đà Lạt"],
     category: "Hotels",
-    campaign: {
-      vi: {
-        title: "Festive Escape tại Pullman Saigon Centre",
-        benefit: "2 đêm cho 2 khách · 10.000 điểm ALL Accor",
-        terms: "Dành cho hội viên ALL Accor đã nhận email mời đổi điểm. Phòng Superior kèm buffet sáng, lưu trú từ 31/12/2026 đến 02/01/2027. Accor gửi voucher qua email sau khi xác nhận người sử dụng.",
-      },
-      en: {
-        title: "Festive Escape at Pullman Saigon Centre",
-        benefit: "2 nights for 2 guests · 10,000 ALL Accor points",
-        terms: "For ALL Accor members who received a redemption invitation by email. Stay in a Superior Room with breakfast from December 31, 2026 to January 2, 2027. Accor emails the voucher after confirming the recipient.",
-      },
+    benefit: {
+      vi: "Giảm 10% và tặng buffet sáng",
+      en: "10% off with buffet breakfast included",
     },
-    redemptionUrl: "https://limitlessexperiences.accor.com/vn-psaigon-stay1",
-    expiresOn: "2027-01-02",
-    image: require("@/assets/images/partners/all-accor-cover.jpg"),
-    logo: require("@/assets/images/partners/all-accor-logo.png"),
+    expired: true,
+    image: require("@/assets/images/partners/lat-valley-villa-cover.jpg"),
+    logo: require("@/assets/images/partners/lat-valley-villa-logo.png"),
   },
   {
-    partnerId: "pizza-4ps",
-    name: "Pizza 4P’s",
+    partnerId: "sus-house-coffee",
+    name: "Su's House Coffee",
+    address: "CT31 Đ. Tam Đảo, Cư xá Bắc Hải, Hòa Hưng, Hồ Chí Minh, Việt Nam",
+    destinations: ["Hồ Chí Minh", "HCM", "TPHCM", "Sài Gòn", "Hòa Hưng"],
     category: "Dining",
-    campaign: {
-      vi: {
-        title: "Phiếu quà tặng Pizza 4P’s",
-        benefit: "eVoucher mệnh giá 200.000₫",
-        terms: "Mua qua Giftpop. Phiếu có hạn 180 ngày từ ngày mua, dùng một lần tại nhà hàng hoặc khi đặt món qua website Pizza 4P’s theo điều kiện áp dụng.",
-      },
-      en: {
-        title: "Pizza 4P’s gift voucher",
-        benefit: "₫200,000 eVoucher",
-        terms: "Purchase on Giftpop. The voucher is valid for 180 days from purchase and can be used once in a restaurant or when ordering on the Pizza 4P’s website, subject to the voucher terms.",
-      },
+    benefit: {
+      vi: "Giảm 10% trên tổng hóa đơn",
+      en: "10% off the total bill",
     },
-    redemptionUrl: "https://www.giftpop.vn/san-pham/phieu-qua-tang-pizza-4p-s-200k-mp2205300002",
-    image: require("@/assets/images/partners/pizza-4ps-cover.jpg"),
-    logo: require("@/assets/images/partners/pizza-4ps-logo.png"),
-  },
-  {
-    partnerId: "gogi-house",
-    name: "GoGi House",
-    category: "Dining",
-    campaign: {
-      vi: {
-        title: "Phiếu quà tặng GoGi House",
-        benefit: "eVoucher mệnh giá 200.000₫",
-        terms: "Mua qua Giftpop. Phiếu có hạn 90 ngày từ ngày mua. Xuất trình eVoucher có QR hoặc mã vạch tại nhà hàng áp dụng.",
-      },
-      en: {
-        title: "GoGi House gift voucher",
-        benefit: "₫200,000 eVoucher",
-        terms: "Purchase on Giftpop. The voucher is valid for 90 days from purchase. Present its QR code or barcode at a participating restaurant.",
-      },
-    },
-    redemptionUrl: "https://www.giftpop.vn/san-pham/phieu-qua-tang-gogi-house-200k-mp1905280011",
-    image: require("@/assets/images/partners/gogi-house-cover.jpg"),
-    logo: require("@/assets/images/partners/gogi-house-logo.png"),
+    expired: true,
+    image: require("@/assets/images/partners/sus-house-coffee-cover.jpg"),
+    logo: require("@/assets/images/partners/sus-house-coffee-logo.png"),
   },
 ];
+
+function normalizeDestination(destination: string) {
+  return destination.toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function getDestinationPartnerOffers(destinations: readonly string[]): PartnerOffer[] {
+  const locations = destinations.map((destination) => ` ${normalizeDestination(destination)} `);
+  return PARTNER_OFFERS.filter((offer) => offer.destinations.some((destination) => {
+    const name = ` ${normalizeDestination(destination)} `;
+    return locations.some((location) => location.includes(name));
+  }));
+}

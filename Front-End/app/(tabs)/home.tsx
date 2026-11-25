@@ -10,7 +10,7 @@ import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { PartnerLogoStrip } from "@/components/PartnerLogoStrip";
 import { PartnerOfferCarousel } from "@/components/PartnerOfferCarousel";
 import { useAuth } from "@/context/AuthContext";
-import { isPartnerOfferActive, PARTNER_OFFERS } from "@/data/partnerOffers";
+import { PARTNER_OFFERS } from "@/data/partnerOffers";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { TranslationKey } from "@/i18n/LocaleContext";
@@ -107,11 +107,11 @@ export default function HomeScreen() {
 
       <View style={styles.offers}>
         <SectionHeader
-          title={t("home.ongoingOffers")}
+          title={t("home.specialOffers")}
           actionLabel={t("home.viewAll")}
           onAction={() => router.push("/(tabs)/voucher")}
         />
-        <PartnerOfferCarousel offers={PARTNER_OFFERS.filter(isPartnerOfferActive)} />
+        <PartnerOfferCarousel offers={PARTNER_OFFERS} />
       </View>
 
       <SectionHeader

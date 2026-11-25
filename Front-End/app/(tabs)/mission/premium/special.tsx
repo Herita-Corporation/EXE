@@ -7,6 +7,7 @@ import { BackHeader } from "@/components/BackHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { PartnerRecommendations } from "@/components/PartnerRecommendations";
 import { PremiumAccessGate } from "@/components/PremiumAccessGate";
 import { PremiumMissionRow } from "@/components/PremiumMissionRow";
 import { PremiumProvincePicker } from "@/components/PremiumProvincePicker";
@@ -88,6 +89,7 @@ function SpecialMissionsContent() {
           }}
         />
       )}
+      {province && <PartnerRecommendations destinations={[province.name]} />}
       <ErrorBanner message={error} />
       {loading ? <ActivityIndicator color={colors.navy} /> : (
         <>

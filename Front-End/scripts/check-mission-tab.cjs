@@ -206,7 +206,7 @@ assert.equal(navigations.length, 0);
 checks++;
 console.log(`PASS: ${checks} mission-tab scenarios using actual footer, filesystem routes and Expo reducers.`);
 
-for (const name of ["BackHeader", "Button", "Card", "ErrorBanner", "GradientHero",
+for (const name of ["BackHeader", "Button", "Card", "ErrorBanner", "GradientHero", "PartnerRecommendations",
   "PremiumMissionRow", "PremiumProvincePicker", "ScreenContainer"]) {
   stubs[`@/components/${name}`] = { [name]: name };
 }

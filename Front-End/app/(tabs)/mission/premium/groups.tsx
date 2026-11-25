@@ -10,6 +10,7 @@ import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { Input } from "@/components/Input";
+import { PartnerRecommendations } from "@/components/PartnerRecommendations";
 import { PremiumAccessGate } from "@/components/PremiumAccessGate";
 import { PremiumProvincePicker } from "@/components/PremiumProvincePicker";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -108,6 +109,7 @@ function PremiumGroupsContent() {
       ) : editing ? (
         <>
           <PremiumProvincePicker provinces={provinces} selected={province} onSelect={setProvince} />
+          {province && <PartnerRecommendations destinations={[province.name]} />}
           <Card style={styles.form}>
             <Input
               label={t("premium.groupSize")}

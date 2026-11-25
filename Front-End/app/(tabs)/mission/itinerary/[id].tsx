@@ -23,7 +23,7 @@ import { BackHeader } from "@/components/BackHeader";
 import { IconButton } from "@/components/IconButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { Chip } from "@/components/Chip";
-import { PartnerOfferCard } from "@/components/PartnerOfferCard";
+import { PartnerRecommendations } from "@/components/PartnerRecommendations";
 import { formatDate } from "@/utils/date";
 import { haptics } from "@/utils/haptics";
 import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
@@ -49,7 +49,6 @@ import {
 } from "@/utils/itineraryHistory";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { FEATURED_PARTNER_OFFER, isPartnerOfferActive } from "@/data/partnerOffers";
 import { getRegionImage } from "@/data/regionImages";
 import type { Activity, ActivityAlternative, ItineraryResponse } from "@/types/itinerary";
 import { MISSION_TYPE_PHOTO, MISSION_TYPE_VIDEO, MissionTemplate } from "@/types/missions";
@@ -1014,11 +1013,10 @@ export default function ItineraryDetailScreen() {
               hint={`${t("itineraryDetail.budget")} ${formatVndShort(data.trip_summary.budget)}`}
             />
           </View>
-          {data.trip_summary.trip_duration_days > 1 && isPartnerOfferActive(FEATURED_PARTNER_OFFER) ? (
-            <View style={screenStyles.stayOffer}>
-              <PartnerOfferCard offer={FEATURED_PARTNER_OFFER} compact />
-            </View>
-          ) : null}
+          <PartnerRecommendations
+            destinations={data.trip_summary.cities}
+            style={screenStyles.partnerRecommendations}
+          />
           {unscheduledMissionStops.length ? (
             <View style={screenStyles.unscheduledCard}>
               <View style={screenStyles.unscheduledHeading}>
@@ -1264,7 +1262,7 @@ const screenStyles = StyleSheet.create({
   summaryLabel: { color: "rgba(255,255,255,0.7)", fontSize: 11 },
   summaryHint: { color: "rgba(255,255,255,0.55)", fontSize: 10 },
   summaryDivider: { width: 1, height: 36, backgroundColor: "rgba(255,255,255,0.15)" },
-  stayOffer: { marginTop: spacing(1.5) },
+  partnerRecommendations: { marginTop: spacing(1.5) },
   unscheduledCard: {
     marginTop: spacing(2),
     gap: spacing(0.75),

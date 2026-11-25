@@ -24,6 +24,7 @@ import { IconButton } from "@/components/IconButton";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { PartnerRecommendations } from "@/components/PartnerRecommendations";
 import { PremiumAccessGate } from "@/components/PremiumAccessGate";
 import { generateItinerary } from "@/api/endpoints/itinerary";
 import { pruneMissions } from "@/api/endpoints/missions";
@@ -280,6 +281,18 @@ function CreateItineraryContent() {
         <ErrorBanner message={error} />
 
         <Text style={styles.label}>{t("createItinerary.whereLabel")}</Text>
+        {!missionProvinceId && (
+          <Pressable style={styles.selectBox} onPress={() => setProvincePickerOpen(true)}>
+            <Ionicons name="location-outline" size={18} color={colors.textMuted} />
+            <Text style={[styles.selectText, !province && styles.placeholderText]}>
+              {province ?? t("createItinerary.provincePlaceholder")}
+            </Text>
+            <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+          </Pressable>
+        )}
+
+        {province && <PartnerRecommendations destinations={[province]} />}
+
         {missionProvinceId ? (
           <View style={styles.missionPlacesCard}>
             {missionPlacesLoading ? <ActivityIndicator color={colors.navy} /> : null}
@@ -310,15 +323,7 @@ function CreateItineraryContent() {
               </>
             ) : null}
           </View>
-        ) : (
-          <Pressable style={styles.selectBox} onPress={() => setProvincePickerOpen(true)}>
-            <Ionicons name="location-outline" size={18} color={colors.textMuted} />
-            <Text style={[styles.selectText, !province && styles.placeholderText]}>
-              {province ?? t("createItinerary.provincePlaceholder")}
-            </Text>
-            <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
-          </Pressable>
-        )}
+        ) : null}
 
         {!missionProvinceId && selectedProvince && featuredAreas.length > 0 ? (
           <View style={styles.featuredBox}>

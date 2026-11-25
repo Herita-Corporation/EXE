@@ -12,6 +12,7 @@ export interface PremiumEntitlement {
   userId: string;
   isPremium: boolean;
   status: "PREMIUM" | "FREE";
+  subscriptionStatus?: "TRIAL" | "ACTIVE" | "FREE";
   planId: number | null;
   expiresAtUtc: string | null;
 }

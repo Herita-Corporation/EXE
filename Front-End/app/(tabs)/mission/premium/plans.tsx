@@ -125,7 +125,7 @@ export default function PremiumPlansScreen() {
             <Card style={styles.activeCard}>
               <Ionicons name="checkmark-circle" size={22} color={colors.success} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.activeTitle}>Bạn đang dùng DISA Premium</Text>
+                <Text style={styles.activeTitle}>{entitlement.subscriptionStatus === "TRIAL" ? "Bạn đang dùng thử DISA Premium" : "Bạn đang dùng DISA Premium"}</Text>
                 {entitlement.expiresAtUtc && <Text style={styles.body}>Hiệu lực đến {new Date(entitlement.expiresAtUtc).toLocaleDateString("vi-VN")}</Text>}
               </View>
             </Card>

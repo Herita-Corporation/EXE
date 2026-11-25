@@ -188,6 +188,7 @@ services:
       GoogleAuth__ClientIds__1: "${GOOGLE_ANDROID_CLIENT_ID:-506948056952-bvv50gogt7hfudeu8pll5dkdbthln02r.apps.googleusercontent.com}"
       GoogleAuth__ClientIds__2: "${GOOGLE_ANDROID_PLAY_CLIENT_ID:-506948056952-5uoaa2n5sdqv1kpbv8ipqnt7p6gcckm6.apps.googleusercontent.com}"
       GoogleAuth__ClientIds__3: "${GOOGLE_IOS_CLIENT_ID:-}"
+      GoogleAuth__ClientIds__4: "${GOOGLE_ANDROID_DIRECT_CLIENT_ID:-506948056952-d6qc253cgvl9smbur5hq1k3j18e7t6tm.apps.googleusercontent.com}"
       SePay__Environment: "${SEPAY_ENVIRONMENT:-TEST}"
       SePay__BankCode: "${SEPAY_BANK_CODE:-}"
       SePay__BankAccount: "${SEPAY_BANK_ACCOUNT:-}"

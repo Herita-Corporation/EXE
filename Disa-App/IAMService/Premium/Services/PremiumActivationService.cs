@@ -56,7 +56,7 @@ public sealed class PremiumActivationService
         // If the user has remaining Premium time,
         // extend from the existing expiration.
         DateTime start = subscription != null
-            && subscription.Status == "ACTIVE"
+            && (subscription.Status == "ACTIVE" || subscription.Status == "TRIAL")
             && subscription.EndAtUtc > now
                 ? subscription.EndAtUtc
                 : now;
@@ -92,6 +92,27 @@ public sealed class PremiumActivationService
 
         await _db.SaveChangesAsync(ct);
 
+        return end;
+    }
+
+    /// <summary>Grants the one-month welcome entitlement once per UserId.</summary>
+    public async Task<DateTime> GrantWelcomeTrialAsync(Guid userId, CancellationToken ct = default)
+    {
+        var existing = await _db.UserPremiumSubscriptions.SingleOrDefaultAsync(x => x.UserId == userId, ct);
+        if (existing is not null) return existing.EndAtUtc;
+
+        var monthlyPlan = await _db.PremiumPlans.SingleAsync(x => x.Code == "MONTHLY" && x.IsActive, ct);
+        var now = DateTime.UtcNow;
+        var end = now.AddMonths(1);
+        _db.UserPremiumSubscriptions.Add(new UserPremiumSubscription
+        {
+            UserId = userId,
+            PlanId = monthlyPlan.Id,
+            Status = "TRIAL",
+            StartAtUtc = now,
+            EndAtUtc = end
+        });
+        await _db.SaveChangesAsync(ct);
         return end;
     }
 }

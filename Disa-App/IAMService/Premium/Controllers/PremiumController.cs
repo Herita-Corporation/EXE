@@ -106,7 +106,7 @@ public sealed class PremiumController : ControllerBase
 
         bool isPremium =
             subscription != null
-            && subscription.Status == "ACTIVE"
+            && (subscription.Status == "ACTIVE" || subscription.Status == "TRIAL")
             && subscription.EndAtUtc > DateTime.UtcNow;
 
         return Ok(new
@@ -114,6 +114,7 @@ public sealed class PremiumController : ControllerBase
             userId,
             isPremium,
             status = isPremium ? "PREMIUM" : "FREE",
+            subscriptionStatus = isPremium ? subscription!.Status : "FREE",
             planId = isPremium
                 ? subscription!.PlanId
                 : (int?)null,
@@ -131,7 +132,7 @@ public sealed class PremiumController : ControllerBase
     {
         var currentUserId = CurrentUserId();
         var current = await _db.UserPremiumSubscriptions.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == currentUserId, ct);
-        if (current is null || current.Status != "ACTIVE" || current.EndAtUtc <= DateTime.UtcNow) return Forbid();
+        if (current is null || current.Status is not ("ACTIVE" or "TRIAL") || current.EndAtUtc <= DateTime.UtcNow) return Forbid();
 
         var accounts = request.Accounts?.Select(x => x.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
             ?? Array.Empty<string>();
@@ -147,7 +148,7 @@ public sealed class PremiumController : ControllerBase
 
         var ids = users.Select(x => x.Id).ToArray();
         var premiumIds = await _db.UserPremiumSubscriptions.AsNoTracking()
-            .Where(x => ids.Contains(x.UserId) && x.Status == "ACTIVE" && x.EndAtUtc > DateTime.UtcNow)
+            .Where(x => ids.Contains(x.UserId) && (x.Status == "ACTIVE" || x.Status == "TRIAL") && x.EndAtUtc > DateTime.UtcNow)
             .Select(x => x.UserId).ToListAsync(ct);
         if (premiumIds.Count != ids.Length)
             return BadRequest(new { error = "Every group member must have an active Premium subscription." });

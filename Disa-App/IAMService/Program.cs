@@ -6,7 +6,7 @@ using IAM.Infrastructure.Data.Entities;
 using IAM.Infrastructure.Security;
 
 using IAMService.Services;
-
+using IAMService.Premium;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -72,6 +72,9 @@ namespace IAMService
                 options.UseSqlServer(
                     builder.Configuration.GetConnectionString("IAMDb"));
             });
+
+            // PREMIUM PAYMENT - đăng ký riêng
+            builder.Services.AddDisaPremium(builder.Configuration);
 
             // ==========================================
             // 3. JWT AUTHENTICATION

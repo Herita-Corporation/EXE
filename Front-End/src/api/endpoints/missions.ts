@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { request } from "@/api/http";
 import type {
   AssignMissionRequest,
@@ -77,59 +78,65 @@ export function getUserMissionsSummary(userId: string) {
 
 // ── Mission submissions (multipart/form-data) ───────────────────────────────
 
-export interface SubmitMissionParams {
-  userMissionId: string;
-  photoUri?: string | null;
-  videoUri?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  takenAt?: string; // ISO string; defaults server-side to UtcNow if omitted
+export interface EvidenceFile {
+  uri: string;
+  name?: string | null;
+  mimeType?: string | null;
+  file?: File;
 }
 
-export function submitMission({
-  userMissionId,
-  photoUri,
-  videoUri,
+export interface MissionEvidence {
+  photo?: EvidenceFile | null;
+  video?: EvidenceFile | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  takenAt?: string;
+}
+
+async function appendEvidence(form: FormData, field: "Photo" | "Video", evidence: EvidenceFile) {
+  const fallbackName = field === "Photo" ? "evidence.jpg" : "evidence.mp4";
+  if (Platform.OS === "web") {
+    const file = evidence.file ?? await (await fetch(evidence.uri)).blob();
+    form.append(field, file, evidence.name ?? (file.type === "image/png" ? "evidence.png" : fallbackName));
+    return;
+  }
+
+  const uriName = evidence.uri.split("/").pop();
+  const name = uriName?.includes(".") ? uriName : evidence.name ?? fallbackName;
+  const extension = name.split(".").pop()?.toLowerCase();
+  const fallbackType = field === "Photo"
+    ? extension === "png" ? "image/png" : "image/jpeg"
+    : extension === "mov" ? "video/quicktime" : "video/mp4";
+  // React Native's FormData accepts a native file descriptor instead of a Blob.
+  form.append(field, {
+    uri: evidence.uri,
+    name: name.includes(".") ? name : fallbackName,
+    type: evidence.mimeType ?? fallbackType,
+  } as unknown as Blob);
+}
+
+export async function postMissionEvidence<T>(path: string, {
+  photo,
+  video,
   latitude,
   longitude,
   takenAt,
-}: SubmitMissionParams) {
+}: MissionEvidence) {
   const form = new FormData();
-  if (photoUri) {
-    const fileName = photoUri.split("/").pop() ?? "evidence.jpg";
-    const ext = fileName.split(".").pop()?.toLowerCase();
-    const mime = ext === "png" ? "image/png" : "image/jpeg";
-    // React Native's FormData accepts this { uri, name, type } shape in
-    // place of a Blob/File — Task.Application's SubmitMissionRequest.Photo
-    // is bound as IFormFile on the server.
-    form.append("Photo", {
-      uri: photoUri,
-      name: fileName,
-      type: mime,
-    } as unknown as Blob);
-  }
-  if (videoUri) {
-    const fileName = videoUri.split("/").pop() ?? "evidence.mp4";
-    const ext = fileName.split(".").pop()?.toLowerCase();
-    const mime = ext === "mov" ? "video/quicktime" : "video/mp4";
-    // Task.Application's SubmitMissionRequest.Video is bound as IFormFile.
-    form.append("Video", {
-      uri: videoUri,
-      name: fileName,
-      type: mime,
-    } as unknown as Blob);
-  }
+  if (photo) await appendEvidence(form, "Photo", photo);
+  if (video) await appendEvidence(form, "Video", video);
   if (latitude != null) form.append("Latitude", String(latitude));
   if (longitude != null) form.append("Longitude", String(longitude));
   if (takenAt) form.append("TakenAt", takenAt);
 
-  return request<SubmitMissionResponse>(
-    "task",
-    `/api/mission-submissions/${userMissionId}`,
-    {
-      method: "POST",
-      data: form,
-      headers: { "Content-Type": "multipart/form-data" },
-    }
-  );
+  return request<T>("task", path, {
+    method: "POST",
+    data: form,
+    timeoutMs: video ? 120000 : undefined,
+    ...(Platform.OS !== "web" && { headers: { "Content-Type": "multipart/form-data" } }),
+  });
+}
+
+export function submitMission(userMissionId: string, evidence: MissionEvidence) {
+  return postMissionEvidence<SubmitMissionResponse>(`/api/mission-submissions/${userMissionId}`, evidence);
 }

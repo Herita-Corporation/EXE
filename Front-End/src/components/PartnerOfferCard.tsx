@@ -5,12 +5,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { Card } from "@/components/Card";
 import { PartnerLogoMark } from "@/components/PartnerLogoMark";
 import { VoucherTicket } from "@/components/VoucherTicket";
+import type { PartnerOffer } from "@/data/partnerOffers";
+import { usePartnerOfferLink } from "@/hooks/usePartnerOfferLink";
 import { useLocale } from "@/i18n/LocaleContext";
-import type { PartnerOffer } from "@/mocks/partnerOffer";
 import { colors, spacing } from "@/theme/colors";
 
 export function PartnerOfferCard({ offer, compact = false }: { offer: PartnerOffer; compact?: boolean }) {
   const { locale, t } = useLocale();
+  const openPartnerOffer = usePartnerOfferLink();
   const { title, benefit } = offer.campaign[locale];
   const openVoucher = () => router.push({
     pathname: "/partner-voucher",
@@ -24,10 +26,11 @@ export function PartnerOfferCard({ offer, compact = false }: { offer: PartnerOff
         partnerName={offer.name}
         title={title}
         benefit={benefit}
-        meta={t("partnerOffer.redemptionPending")}
-        points={offer.pointsCost}
+        meta={t("partnerOffer.onWebsite")}
+        redeemLabel={t("partnerOffer.redeem")}
+        redeemIcon="open-outline"
         onOpen={openVoucher}
-        onRedeem={openVoucher}
+        onRedeem={() => openPartnerOffer(offer)}
       />
     );
   }

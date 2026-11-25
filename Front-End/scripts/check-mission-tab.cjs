@@ -14,6 +14,7 @@ const load = (file) => require(path.join(expo, "build", file));
 const { getRoutes } = load("getRoutesCore");
 const { getReactNavigationConfig } = load("getReactNavigationConfig");
 const { getStateFromPath } = load("fork/getStateFromPath");
+const { resolveHref } = load("link/href");
 const { resolveNavigationDestination } = load("global-state/resolveNavigationDestination");
 const { indexNavigationTree, reduceNavigationTree } = load("global-state/reduceNavigationTree");
 const { createInitialState } = load("react-navigation/core/createInitialState");
@@ -52,7 +53,8 @@ function reduce(action) {
   assert.equal(result.handled, true, `Action ${action.type} should be handled`);
   current = result.nextState;
 }
-function navigate(href) {
+function navigate(href, type = "NAVIGATE") {
+  href = resolveHref(href);
   navigations.push(href);
   const targetState = getStateFromPath(href, linking);
   assert(targetState, `The real route matcher must resolve ${href}`);
@@ -61,7 +63,7 @@ function navigate(href) {
     navigationState: current,
     routeNode,
     registry,
-    action: { type: "NAVIGATE", payload: {} },
+    action: { type, payload: {} },
   }));
 }
 function register(state, router) {
@@ -109,33 +111,50 @@ function setup(focused, feature, withDashboard = true) {
 const element = (type, props, ...children) => ({ type, props: { ...props, children } });
 const react = { createElement: element };
 const themeValue = new Proxy({}, { get: () => 0 });
-const router = { navigate };
+const router = {
+  navigate,
+  push: (href) => navigate(href, "PUSH"),
+  replace: (href) => navigate(href, "REPLACE"),
+};
+let premiumStatus = "inactive";
 const stubs = {
   react,
-  "react-native": { View: "View", Text: "Text", Pressable: "Pressable", StyleSheet: { create: (value) => value } },
+  "react-native": {
+    View: "View", Text: "Text", Pressable: "Pressable", ActivityIndicator: "ActivityIndicator",
+    StyleSheet: { create: (value) => value },
+  },
   "expo-router": { router, Tabs: { Screen: "Screen" }, Redirect: "Redirect", usePathname: () => currentPath },
   "@expo/vector-icons": { Ionicons: "Icon" },
   "react-native-safe-area-context": { useSafeAreaInsets: () => ({ bottom: 0 }) },
   "@/context/AuthContext": { useAuth: () => ({ isAuthenticated: true, isLoading: false }) },
+  "@/hooks/usePremiumAccess": { usePremiumAccess: () => ({ status: premiumStatus, retry() {} }) },
   "@/i18n/LocaleContext": { useLocale: () => ({ t: (key) => key }) },
   "@/utils/haptics": { haptics: { tap() {} } },
   "@/theme/colors": { colors: themeValue, radius: themeValue, shadow: {}, spacing: (value) => value, TAB_BAR_HEIGHT: 60 },
 };
-const source = fs.readFileSync(path.join(app, "(tabs)", "_layout.tsx"), "utf8");
-const compiled = ts.transpileModule(`${source}\nexport { CustomTabBar as TestTabBar };`, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
-}).outputText;
-const sandbox = {
-  exports: {},
-  require(name) { assert(name in stubs, `Unexpected native dependency ${name}`); return stubs[name]; },
-};
-vm.runInNewContext(compiled, sandbox, { filename: "_layout.navigation-check.js" });
 
-function findPressables(node) {
-  if (Array.isArray(node)) return node.flatMap(findPressables);
-  if (!node || typeof node !== "object") return [];
-  return node.type === "Pressable" ? [node] : findPressables(node.props?.children);
+function loadComponent(file, extraSource = "") {
+  const source = fs.readFileSync(path.join(project, file), "utf8");
+  const compiled = ts.transpileModule(`${source}\n${extraSource}`, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
+  }).outputText;
+  const sandbox = {
+    exports: {},
+    require(name) { assert(name in stubs, `Unexpected native dependency ${name}`); return stubs[name]; },
+  };
+  vm.runInNewContext(compiled, sandbox, { filename: file });
+  return sandbox.exports;
 }
+
+const { CustomTabBar: TestTabBar } = loadComponent("app/(tabs)/_layout.tsx", "export { CustomTabBar };");
+
+function findElements(node, type) {
+  if (Array.isArray(node)) return node.flatMap((child) => findElements(child, type));
+  if (!node || typeof node !== "object") return [];
+  return node.type === type ? [node] : findElements(node.props?.children, type);
+}
+
+const findPressables = (node) => findElements(node, "Pressable");
 function pressTrophy() {
   const tabs = current.routes[0].state;
   // Match Expo's footer view state: routes carry only names/keys/params.
@@ -144,7 +163,7 @@ function pressTrophy() {
   const descriptors = Object.fromEntries(state.routes.map((route) => [route.key, {
     navigation: { getState: () => current.routes[0].state, dispatch(action) { dispatches++; reduce(action); } },
   }]));
-  const bar = sandbox.exports.TestTabBar({ state, descriptors, emitter: { emit: () => ({ defaultPrevented: prevented }) } });
+  const bar = TestTabBar({ state, descriptors, emitter: { emit: () => ({ defaultPrevented: prevented }) } });
   const buttons = findPressables(bar);
   assert.equal(buttons.length, 5, "Feature stack must not become a sixth footer button");
   const trophy = buttons.find((button) => button.props.accessibilityLabel === "tabs.mission");
@@ -186,3 +205,45 @@ assert.equal(current, beforePrevented);
 assert.equal(navigations.length, 0);
 checks++;
 console.log(`PASS: ${checks} mission-tab scenarios using actual footer, filesystem routes and Expo reducers.`);
+
+for (const name of ["BackHeader", "Button", "Card", "ErrorBanner", "GradientHero",
+  "PremiumMissionRow", "PremiumProvincePicker", "ScreenContainer"]) {
+  stubs[`@/components/${name}`] = { [name]: name };
+}
+stubs["@/api/endpoints/premium"] = {};
+stubs["@/api/http"] = {};
+stubs["@/data/premiumPlans.json"] = require("../src/data/premiumPlans.json");
+stubs["@/components/PremiumAccessGate"] = loadComponent("src/components/PremiumAccessGate.tsx");
+const { PremiumMissionEntries } = loadComponent("src/components/PremiumEntry.tsx");
+const { default: SpecialMissionsScreen } = loadComponent("app/(tabs)/mission/premium/special.tsx");
+
+setup("missions", "itineraries");
+for (const status of ["inactive", "loading", "unavailable"]) {
+  premiumStatus = status;
+  const entries = findPressables(PremiumMissionEntries());
+  assert.equal(entries.length, 1, `Special missions must be visible when access is ${status}`);
+  assert(entries[0].props.children.some(({ props }) => props.name === "lock-closed-outline"));
+}
+premiumStatus = "inactive";
+findPressables(PremiumMissionEntries())[0].props.onPress();
+assert.equal(navigations.at(-1), "/(tabs)/mission/premium/special");
+const specialGate = SpecialMissionsScreen();
+const locked = specialGate.type(specialGate.props);
+assert.equal(locked.type, "Redirect");
+router.replace(locked.props.href);
+assert.equal(navigations.at(-1), "/(tabs)/mission/premium/plans?from=special");
+
+premiumStatus = "unavailable";
+setup("mission", "premium/special");
+const unavailable = specialGate.type(specialGate.props);
+const viewPlans = findElements(unavailable, "Button").find((button) => button.props.title === "premium.viewPlans");
+assert(viewPlans, "A subscription error must still offer a way to view the plans");
+viewPlans.props.onPress();
+assert.equal(navigations.at(-1), "/(tabs)/mission/premium/plans?from=special");
+
+premiumStatus = "active";
+assert.equal(specialGate.type(specialGate.props), specialGate.props.children);
+const entries = findPressables(PremiumMissionEntries());
+assert.equal(entries.length, 2);
+assert(entries[0].props.children.some(({ props }) => props.name === "chevron-forward"));
+console.log("PASS: Province missions stay visible, route to Premium when locked and open with active access.");

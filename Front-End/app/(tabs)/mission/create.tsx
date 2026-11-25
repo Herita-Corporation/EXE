@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,8 +24,10 @@ import { IconButton } from "@/components/IconButton";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { PremiumAccessGate } from "@/components/PremiumAccessGate";
 import { generateItinerary } from "@/api/endpoints/itinerary";
 import { pruneMissions } from "@/api/endpoints/missions";
+import { getSpecialMissions } from "@/api/endpoints/premium";
 import { ApiError } from "@/api/http";
 import { useAuth } from "@/context/AuthContext";
 import { getLiveItineraryIds, setLastGeneratedItinerary } from "@/utils/itineraryHistory";
@@ -33,6 +35,7 @@ import { useSmartBack } from "@/utils/backNavigation";
 import { VIETNAM_PROVINCES, type ProvinceHighlight } from "@/data/vietnamProvinces";
 import { getRegionImage } from "@/data/regionImages";
 import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
+import type { PremiumMission } from "@/types/premium";
 import { formatDate, fromIsoDate, toIsoDate } from "@/utils/date";
 import { colors, radius, spacing } from "@/theme/colors";
 
@@ -119,11 +122,45 @@ function FeaturedAreaCard({
 }
 
 export default function CreateItineraryScreen() {
+  const { missionProvinceId } = useLocalSearchParams<{ missionProvinceId?: string }>();
+  const content = <CreateItineraryContent />;
+  return missionProvinceId ? <PremiumAccessGate>{content}</PremiumAccessGate> : content;
+}
+
+function CreateItineraryContent() {
   const insets = useSafeAreaInsets();
   const goBack = useSmartBack();
   const { t, locale } = useLocale();
   const { user } = useAuth();
-  const [province, setProvince] = useState<string | null>(null);
+  const { missionProvinceId } = useLocalSearchParams<{ missionProvinceId?: string }>();
+  const [provinceSelection, setProvince] = useState<string | null>(null);
+  const [missionPlaces, setMissionPlaces] = useState<PremiumMission[]>([]);
+  const [missionPlacesLoading, setMissionPlacesLoading] = useState(!!missionProvinceId);
+  const [missionPlacesFailed, setMissionPlacesFailed] = useState(false);
+  const [missionPlacesAttempt, setMissionPlacesAttempt] = useState(0);
+  const province = missionProvinceId ? missionPlaces[0]?.provinceName ?? null : provinceSelection;
+
+  useEffect(() => {
+    if (!missionProvinceId) return;
+
+    let active = true;
+    setMissionPlaces([]);
+    setMissionPlacesLoading(true);
+    setMissionPlacesFailed(false);
+    getSpecialMissions(missionProvinceId)
+      .then((missions) => {
+        if (active) setMissionPlaces(missions.filter((mission) => mission.accepted));
+      })
+      .catch(() => {
+        if (active) setMissionPlacesFailed(true);
+      })
+      .finally(() => {
+        if (active) setMissionPlacesLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [missionProvinceId, missionPlacesAttempt]);
+
   const [provincePickerOpen, setProvincePickerOpen] = useState(false);
   const [provinceQuery, setProvinceQuery] = useState("");
   const provinceResults = provinceQuery.trim()
@@ -180,13 +217,14 @@ export default function CreateItineraryScreen() {
     setLoading(true);
     try {
       const result = await generateItinerary({
-        cities: [highlight ? `${highlight}, ${province}` : province],
+        cities: [highlight && !missionProvinceId ? `${highlight}, ${province}` : province],
         // The slider is per person; AI-Itinerary plans against the whole
         // trip budget (schemas/request.py: "Total trip budget in VND").
         budget: budgetVnd * travelers,
         start_date: startDate,
         end_date: endDate,
         preferences: styles_,
+        mission_province_id: missionProvinceId,
       });
       // Drop missions left over from itineraries that no longer exist — only
       // saved ones ("Lộ trình của tôi") and this new one keep theirs.
@@ -199,7 +237,14 @@ export default function CreateItineraryScreen() {
       }
       // Not saved to "My Itineraries" yet — only once the user reviews and
       // taps "Xác nhận tạo lộ trình" on the detail screen (see [id].tsx).
-      router.replace(`/(tabs)/mission/itinerary/${result.itinerary_id}`);
+      if (missionProvinceId && result.unscheduled_mission_destinations?.length) {
+        router.push({
+          pathname: "/(tabs)/mission/itinerary/[id]",
+          params: { id: result.itinerary_id, adjustMissionDates: "1" },
+        });
+      } else {
+        router.replace(`/(tabs)/mission/itinerary/${result.itinerary_id}`);
+      }
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : t("createItinerary.errorGenerateFailed")
@@ -235,15 +280,47 @@ export default function CreateItineraryScreen() {
         <ErrorBanner message={error} />
 
         <Text style={styles.label}>{t("createItinerary.whereLabel")}</Text>
-        <Pressable style={styles.selectBox} onPress={() => setProvincePickerOpen(true)}>
-          <Ionicons name="location-outline" size={18} color={colors.textMuted} />
-          <Text style={[styles.selectText, !province && styles.placeholderText]}>
-            {province ?? t("createItinerary.provincePlaceholder")}
-          </Text>
-          <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
-        </Pressable>
+        {missionProvinceId ? (
+          <View style={styles.missionPlacesCard}>
+            {missionPlacesLoading ? <ActivityIndicator color={colors.navy} /> : null}
+            {missionPlacesFailed ? (
+              <>
+                <ErrorBanner message={t("createItinerary.missionPlacesLoadFailed")} />
+                <Button
+                  title={t("createItinerary.retryMissionPlaces")}
+                  variant="secondary"
+                  onPress={() => setMissionPlacesAttempt((attempt) => attempt + 1)}
+                />
+              </>
+            ) : null}
+            {!missionPlacesLoading && !missionPlacesFailed && !missionPlaces.length ? (
+              <ErrorBanner message={t("createItinerary.missionPlacesEmpty")} />
+            ) : null}
+            {missionPlaces.length > 0 ? (
+              <>
+                <Text style={styles.missionPlacesTitle}>
+                  {province} · {t("createItinerary.missionPlacesTitle")}
+                </Text>
+                {missionPlaces.map((mission) => (
+                  <View key={mission.id} style={styles.missionPlaceRow}>
+                    <Ionicons name="location-outline" size={16} color={colors.link} />
+                    <Text style={styles.missionPlaceName}>{mission.placeName}</Text>
+                  </View>
+                ))}
+              </>
+            ) : null}
+          </View>
+        ) : (
+          <Pressable style={styles.selectBox} onPress={() => setProvincePickerOpen(true)}>
+            <Ionicons name="location-outline" size={18} color={colors.textMuted} />
+            <Text style={[styles.selectText, !province && styles.placeholderText]}>
+              {province ?? t("createItinerary.provincePlaceholder")}
+            </Text>
+            <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+          </Pressable>
+        )}
 
-        {selectedProvince && featuredAreas.length > 0 ? (
+        {!missionProvinceId && selectedProvince && featuredAreas.length > 0 ? (
           <View style={styles.featuredBox}>
             <View style={styles.featuredHeader}>
               <Ionicons name="star" size={14} color={colors.warning} />
@@ -440,6 +517,7 @@ export default function CreateItineraryScreen() {
           iconPosition="right"
           onPress={onGenerate}
           loading={loading}
+          disabled={!!missionProvinceId && !missionPlaces.length}
           style={{ marginTop: spacing(1) }}
         />
       </View>
@@ -642,6 +720,17 @@ const styles = StyleSheet.create({
   },
   selectText: { flex: 1, color: colors.text, fontSize: 14 },
   placeholderText: { color: colors.textMuted },
+  missionPlacesCard: {
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing(1.75),
+    gap: spacing(1),
+  },
+  missionPlacesTitle: { color: colors.navy, fontWeight: "800", fontSize: 15 },
+  missionPlaceRow: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
+  missionPlaceName: { flex: 1, color: colors.text, fontSize: 14 },
   dateRow: { flexDirection: "row", gap: spacing(1.5) },
   card: {
     backgroundColor: colors.surface,

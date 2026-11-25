@@ -8,6 +8,14 @@ export interface GenerateItineraryRequest {
   start_date: string; // "YYYY-MM-DD"
   end_date: string; // "YYYY-MM-DD"
   preferences: string[];
+  mission_province_id?: string;
+}
+
+export interface MissionDestination {
+  mission_id: string;
+  name: string;
+  place_query: string;
+  city: string;
 }
 
 export interface TripSummary {
@@ -35,6 +43,7 @@ export interface LocationCoords {
 
 export interface Activity {
   activity_id: string;
+  mission_id?: string | null;
   name: string;
   type: string;
   activity: string;
@@ -59,6 +68,7 @@ export interface ItineraryResponse {
   trip_summary: TripSummary;
   budget_breakdown: BudgetBreakdown;
   days: DayPlan[];
+  unscheduled_mission_destinations?: MissionDestination[];
   total_cost: number;
   created_at: string;
 }

@@ -49,8 +49,8 @@ import {
 } from "@/utils/itineraryHistory";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import { FEATURED_PARTNER_OFFER, isPartnerOfferActive } from "@/data/partnerOffers";
 import { getRegionImage } from "@/data/regionImages";
-import { FEATURED_PARTNER_OFFER } from "@/mocks/partnerOffer";
 import type { Activity, ActivityAlternative, ItineraryResponse } from "@/types/itinerary";
 import { MISSION_TYPE_PHOTO, MISSION_TYPE_VIDEO, MissionTemplate } from "@/types/missions";
 import { colors, radius, shadow, spacing } from "@/theme/colors";
@@ -59,7 +59,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function isEditablePlace(activity: Activity) {
-  return activity.type !== "transportation";
+  return activity.type !== "transportation" && !activity.mission_id;
 }
 
 const ACTIVITY_TYPE_KEY: Record<string, TranslationKey> = {
@@ -115,9 +115,12 @@ const ARRIVAL_RADIUS_METERS = 150;
 function openMapsFor(activity: Activity, city?: string) {
   // Prefer server-geocoded GPS; otherwise let Google Maps search by name +
   // area (meals/coffee are never geocoded, hotel names often miss).
+  const place = activity.mission_id && activity.location
+    ? activity.location
+    : [activity.name, activity.location ?? city].filter(Boolean).join(", ");
   const destination = activity.coordinates
     ? `${activity.coordinates.lat},${activity.coordinates.lng}`
-    : encodeURIComponent([activity.name, activity.location ?? city].filter(Boolean).join(", "));
+    : encodeURIComponent(place);
   Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${destination}`);
 }
 
@@ -465,6 +468,11 @@ function ActivityCard({
         <View style={cardStyles.chip}>
           <Text style={cardStyles.chipText}>{activityTypeLabel(activity.type, t)}</Text>
         </View>
+        {activity.mission_id ? (
+          <View style={cardStyles.chip}>
+            <Text style={cardStyles.chipText}>{t("itineraryDetail.missionStop")}</Text>
+          </View>
+        ) : null}
         {activity.location ? (
           <View style={cardStyles.chip}>
             <Text style={cardStyles.chipText} numberOfLines={1}>
@@ -486,7 +494,7 @@ function ActivityCard({
       )}
 
       {/* Inline Swipe Buttons directly on the card (no modal popups) */}
-      {!isTransport && (
+      {!isTransport && !activity.mission_id && (
         <View style={cardStyles.missionContainer}>
           {/* Photo mission slider / status */}
           {photoAssigned ? (
@@ -645,7 +653,7 @@ const cardStyles = StyleSheet.create({
 // ── Main Itinerary Detail Screen ─────────────────────────────────────────────
 
 export default function ItineraryDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, adjustMissionDates } = useLocalSearchParams<{ id: string; adjustMissionDates?: string }>();
   const { user } = useAuth();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -945,6 +953,7 @@ export default function ItineraryDetailScreen() {
     .map((day, dayIdx) => ({ day, dayIdx }))
     .filter(({ dayIdx }) => selectedDay === null || selectedDay === dayIdx);
   const nextWaypoint = waypoints[waypointIndex];
+  const unscheduledMissionStops = data.unscheduled_mission_destinations ?? [];
 
   return (
     <View style={screenStyles.root}>
@@ -1005,9 +1014,29 @@ export default function ItineraryDetailScreen() {
               hint={`${t("itineraryDetail.budget")} ${formatVndShort(data.trip_summary.budget)}`}
             />
           </View>
-          {data.trip_summary.trip_duration_days > 1 ? (
+          {data.trip_summary.trip_duration_days > 1 && isPartnerOfferActive(FEATURED_PARTNER_OFFER) ? (
             <View style={screenStyles.stayOffer}>
               <PartnerOfferCard offer={FEATURED_PARTNER_OFFER} compact />
+            </View>
+          ) : null}
+          {unscheduledMissionStops.length ? (
+            <View style={screenStyles.unscheduledCard}>
+              <View style={screenStyles.unscheduledHeading}>
+                <Ionicons name="calendar-outline" size={20} color={colors.link} />
+                <Text style={screenStyles.unscheduledTitle}>{t("itineraryDetail.unscheduledMissionStops")}</Text>
+              </View>
+              {unscheduledMissionStops.map((stop) => (
+                <Text key={stop.mission_id} style={screenStyles.unscheduledStop}>• {stop.name}</Text>
+              ))}
+              <Text style={screenStyles.unscheduledHint}>{t("itineraryDetail.unscheduledMissionHint")}</Text>
+              {adjustMissionDates && router.canGoBack() ? (
+                <Button
+                  title={t("itineraryDetail.adjustMissionDates")}
+                  icon="calendar-outline"
+                  variant="outline"
+                  onPress={() => router.back()}
+                />
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -1236,6 +1265,19 @@ const screenStyles = StyleSheet.create({
   summaryHint: { color: "rgba(255,255,255,0.55)", fontSize: 10 },
   summaryDivider: { width: 1, height: 36, backgroundColor: "rgba(255,255,255,0.15)" },
   stayOffer: { marginTop: spacing(1.5) },
+  unscheduledCard: {
+    marginTop: spacing(2),
+    gap: spacing(0.75),
+    padding: spacing(1.75),
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceAlt,
+  },
+  unscheduledHeading: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
+  unscheduledTitle: { flex: 1, fontSize: 15, fontWeight: "800", color: colors.navy },
+  unscheduledStop: { fontSize: 14, color: colors.text },
+  unscheduledHint: { fontSize: 13, color: colors.textMuted, marginVertical: spacing(0.5) },
   dayChipsWrap: {
     backgroundColor: colors.background,
     paddingVertical: spacing(1.25),

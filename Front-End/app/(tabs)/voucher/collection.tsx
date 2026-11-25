@@ -8,9 +8,15 @@ import { remoteImage } from "@/data/regionImages";
 import { BackHeader } from "@/components/BackHeader";
 import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { PremiumVoucherCard } from "@/components/PremiumVoucherCard";
 import { formatDate } from "@/utils/date";
 import { VoucherCategoryPill, VoucherIcon } from "@/components/VoucherIcon";
 import * as vouchersApi from "@/api/endpoints/vouchers";
+import { getEarnedSpecialVouchers } from "@/api/endpoints/premium";
+import { ApiError } from "@/api/http";
+import { usePartnerOfferLink } from "@/hooks/usePartnerOfferLink";
+import type { EarnedPremiumVoucher } from "@/types/premium";
 import type { OwnedVoucher, PointsBalance } from "@/types/vouchers";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/i18n/LocaleContext";
@@ -23,16 +29,29 @@ function isExpiringSoon(expiresAt: string) {
 
 export default function VoucherCollectionScreen() {
   const { user } = useAuth();
+  const userId = user?.id;
   const { t, locale } = useLocale();
+  const openPartnerOffer = usePartnerOfferLink();
   const [owned, setOwned] = useState<OwnedVoucher[]>([]);
   const [balance, setBalance] = useState<PointsBalance | null>(null);
+  const [rewards, setRewards] = useState<{ userId: string; items: EarnedPremiumVoucher[]; failed: boolean }>();
+  const missionRewards = rewards?.userId === userId ? rewards?.items ?? [] : [];
+  const activeMissionRewards = missionRewards.filter(({ voucher }) => !voucher.endsOn ||
+    Date.now() <= Date.parse(`${voucher.endsOn}T23:59:59.999+07:00`));
 
   useFocusEffect(
     useCallback(() => {
-      if (!user) return;
-      vouchersApi.getOwnedVouchers(user.id).then(setOwned).catch(() => {});
-      vouchersApi.getPointsBalance(user.id).then(setBalance).catch(() => {});
-    }, [user])
+      if (!userId) return;
+      let cancelled = false;
+      vouchersApi.getOwnedVouchers(userId).then(setOwned).catch(() => {});
+      vouchersApi.getPointsBalance(userId).then(setBalance).catch(() => {});
+      getEarnedSpecialVouchers().then((items) => {
+        if (!cancelled) setRewards({ userId, items, failed: false });
+      }).catch((err) => {
+        if (!cancelled) setRewards({ userId, items: [], failed: !(err instanceof ApiError && err.status === 404) });
+      });
+      return () => { cancelled = true; };
+    }, [userId])
   );
 
   return (
@@ -43,7 +62,7 @@ export default function VoucherCollectionScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.totalLabel}>{t("voucher.totalRewards")}</Text>
           <Text style={styles.totalValue}>
-            {owned.length} {t("voucher.activeVouchers")}
+            {owned.length + activeMissionRewards.length} {t("voucher.activeVouchers")}
           </Text>
           <View style={styles.pointsRow}>
             <Ionicons name="star" size={12} color={colors.gold} />
@@ -70,7 +89,15 @@ export default function VoucherCollectionScreen() {
         <Text style={styles.sectionTitle}>{t("voucher.myCollection")}</Text>
       </View>
 
-      {owned.length === 0 ? (
+      {rewards?.userId === userId && rewards?.failed && <ErrorBanner message={t("premium.vouchersLoadFailed")} />}
+      {missionRewards.map(({ voucher, redemptionUrl }) => (
+        <PremiumVoucherCard
+          key={voucher.rewardId}
+          voucher={voucher}
+          onOpen={() => openPartnerOffer({ redemptionUrl, expiresOn: voucher.endsOn ?? undefined })}
+        />
+      ))}
+      {owned.length === 0 && missionRewards.length === 0 ? (
         <EmptyState icon="ticket-outline" title={t("voucher.noOwnedVouchers")} />
       ) : (
         owned.map((v) => (

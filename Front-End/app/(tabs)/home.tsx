@@ -10,13 +10,14 @@ import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { PartnerLogoStrip } from "@/components/PartnerLogoStrip";
 import { PartnerOfferCarousel } from "@/components/PartnerOfferCarousel";
 import { useAuth } from "@/context/AuthContext";
+import { isPartnerOfferActive, PARTNER_OFFERS } from "@/data/partnerOffers";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { TranslationKey } from "@/i18n/LocaleContext";
 import { FEATURED_MISSIONS } from "@/mocks/featuredMissions";
-import { PARTNER_OFFERS } from "@/mocks/partnerOffer";
 import { colors, isDark, radius, spacing } from "@/theme/colors";
 import { GradientHero } from "@/components/GradientHero";
+import { PremiumHomeCard } from "@/components/PremiumEntry";
 
 // One consistent tile style for every action (soft blue tile, navy icon)
 // instead of a different solid color per action — the old rainbow grid was
@@ -55,8 +56,6 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Hero: the one gradient block on the page — greeting, points and the
-          screen's single amber CTA (create itinerary) together. */}
       <GradientHero style={styles.hero} markStyle={{ right: -40, width: 180 }}>
         <View style={styles.heroTop}>
           <Avatar name={displayName} size={44} />
@@ -85,6 +84,8 @@ export default function HomeScreen() {
         </View>
       </GradientHero>
 
+      <PremiumHomeCard />
+
       <View style={styles.quickRow}>
         {QUICK_ACTIONS.map((action) => (
           <Pressable
@@ -110,7 +111,7 @@ export default function HomeScreen() {
           actionLabel={t("home.viewAll")}
           onAction={() => router.push("/(tabs)/voucher")}
         />
-        <PartnerOfferCarousel offers={PARTNER_OFFERS} />
+        <PartnerOfferCarousel offers={PARTNER_OFFERS.filter(isPartnerOfferActive)} />
       </View>
 
       <SectionHeader

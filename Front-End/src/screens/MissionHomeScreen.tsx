@@ -22,6 +22,7 @@ import { haptics } from "@/utils/haptics";
 import { MissionThumb } from "@/components/MissionThumb";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { GradientHero } from "@/components/GradientHero";
+import { PremiumMissionEntries } from "@/components/PremiumEntry";
 import { deleteMission, listUserMissions, pruneMissions } from "@/api/endpoints/missions";
 import { useToast } from "@/context/ToastContext";
 import { getLiveItineraryIds } from "@/utils/itineraryHistory";
@@ -181,6 +182,8 @@ export default function MissionHomeScreen() {
           />
         }
       />
+
+      <PremiumMissionEntries />
 
       {/* Points hero */}
       <GradientHero style={styles.pointsCard} markPosition="top-right" markStyle={{ width: 160, opacity: 0.1 }}>

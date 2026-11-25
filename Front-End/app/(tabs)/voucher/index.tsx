@@ -9,7 +9,7 @@ import { GradientHero } from "@/components/GradientHero";
 import { VoucherIcon } from "@/components/VoucherIcon";
 import { VoucherTicket } from "@/components/VoucherTicket";
 import { PartnerOfferCard } from "@/components/PartnerOfferCard";
-import { PARTNER_OFFERS } from "@/mocks/partnerOffer";
+import { isPartnerOfferActive, PARTNER_OFFERS } from "@/data/partnerOffers";
 import { ALL_CATEGORY_ICON, categoryStyle } from "@/utils/voucherCategory";
 import { Chip } from "@/components/Chip";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -80,13 +80,14 @@ export default function VoucherScreen() {
   );
 
   const category = CATEGORIES.find(([value]) => value === categoryParam)?.[0] ?? ALL_OFFERS;
-  const selectedPartner = PARTNER_OFFERS.find((offer) => offer.partnerId === partner);
+  const activePartnerOffers = PARTNER_OFFERS.filter(isPartnerOfferActive);
+  const selectedPartner = activePartnerOffers.find((offer) => offer.partnerId === partner);
   const filtered = selectedPartner
     ? []
     : vouchers.filter((voucher) => category === ALL_OFFERS || voucher.category === category);
   const partnerOffers = selectedPartner
     ? [selectedPartner]
-    : PARTNER_OFFERS.filter((offer) => category === ALL_OFFERS || offer.category === category);
+    : activePartnerOffers.filter((offer) => category === ALL_OFFERS || offer.category === category);
 
   function selectCategory(nextCategory: string) {
     router.setParams({

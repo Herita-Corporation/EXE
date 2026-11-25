@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { PartnerLogoMark } from "@/components/PartnerLogoMark";
-import type { PartnerOffer } from "@/mocks/partnerOffer";
+import type { PartnerOffer } from "@/data/partnerOffers";
 import { brand, colors, radius, spacing } from "@/theme/colors";
 
 export function PartnerLogoStrip({ offers }: { offers: readonly PartnerOffer[] }) {

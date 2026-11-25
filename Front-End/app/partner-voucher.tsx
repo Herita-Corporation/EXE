@@ -4,14 +4,22 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BackHeader } from "@/components/BackHeader";
 import { Badge } from "@/components/Badge";
+import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { PartnerLogoMark } from "@/components/PartnerLogoMark";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { SectionHeader } from "@/components/SectionHeader";
+import {
+  FEATURED_PARTNER_OFFER,
+  isPartnerOfferActive,
+  PARTNER_CATEGORY_LABELS,
+  PARTNER_OFFERS,
+} from "@/data/partnerOffers";
+import { usePartnerOfferLink } from "@/hooks/usePartnerOfferLink";
 import { useLocale } from "@/i18n/LocaleContext";
-import { FEATURED_PARTNER_OFFER, PARTNER_CATEGORY_LABELS, PARTNER_OFFERS } from "@/mocks/partnerOffer";
-import { colors, radius, spacing } from "@/theme/colors";
+import { colors, spacing } from "@/theme/colors";
+import { formatDate } from "@/utils/date";
 
 function goBack() {
   if (router.canGoBack()) {
@@ -23,14 +31,18 @@ function goBack() {
 
 export default function PartnerVoucherScreen() {
   const { locale, t } = useLocale();
+  const openPartnerOffer = usePartnerOfferLink();
   const { partner = FEATURED_PARTNER_OFFER.partnerId } = useLocalSearchParams<{ partner?: string }>();
   const offer = PARTNER_OFFERS.find((item) => item.partnerId === partner);
 
-  if (!offer) {
+  if (!offer || !isPartnerOfferActive(offer)) {
     return (
       <ScreenContainer>
         <BackHeader title={t("voucherDetail.title")} onBack={goBack} />
-        <EmptyState icon="pricetags-outline" title={t("voucherDetail.notFound")} />
+        <EmptyState
+          icon="pricetags-outline"
+          title={t(offer ? "partnerOffer.expired" : "voucherDetail.notFound")}
+        />
       </ScreenContainer>
     );
   }
@@ -54,15 +66,11 @@ export default function PartnerVoucherScreen() {
             <Text accessibilityRole="header" style={styles.title}>{title}</Text>
             <Text style={styles.benefit}>{benefit}</Text>
           </View>
-          <View style={styles.redemption}>
-            <View style={styles.points}>
-              <Ionicons name="star" size={16} color={colors.gold} />
-              <Text style={styles.pointsText}>
-                {t("partnerOffer.points", { points: offer.pointsCost })}
-              </Text>
-            </View>
-            <Badge label={t("partnerOffer.redemptionPending")} />
-          </View>
+          {offer.expiresOn && (
+            <Text style={styles.copy}>
+              {t("voucherDetail.expires", { date: formatDate(offer.expiresOn, locale) })}
+            </Text>
+          )}
         </View>
       </Card>
 
@@ -71,6 +79,13 @@ export default function PartnerVoucherScreen() {
         <Ionicons name="reader-outline" size={20} color={colors.navy} />
         <Text style={styles.copy}>{terms}</Text>
       </Card>
+      <Button
+        title={t("partnerOffer.redeem")}
+        variant="amber"
+        icon="open-outline"
+        iconPosition="right"
+        onPress={() => openPartnerOffer(offer)}
+      />
     </ScreenContainer>
   );
 }
@@ -82,18 +97,6 @@ const styles = StyleSheet.create({
   campaignCopy: { gap: spacing(0.5) },
   title: { color: colors.navy, fontSize: 24, lineHeight: 30, fontWeight: "800" },
   benefit: { color: colors.text, fontSize: 15, lineHeight: 21, fontWeight: "700" },
-  redemption: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing(1) },
-  points: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: spacing(0.75),
-    backgroundColor: colors.goldMuted,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing(1.25),
-    paddingVertical: spacing(0.75),
-  },
-  pointsText: { color: colors.navy, fontSize: 13, fontWeight: "800" },
   copy: { flex: 1, color: colors.textMuted, fontSize: 14, lineHeight: 20 },
   terms: { flexDirection: "row", alignItems: "flex-start", gap: spacing(1.25) },
 });

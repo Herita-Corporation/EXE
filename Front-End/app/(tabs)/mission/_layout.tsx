@@ -30,6 +30,11 @@ export default function MissionLayout() {
       <Stack.Screen name="events/[id]" />
       <Stack.Screen name="collection/index" />
       <Stack.Screen name="collection/[id]" />
+      <Stack.Screen name="premium/plans" />
+      <Stack.Screen name="premium/special" />
+      <Stack.Screen name="premium/groups" />
+      <Stack.Screen name="premium/group/[groupId]" />
+      <Stack.Screen name="premium/evidence/[missionId]" />
     </Stack>
   );
 }

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "basic",
+    "name": "Cơ bản",
+    "periodMonths": null,
+    "priceVnd": 0,
+    "specialMissions": false,
+    "groupMissions": false
+  },
+  {
+    "id": "premium-1m",
+    "name": "1 tháng",
+    "periodMonths": 1,
+    "priceVnd": 29000,
+    "specialMissions": true,
+    "groupMissions": true
+  },
+  {
+    "id": "premium-6m",
+    "name": "6 tháng",
+    "periodMonths": 6,
+    "priceVnd": 149000,
+    "specialMissions": true,
+    "groupMissions": true
+  },
+  {
+    "id": "premium-12m",
+    "name": "1 năm",
+    "periodMonths": 12,
+    "priceVnd": 249000,
+    "specialMissions": true,
+    "groupMissions": true
+  }
+]

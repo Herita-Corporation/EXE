@@ -6,9 +6,10 @@
  * with AuthContext.
  */
 import * as SecureStore from "expo-secure-store";
+import { isPremiumTest } from "@/utils/premiumTest";
 
-const ACCESS_KEY = "disa.accessToken";
-const REFRESH_KEY = "disa.refreshToken";
+const ACCESS_KEY = isPremiumTest ? "disa.accessToken.premiumTest" : "disa.accessToken";
+const REFRESH_KEY = isPremiumTest ? "disa.refreshToken.premiumTest" : "disa.refreshToken";
 
 let accessToken: string | null = null;
 let refreshToken: string | null = null;

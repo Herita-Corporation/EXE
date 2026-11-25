@@ -8,6 +8,7 @@
  * once the app is actually running on the device's network.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { isPremiumTest, premiumTestApiUrl } from "@/utils/premiumTest";
 
 export type ServiceKey = "iam" | "aiTour" | "task";
 
@@ -17,13 +18,17 @@ export const SERVICE_LABELS: Record<ServiceKey, string> = {
   task: "Task.Presentation (missions)",
 };
 
-export const DEFAULT_URLS: Record<ServiceKey, string> = {
+export const DEFAULT_URLS: Record<ServiceKey, string> = premiumTestApiUrl ? {
+  iam: `${premiumTestApiUrl}/iam`,
+  aiTour: `${premiumTestApiUrl}/aitour`,
+  task: `${premiumTestApiUrl}/task`,
+} : {
   iam: process.env.EXPO_PUBLIC_IAM_API_URL ?? "http://localhost:5195",
   aiTour: process.env.EXPO_PUBLIC_AITOUR_API_URL ?? "http://localhost:5289",
   task: process.env.EXPO_PUBLIC_TASK_API_URL ?? "http://localhost:5020",
 };
 
-const STORAGE_KEY = "disa.apiConfig.v1";
+const STORAGE_KEY = isPremiumTest ? "disa.apiConfig.v1.premiumTest" : "disa.apiConfig.v1";
 
 let current: Record<ServiceKey, string> = { ...DEFAULT_URLS };
 let loaded = false;

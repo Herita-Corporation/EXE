@@ -14,7 +14,8 @@ export function generateItinerary(payload: GenerateItineraryRequest) {
   return request<ItineraryResponse>("aiTour", "/api/v1/itinerary/generate", {
     method: "POST",
     data: payload,
-    timeoutMs: 90000, // GPT-4o-mini generation: longer multi-day trips can take ~50-60s
+    // Mission trips also check the accepted places and may geocode extra stops.
+    timeoutMs: payload.mission_province_id ? 140_000 : 90_000,
   });
 }
 

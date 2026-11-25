@@ -13,6 +13,7 @@ import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
 import { colors, isDark, spacing } from "@/theme/colors";
+import { isPremiumTest } from "@/utils/premiumTest";
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -56,7 +57,7 @@ export default function LoginScreen() {
         />
         <Text style={styles.title}>{t("auth.welcomeBack")}</Text>
         <Text style={styles.subtitle}>
-          {t("auth.welcomeBackSubtitle")}
+          {t(isPremiumTest ? "premium.testBuild" : "auth.welcomeBackSubtitle")}
         </Text>
       </View>
 

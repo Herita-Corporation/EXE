@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import { ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { PaginationDots } from "@/components/PaginationDots";
 import { PartnerOfferBanner } from "@/components/PartnerOfferBanner";
+import type { PartnerOffer } from "@/data/partnerOffers";
 import { useLocale } from "@/i18n/LocaleContext";
-import type { PartnerOffer } from "@/mocks/partnerOffer";
 import { radius, spacing } from "@/theme/colors";
 
 export function PartnerOfferCarousel({ offers }: { offers: readonly PartnerOffer[] }) {
@@ -12,6 +12,7 @@ export function PartnerOfferCarousel({ offers }: { offers: readonly PartnerOffer
   const [activeIndex, setActiveIndex] = useState(0);
 
   if (offers.length === 0) return null;
+  const visibleIndex = Math.min(activeIndex, offers.length - 1);
 
   function onScroll({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) {
     const { contentOffset, layoutMeasurement } = nativeEvent;
@@ -42,9 +43,9 @@ export function PartnerOfferCarousel({ offers }: { offers: readonly PartnerOffer
       {offers.length > 1 && (
         <PaginationDots
           count={offers.length}
-          activeIndex={activeIndex}
+          activeIndex={visibleIndex}
           onLightBackground
-          accessibilityLabel={t("partnerOffer.carouselPosition", { current: activeIndex + 1, count: offers.length })}
+          accessibilityLabel={t("partnerOffer.carouselPosition", { current: visibleIndex + 1, count: offers.length })}
         />
       )}
     </View>

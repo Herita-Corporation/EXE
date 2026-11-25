@@ -4,8 +4,8 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { PartnerLogoMark } from "@/components/PartnerLogoMark";
+import type { PartnerOffer } from "@/data/partnerOffers";
 import { useLocale } from "@/i18n/LocaleContext";
-import type { PartnerOffer } from "@/mocks/partnerOffer";
 import { brand, radius, spacing } from "@/theme/colors";
 
 export function PartnerOfferBanner({ offer }: { offer: PartnerOffer }) {

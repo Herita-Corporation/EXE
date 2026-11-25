@@ -11,7 +11,9 @@ interface Props {
   title: string;
   benefit?: string;
   meta: string;
-  points: number;
+  points?: number;
+  redeemLabel?: string;
+  redeemIcon?: keyof typeof Ionicons.glyphMap;
   onOpen: () => void;
   onRedeem: () => void;
   disabled?: boolean;
@@ -25,13 +27,15 @@ export function VoucherTicket({
   benefit,
   meta,
   points,
+  redeemLabel,
+  redeemIcon,
   onOpen,
   onRedeem,
   disabled,
   loading,
 }: Props) {
   const { locale, t } = useLocale();
-  const redeemLabel = t("voucher.redeemShort");
+  const actionLabel = redeemLabel ?? t("voucher.redeemShort");
 
   return (
     <View style={styles.ticket}>
@@ -54,15 +58,19 @@ export function VoucherTicket({
           {meta ? <Text style={styles.meta}>{meta}</Text> : null}
         </Pressable>
         <View style={styles.footer}>
-          <View style={styles.points}>
-            <Ionicons name="star" size={13} color={colors.goldText} />
-            <Text style={styles.pointsText}>
-              {points.toLocaleString(locale)} {t("voucher.pointsSuffix")}
-            </Text>
-          </View>
+          {points !== undefined && (
+            <View style={styles.points}>
+              <Ionicons name="star" size={13} color={colors.goldText} />
+              <Text style={styles.pointsText}>
+                {points.toLocaleString(locale)} {t("voucher.pointsSuffix")}
+              </Text>
+            </View>
+          )}
           <Button
-            title={redeemLabel}
-            accessibilityLabel={`${redeemLabel} ${partnerName ?? title}`}
+            title={actionLabel}
+            accessibilityLabel={`${actionLabel} ${partnerName ?? title}`}
+            icon={redeemIcon}
+            iconPosition="right"
             size="sm"
             shape="rounded"
             variant="secondary"
@@ -121,5 +129,5 @@ const styles = StyleSheet.create({
   },
   points: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
   pointsText: { fontSize: 13, fontWeight: "800", color: colors.navy, flexShrink: 1 },
-  button: { minHeight: 40, minWidth: 64, borderRadius: radius.sm },
+  button: { minHeight: 40, minWidth: 64, borderRadius: radius.sm, marginLeft: "auto" },
 });

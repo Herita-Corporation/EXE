@@ -30,7 +30,9 @@ import { brand, colors, radius, spacing } from "@/theme/colors";
 // translated, via this lookup, so the comparison against v.category still
 // works regardless of the selected app language.
 const ALL_OFFERS = "All Offers";
+const PARTNER_OFFERS_FILTER = "Partner";
 const CATEGORY_KEYS: Record<string, TranslationKey> = {
+  [PARTNER_OFFERS_FILTER]: "voucher.filterPartnerOffers",
   Hotels: "voucher.filterHotels",
   Dining: "voucher.filterDining",
   Experience: "voucher.filterExperience",
@@ -81,12 +83,14 @@ export default function VoucherScreen() {
 
   const category = CATEGORIES.find(([value]) => value === categoryParam)?.[0] ?? ALL_OFFERS;
   const selectedPartner = PARTNER_OFFERS.find((offer) => offer.partnerId === partner);
-  const filtered = selectedPartner
+  const filtered = selectedPartner || category === PARTNER_OFFERS_FILTER
     ? []
     : vouchers.filter((voucher) => category === ALL_OFFERS || voucher.category === category);
   const partnerOffers = selectedPartner
     ? [selectedPartner]
-    : PARTNER_OFFERS.filter((offer) => category === ALL_OFFERS || offer.category === category);
+    : PARTNER_OFFERS.filter((offer) =>
+      category === ALL_OFFERS || category === PARTNER_OFFERS_FILTER || offer.category === category
+    );
 
   function selectCategory(nextCategory: string) {
     router.setParams({
@@ -174,8 +178,8 @@ export default function VoucherScreen() {
             key={value}
             label={t(label)}
             selected={!selectedPartner && category === value}
-            icon={categoryStyle(value).icon}
-            iconColor={categoryStyle(value).color}
+            icon={value === PARTNER_OFFERS_FILTER ? "gift-outline" : categoryStyle(value).icon}
+            iconColor={value === PARTNER_OFFERS_FILTER ? colors.goldMuted : categoryStyle(value).color}
             onPress={() => selectCategory(value)}
           />
         ))}

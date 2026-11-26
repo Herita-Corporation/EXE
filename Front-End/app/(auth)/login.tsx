@@ -5,6 +5,7 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -22,6 +23,11 @@ const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
 const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const hasGoogleAuthConfig = Boolean(googleWebClientId && googleAndroidClientId);
+// Expo Go cannot own the app's disatravel:// redirect scheme. Showing the
+// button there starts an OAuth request that Google rejects before returning
+// to the app. Google sign-in is therefore tested in a development build or
+// one of the signed APK/AAB variants, never Expo Go.
+const isExpoGo = Constants.appOwnership === "expo";
 
 function GoogleLoginButton({
   disabled,
@@ -103,7 +109,7 @@ function GoogleLoginButton({
 
 export default function LoginScreen() {
   const { login } = useAuth();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -203,11 +209,17 @@ export default function LoginScreen() {
           iconPosition="right"
         />
 
-        {hasGoogleAuthConfig ? (
+        {hasGoogleAuthConfig && !isExpoGo ? (
           <GoogleLoginButton
             disabled={loading}
             onError={reportGoogleError}
           />
+        ) : hasGoogleAuthConfig && isExpoGo ? (
+          <Text style={styles.googleDevHint}>
+            {locale === "vi"
+              ? "Đăng nhập Google cần dùng bản Development Build hoặc APK DISA Travel."
+              : "Google sign-in is available in the Development Build or DISA Travel APK."}
+          </Text>
         ) : null}
       </Card>
 
@@ -269,6 +281,7 @@ const styles = StyleSheet.create({
   divider: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
   dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   dividerText: { color: colors.textMuted, fontSize: 12, textTransform: "uppercase" },
+  googleDevHint: { color: colors.textMuted, fontSize: 12, textAlign: "center", lineHeight: 17 },
   footer: { marginTop: "auto", paddingTop: spacing(4), gap: spacing(0.5) },
   footerLinks: { color: colors.textMuted, fontSize: 12, textAlign: "center" },
   copyright: { color: colors.textMuted, fontSize: 11, textAlign: "center" },

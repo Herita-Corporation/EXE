@@ -18,6 +18,8 @@ import { FEATURED_MISSIONS } from "@/mocks/featuredMissions";
 import { colors, isDark, radius, spacing } from "@/theme/colors";
 import { GradientHero } from "@/components/GradientHero";
 import { PremiumHomeCard } from "@/components/PremiumEntry";
+import { Badge, type BadgeTone } from "@/components/Badge";
+import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 
 // One consistent tile style for every action (soft blue tile, navy icon)
 // instead of a different solid color per action — the old rainbow grid was
@@ -39,8 +41,14 @@ const QUICK_ACTIONS: Array<{
 export default function HomeScreen() {
   const { user } = useAuth();
   const gamification = useGamification();
+  const premium = usePremiumAccess();
   const { t } = useLocale();
   const displayName = user?.username ?? t("common.voyager");
+  const membership = premium.status === "active"
+    ? { label: t("account.premiumMember"), tone: "gold" as BadgeTone }
+    : premium.status === "inactive"
+      ? { label: t("account.standardMember"), tone: "neutral" as BadgeTone }
+      : { label: t("account.membershipChecking"), tone: "neutral" as BadgeTone };
 
   return (
     <ScreenContainer avoidTabBar edges={["top", "left", "right"]}>
@@ -63,6 +71,7 @@ export default function HomeScreen() {
             <Text style={styles.heroGreeting} numberOfLines={1}>
               {t("home.greeting", { name: displayName })}
             </Text>
+            <Badge label={membership.label} tone={membership.tone} style={styles.membershipBadge} />
             <Text style={styles.heroSub}>{t("home.greetingSub")}</Text>
           </View>
         </View>
@@ -159,6 +168,7 @@ const styles = StyleSheet.create({
   hero: { gap: spacing(2.5) },
   heroTop: { flexDirection: "row", alignItems: "center", gap: spacing(1.5) },
   heroGreeting: { color: "#FFFFFF", fontSize: 18, fontWeight: "800" },
+  membershipBadge: { marginTop: spacing(0.5) },
   heroSub: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 2 },
   heroBottom: {
     flexDirection: "row",

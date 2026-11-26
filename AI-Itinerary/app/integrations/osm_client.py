@@ -7,6 +7,7 @@ feature — Activity.location from GPT is free-text only, never real GPS.
 """
 
 import asyncio
+import json
 import time
 from typing import Dict, Optional, Tuple
 
@@ -56,7 +57,7 @@ class OSMClient:
     """Geocoding client — city name → bounding box; place name → lat/lng."""
 
     async def get_place_coordinates(
-        self, query: str
+        self, query: str, expected_locality: str | None = None
     ) -> Optional[Tuple[float, float]]:
         """
         Point-geocode a free-text place query (e.g. "Hồ Gươm, Hà Nội") to
@@ -64,14 +65,14 @@ class OSMClient:
         failure — a missing coordinate just disables auto-navigation for
         that one activity, it must never fail itinerary generation.
         """
-        key = query.strip().lower()
+        key = f"{query.strip().lower()}|{(expected_locality or '').strip().lower()}"
         if not key:
             return None
         if key in _PLACE_COORDS_CACHE:
             return _PLACE_COORDS_CACHE[key]
 
         try:
-            result = await self._nominatim_point_lookup(query)
+            result = await self._nominatim_point_lookup(query, expected_locality)
         except Exception as exc:
             logger.warning(
                 "nominatim_place_lookup_failed",
@@ -83,7 +84,7 @@ class OSMClient:
         return result
 
     async def _nominatim_point_lookup(
-        self, query: str
+        self, query: str, expected_locality: str | None = None
     ) -> Optional[Tuple[float, float]]:
         global _last_nominatim_call
         async with _nominatim_lock:
@@ -101,9 +102,12 @@ class OSMClient:
                     params={
                         "q": query,
                         "format": "json",
-                        "limit": 1,
+                        # A generic hotel name can have several Vietnamese
+                        # matches.  Select only a result whose locality agrees
+                        # with the itinerary instead of blindly taking #1.
+                        "limit": 5,
                         "countrycodes": "vn",
-                        "addressdetails": 0,
+                        "addressdetails": 1,
                         "accept-language": "vi,en",
                     },
                 )
@@ -112,7 +116,31 @@ class OSMClient:
 
         if not results:
             return None
+        if expected_locality:
+            normalized_expected = _normalise_locality(expected_locality)
+            # City-only values are useful in the query but do not prove the
+            # district is correct.  For a specific locality such as Quận 10,
+            # reject a result that does not explicitly contain it.
+            if normalized_expected:
+                results = [
+                    item for item in results
+                    if normalized_expected in _normalise_locality(
+                        f"{item.get('display_name', '')} {json.dumps(item.get('address', {}), ensure_ascii=False)}"
+                    )
+                ]
+        if not results:
+            return None
         return float(results[0]["lat"]), float(results[0]["lon"])
+
+
+def _normalise_locality(value: str) -> str:
+    return " ".join(
+        value.casefold()
+        .replace("đ", "d")
+        .replace("quận", "quan")
+        .replace("phường", "phuong")
+        .split()
+    )
 
     async def get_city_bbox(
         self, city: str

@@ -31,6 +31,7 @@ import {
   deleteItinerary,
   getActivityAlternatives,
   getItinerary,
+  resolveActivityCoordinates,
   replaceActivity,
 } from "@/api/endpoints/itinerary";
 import {
@@ -461,6 +462,14 @@ function ActivityCard({
       {activity.activity ? (
         <Text style={cardStyles.descText}>{activity.activity}</Text>
       ) : null}
+      {activity.type === "hotel" ? (
+        <View style={cardStyles.bookingNotice}>
+          <Ionicons name="information-circle-outline" size={15} color={colors.navy} />
+          <Text style={cardStyles.bookingNoticeText}>
+            DISA Travel chỉ gợi ý chỗ ở. Bạn cần tự liên hệ cơ sở lưu trú để kiểm tra phòng, giá và đặt phòng.
+          </Text>
+        </View>
+      ) : null}
 
       {/* Tag pills */}
       <View style={cardStyles.tagRow}>
@@ -593,6 +602,15 @@ const cardStyles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 18,
   },
+  bookingNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    backgroundColor: colors.blueSoft,
+    borderRadius: radius.sm,
+    padding: spacing(1),
+  },
+  bookingNoticeText: { flex: 1, color: colors.navy, fontSize: 12, lineHeight: 17 },
   tagRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -862,6 +880,22 @@ export default function ItineraryDetailScreen() {
     }
   }
 
+  async function openVerifiedDirections(activity: Activity, city?: string) {
+    // Never silently hand Google Maps an unverified coordinate.  Resolve it
+    // through the server first, where a district mismatch is rejected; a
+    // failure deliberately falls back to a human-readable Maps search.
+    if (activity.coordinates || !data) {
+      openMapsFor(activity, city);
+      return;
+    }
+    try {
+      const coordinates = await resolveActivityCoordinates(data.itinerary_id, activity.activity_id);
+      openMapsFor({ ...activity, coordinates }, city);
+    } catch {
+      openMapsFor(activity, city);
+    }
+  }
+
   function checkArrival(pos: { latitude: number; longitude: number }) {
     const current = waypoints[waypointIndexRef.current];
     if (!current?.coordinates) return;
@@ -1094,7 +1128,7 @@ export default function ItineraryDetailScreen() {
                         : undefined
                     }
                     onEdit={() => onEditActivity(activity)}
-                    onDirections={() => openMapsFor(activity, day.city)}
+                    onDirections={() => void openVerifiedDirections(activity, day.city)}
                   />
                 );
               })}

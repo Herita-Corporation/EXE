@@ -20,6 +20,7 @@
     },
     "android": {
       "package": "com.disa.travel.frontend",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/app-adaptive-icon.png",
         "backgroundColor": "#FFFFFF"

@@ -26,6 +26,11 @@ Requirements, in priority order:
    per overnight date; other hotel rows on that date can be zero.
 8. Markets use type market, not a meal type. Choose flexible meal, coffee,
    market, and shopping stops near that day's anchor locations.
+9. eligible_partner_locations is a curated optional list. When a partner is in
+   the same city/area as a day and naturally fits the route, preferentially use
+   its exact name and address as at most one stop per day. Never add a detour,
+   invent a partner, or use a partner from another city. If no listed partner
+   fits, produce the normal best itinerary.
 
 Use these types only: transportation, breakfast, lunch, dinner, attraction,
 hotel, shopping, experience, market, coffee.

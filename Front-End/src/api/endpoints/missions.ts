@@ -9,6 +9,14 @@ import type {
   UserMissionSummary,
 } from "@/types/missions";
 
+/** A local evidence item selected in React Native's media picker. */
+export interface EvidenceFile {
+  uri: string;
+  name?: string | null;
+  mimeType?: string | null;
+  file?: File | null;
+}
+
 // Base: <EXPO_PUBLIC_TASK_API_URL>/api/...
 // (Task.Presentation/Controllers/*.cs — none of these require [Authorize]
 // today, but we still send the Bearer token when present.)

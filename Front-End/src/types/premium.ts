@@ -45,6 +45,22 @@ export interface PremiumPaymentStatus {
 }
 
 export interface PremiumProvince { id: string; name: string; }
+export type PremiumMissionScope = "special" | "groups";
+export interface PremiumVoucher {
+  id: string;
+  provider: string;
+  category?: string;
+  title: string;
+  benefit: string;
+  terms: string;
+  kind: "issued_code" | "public_offer";
+  code?: string | null;
+  disaPointCost: number;
+  startsOn?: string | null;
+  endsOn?: string | null;
+  scope?: string | null;
+  groupUse?: string | null;
+}
 export interface PremiumMission {
   id: string;
   provinceName: string;

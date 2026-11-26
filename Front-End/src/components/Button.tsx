@@ -27,6 +27,7 @@ interface Props {
   leftElement?: React.ReactNode;
   loading?: boolean;
   disabled?: boolean;
+  accessibilityLabel?: string;
   style?: ViewStyle;
 }
 
@@ -41,6 +42,7 @@ export function Button({
   leftElement,
   loading = false,
   disabled = false,
+  accessibilityLabel,
   style,
 }: Props) {
   const isDisabled = disabled || loading;
@@ -55,6 +57,7 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.base,
         sizeStyles[size],

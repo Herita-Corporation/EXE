@@ -204,12 +204,13 @@ public class PhoneRegistrationController : ControllerBase
         }
 
         bool verified;
+        var otp = request.Otp!;
 
         try
         {
             verified = await _otp.VerifyOtpAsync(
                 phone,
-                request.Otp);
+                otp);
         }
         catch (Exception ex)
         {

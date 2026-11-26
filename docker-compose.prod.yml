@@ -194,7 +194,7 @@ services:
       SePay__BankAccount: "${SEPAY_BANK_ACCOUNT:-}"
       SePay__AccountName: "${SEPAY_ACCOUNT_NAME:-}"
       SePay__WebhookSecret: "${SEPAY_WEBHOOK_SECRET:-}"
-      Premium__ApplyMigrationsOnStartup: "${PREMIUM_APPLY_MIGRATIONS_ON_STARTUP:-false}"
+      Premium__ApplyMigrationsOnStartup: "${PREMIUM_APPLY_MIGRATIONS_ON_STARTUP:-true}"
       Twilio__AccountSid: "${TWILIO_ACCOUNT_SID:-}"
       Twilio__AuthToken: "${TWILIO_AUTH_TOKEN:-}"
       Twilio__VerifyServiceSid: "${TWILIO_VERIFY_SERVICE_SID:-}"
@@ -251,6 +251,11 @@ services:
       Jwt__Issuer: IAMService
       Jwt__Audience: IAMClient
       Premium__IamBaseUrl: http://iam-service:8080
+      PartnerVouchers__Enabled: "${PARTNER_VOUCHERS_ENABLED:-false}"
+      PartnerVouchers__TokenKey: "${PARTNER_VOUCHERS_TOKEN_KEY:-}"
+      PartnerVouchers__SyncKey: "${PARTNER_VOUCHERS_SYNC_KEY:-}"
+      PartnerVouchers__IamBaseUrl: "${PARTNER_VOUCHERS_IAM_BASE_URL:-http://iam-service:8080}"
+      PartnerVouchers__AllowTestCampaigns: "${PARTNER_VOUCHERS_ALLOW_TEST_CAMPAIGNS:-false}"
     volumes:
       - task_uploads:/app/Uploads
     depends_on:

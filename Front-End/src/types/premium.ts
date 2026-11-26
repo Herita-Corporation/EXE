@@ -4,8 +4,6 @@ export interface PremiumPlan {
   name: string;
   durationMonths: number;
   priceVnd: number;
-  googleProductId: string;
-  appleProductId: string;
 }
 
 export interface PremiumEntitlement {
@@ -46,21 +44,6 @@ export interface PremiumPaymentStatus {
 
 export interface PremiumProvince { id: string; name: string; }
 export type PremiumMissionScope = "special" | "groups";
-export interface PremiumVoucher {
-  id: string;
-  provider: string;
-  category?: string;
-  title: string;
-  benefit: string;
-  terms: string;
-  kind: "issued_code" | "public_offer";
-  code?: string | null;
-  disaPointCost: number;
-  startsOn?: string | null;
-  endsOn?: string | null;
-  scope?: string | null;
-  groupUse?: string | null;
-}
 export interface PremiumMission {
   id: string;
   provinceName: string;
@@ -82,9 +65,18 @@ export interface PremiumGroup {
   members: Array<{ id: string; username: string }>;
 }
 export interface PremiumGroupDetail extends PremiumGroup { missions: PremiumMission[]; }
-export interface EarnedPremiumVoucher {
-  voucher: { id: string; provider: string; category: string; title: string; benefit: string; terms: string; code: string; disaPointCost: number };
-  redemptionUrl: string | null;
+export interface EarnedPremiumOffer {
+  offer: {
+    id: string;
+    provider: string;
+    category: string;
+    title: string;
+    benefit: string;
+    terms: string;
+    publicUrl: string;
+    startsAtUtc: string | null;
+    expiresAtUtc: string | null;
+  };
   scope: "special" | "groups";
   scopeId: string;
   missionId: string;

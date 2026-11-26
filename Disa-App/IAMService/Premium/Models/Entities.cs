@@ -38,6 +38,4 @@ public class UserPremiumSubscription
     public long? LastPaymentId { get; set; }
 }
 public record CreateQrRequest(string PlanCode);
-public record VerifyGoogleRequest(string ProductId, string PurchaseToken);
-public record VerifyAppleRequest(string SignedTransactionInfo);
 public record ResolvePremiumMembersRequest(string[]? Accounts);

@@ -13,6 +13,30 @@ using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+if (builder.Environment.IsProduction())
+{
+    var missing = new[] { "ConnectionStrings:TaskDb", "Jwt:Key" }
+        .Where(key => string.IsNullOrWhiteSpace(builder.Configuration[key]))
+        .ToArray();
+    if (missing.Length > 0)
+        throw new InvalidOperationException($"Missing required production configuration: {string.Join(", ", missing)}");
+
+    if (builder.Configuration.GetValue<bool>("PartnerVouchers:Enabled"))
+    {
+        var partnerVoucherMissing = new[]
+        {
+            "PartnerVouchers:TokenKey",
+            "PartnerVouchers:SyncKey",
+            "PartnerVouchers:IamBaseUrl"
+        }
+        .Where(key => string.IsNullOrWhiteSpace(builder.Configuration[key]))
+        .ToArray();
+
+        if (partnerVoucherMissing.Length > 0)
+            throw new InvalidOperationException($"Missing required Partner Voucher configuration: {string.Join(", ", partnerVoucherMissing)}");
+    }
+}
+
 builder.Services.AddControllers();
 
 builder.Services.AddInfrastructure(builder.Configuration);

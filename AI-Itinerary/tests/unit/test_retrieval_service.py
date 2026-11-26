@@ -41,7 +41,7 @@ class TestRankAndTrim:
         ratings = [r["rating"] for r in result["restaurants"]]
         assert ratings == sorted(ratings, reverse=True)
 
-    def test_trim_to_50_max(self, service):
+    def test_trim_to_context_max(self, service):
         large = {
             "attractions": [{"id": f"a{i}", "name": f"Attr{i}", "rating": 4.5, "category": "attraction", "latitude": 16.0, "longitude": 108.0} for i in range(30)],
             "restaurants": [{"id": f"r{i}", "name": f"Rest{i}", "rating": 4.5, "avg_price": 100000, "latitude": 16.0, "longitude": 108.0} for i in range(20)],
@@ -49,7 +49,7 @@ class TestRankAndTrim:
         }
         result = service.rank_and_trim(large, [])
         total = sum(len(v) for v in result.values())
-        assert total <= 50
+        assert total <= service.MAX_CONTEXT_ENTITIES
 
 
 class TestValidateLocationIds:

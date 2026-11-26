@@ -100,6 +100,19 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
+    def validate_production_settings(self) -> None:
+        if self.APP_ENV.lower() != "production":
+            return
+        required = {
+            "POSTGRES_PASSWORD": self.POSTGRES_PASSWORD,
+            "JWT_SECRET": self.JWT_SECRET,
+            "API_KEY": self.API_KEY,
+            "OPENAI_API_KEY": self.OPENAI_API_KEY,
+        }
+        missing = [name for name, value in required.items() if not value or value == "change-me"]
+        if missing:
+            raise RuntimeError(f"Missing required production configuration: {', '.join(missing)}")
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -26,6 +26,20 @@ namespace IAMService
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            if (builder.Environment.IsProduction())
+            {
+                RequireProductionSettings(builder.Configuration,
+                    "ConnectionStrings:IAMDb",
+                    "Jwt:Key");
+                if (string.Equals(builder.Configuration["SePay:Environment"], "LIVE", StringComparison.OrdinalIgnoreCase))
+                {
+                    RequireProductionSettings(builder.Configuration,
+                        "SePay:BankCode",
+                        "SePay:BankAccount",
+                        "SePay:WebhookSecret");
+                }
+            }
+
             // ==========================================
             // 1. CONTROLLERS + SWAGGER
             // ==========================================
@@ -293,6 +307,13 @@ namespace IAMService
             // ==========================================
 
             app.Run();
+        }
+
+        private static void RequireProductionSettings(IConfiguration configuration, params string[] keys)
+        {
+            var missing = keys.Where(key => string.IsNullOrWhiteSpace(configuration[key])).ToArray();
+            if (missing.Length > 0)
+                throw new InvalidOperationException($"Missing required production configuration: {string.Join(", ", missing)}");
         }
     }
 }

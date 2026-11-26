@@ -30,7 +30,7 @@ export default function PremiumGroupsScreen() {
       <Input label="Thành viên" value={accounts} onChangeText={setAccounts} multiline placeholder="nguyen-a&#10;ban@example.com" />
       <Button title="Tạo nhóm" onPress={() => void create()} loading={saving} disabled={!province || !accounts.trim()} icon="people-outline" />
     </> : <>
-      <Text style={styles.copy}>Một người nộp minh chứng sẽ hoàn thành nhiệm vụ cho cả nhóm. Voucher của từng thành viên được mở khóa riêng.</Text>
+      <Text style={styles.copy}>Một người nộp minh chứng sẽ hoàn thành nhiệm vụ cho cả nhóm. Ưu đãi đối tác phù hợp sẽ được mở khóa cho từng thành viên.</Text>
       <Button title="Tạo nhóm" onPress={() => setEditing(true)} icon="add" />
       {groups.map(g => <Pressable key={g.id} style={({ pressed }) => [styles.group, pressed && { opacity: 0.7 }]} onPress={() => router.push({ pathname: "/(tabs)/mission/premium/group/[groupId]", params: { groupId: g.id } })}><View style={{ flex: 1 }}><Text style={styles.groupTitle}>{g.provinceName}</Text><Text style={styles.copy}>{g.members.map(m => m.username).join(", ")}</Text><Text style={styles.copy}>{g.completedCount}/8 nhiệm vụ hoàn thành</Text></View></Pressable>)}
     </>}</ScreenContainer>;

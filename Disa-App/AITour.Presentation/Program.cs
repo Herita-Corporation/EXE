@@ -13,6 +13,15 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        if (builder.Environment.IsProduction())
+        {
+            var missing = new[] { "Jwt:Key", "AIItinerary:BaseUrl" }
+                .Where(key => string.IsNullOrWhiteSpace(builder.Configuration[key]))
+                .ToArray();
+            if (missing.Length > 0)
+                throw new InvalidOperationException($"Missing required production configuration: {string.Join(", ", missing)}");
+        }
+
         // ── Controllers ───────────────────────────────────────────────────────
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();

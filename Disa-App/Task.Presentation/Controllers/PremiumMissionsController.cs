@@ -9,7 +9,7 @@ using Task.Infrastructure.Premium;
 namespace Task.Presentation.Controllers;
 
 public record CreatePremiumGroupRequest(Guid ProvinceId, string[] Accounts);
-public record ImportPremiumVoucherRequest(Guid ProvinceId, Guid? MissionId, string Scope, string Provider, string Category, string Title, string Benefit, string Terms, string Code, string? RedemptionUrl, DateTime ExpiresAtUtc);
+public record ImportPremiumOfferRequest(Guid ProvinceId, Guid? MissionId, string Scope, string Provider, string Category, string Title, string Benefit, string Terms, string PublicUrl, DateTime? StartsAtUtc, DateTime? ExpiresAtUtc);
 public sealed record PremiumMissionView(Guid Id, string ProvinceName, string Title, string EvidenceType, string Instruction, string PlaceName, string Locality, string PlaceQuery, bool Accepted, DateTime? CompletedAt);
 
 [ApiController, Authorize, Route("api/premium")]
@@ -160,46 +160,78 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
         return Ok((await Missions(provinceId.Value, groupId, UserId)).Single(x => x.Id == missionId));
     }
 
-    [HttpGet("special-vouchers")]
-    public async global::System.Threading.Tasks.Task<IActionResult> Vouchers()
+    // Completed missions unlock reusable public partner links. No private
+    // voucher code is allocated or exposed to the client.
+    [HttpGet("special-offers")]
+    public async global::System.Threading.Tasks.Task<IActionResult> Offers()
     {
         await RequirePremium();
-        var vouchers = await db.Set<PremiumVoucherCode>().AsNoTracking().Where(x => x.AssignedToUserId == UserId && x.RedeemedAtUtc == null && x.ExpiresAtUtc > DateTime.UtcNow)
-            .Join(db.Set<PremiumMissionAssignment>(), v => v.Id, a => a.VoucherCodeId, (v, a) => new { v, a })
-            .Where(x => x.a.CompletedAtUtc != null).ToListAsync();
-        return Ok(vouchers.Select(x => new
-        {
-            voucher = new { id = x.v.Id, provider = x.v.Provider, category = x.v.Category, title = x.v.Title, benefit = x.v.Benefit, terms = x.v.Terms, code = x.v.Code, disaPointCost = 0 },
-            redemptionUrl = x.v.RedemptionUrl,
-            scope = x.a.GroupId.HasValue ? "groups" : "special",
-            scopeId = x.a.GroupId ?? x.v.ProvinceId,
-            missionId = x.a.MissionId
-        }));
-    }
+        var now = DateTime.UtcNow;
+        var assignments = await db.Set<PremiumMissionAssignment>().AsNoTracking()
+            .Include(x => x.Mission)
+            .Where(x => x.UserId == UserId && x.CompletedAtUtc != null)
+            .ToListAsync();
+        var offers = await db.Set<PremiumPublicOffer>().AsNoTracking()
+            .Where(x => x.IsActive
+                && (x.StartsAtUtc == null || x.StartsAtUtc <= now)
+                && (x.ExpiresAtUtc == null || x.ExpiresAtUtc > now))
+            .ToListAsync();
 
-    [HttpPost("{scope:regex(^(special|groups)$)}/{scopeId:guid}/{missionId:guid}/redeem")]
-    public async global::System.Threading.Tasks.Task<IActionResult> Redeem(string scope, Guid scopeId, Guid missionId)
-    {
-        await RequirePremium();
-        var groupId = scope == "groups" ? scopeId : (Guid?)null;
-        var assignment = await db.Set<PremiumMissionAssignment>().Include(x => x.Mission).SingleOrDefaultAsync(x => x.MissionId == missionId && x.UserId == UserId && x.GroupId == groupId && x.CompletedAtUtc != null);
-        if (assignment?.VoucherCodeId is null) return NotFound();
-        var voucher = await db.Set<PremiumVoucherCode>().SingleAsync(x => x.Id == assignment.VoucherCodeId && x.AssignedToUserId == UserId);
-        if (voucher.ExpiresAtUtc <= DateTime.UtcNow) return Conflict(new { message = "Voucher đã hết hạn." });
-        voucher.RedeemedAtUtc ??= DateTime.UtcNow;
-        await db.SaveChangesAsync();
-        return Ok(new { redemptionUrl = voucher.RedemptionUrl, code = voucher.Code });
+        var result = assignments.SelectMany(assignment => offers
+            .Where(offer => offer.ProvinceId == assignment.Mission.ProvinceId
+                && offer.Scope == (assignment.GroupId.HasValue ? "GROUP" : "SPECIAL")
+                && (offer.MissionId == null || offer.MissionId == assignment.MissionId))
+            .Select(offer => new
+            {
+                offer = new
+                {
+                    id = offer.Id,
+                    provider = offer.Provider,
+                    category = offer.Category,
+                    title = offer.Title,
+                    benefit = offer.Benefit,
+                    terms = offer.Terms,
+                    publicUrl = offer.PublicUrl,
+                    startsAtUtc = offer.StartsAtUtc,
+                    expiresAtUtc = offer.ExpiresAtUtc
+                },
+                scope = assignment.GroupId.HasValue ? "groups" : "special",
+                scopeId = assignment.GroupId ?? assignment.Mission.ProvinceId,
+                missionId = assignment.MissionId
+            }))
+            .GroupBy(x => x.offer.id)
+            .Select(x => x.First());
+        return Ok(result);
     }
 
     [Authorize(Roles = "Admin")]
-    [HttpPost("special-vouchers/import")]
-    public async global::System.Threading.Tasks.Task<IActionResult> Import(ImportPremiumVoucherRequest request)
+    [HttpPost("special-offers/import")]
+    public async global::System.Threading.Tasks.Task<IActionResult> ImportPublicOffer(ImportPremiumOfferRequest request)
     {
-        if (request.Scope is not ("SPECIAL" or "GROUP") || string.IsNullOrWhiteSpace(request.Code) || request.ExpiresAtUtc <= DateTime.UtcNow)
-            return BadRequest(new { message = "Voucher không hợp lệ." });
+        if (request.Scope is not ("SPECIAL" or "GROUP")
+            || string.IsNullOrWhiteSpace(request.Provider)
+            || string.IsNullOrWhiteSpace(request.Title)
+            || !Uri.TryCreate(request.PublicUrl, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps
+            || request.ExpiresAtUtc is not null && request.ExpiresAtUtc <= DateTime.UtcNow)
+            return BadRequest(new { message = "Public offer is invalid." });
         if (!await db.Set<PremiumProvince>().AnyAsync(x => x.Id == request.ProvinceId)) return NotFound();
-        if (request.MissionId.HasValue && !await db.Set<PremiumMissionDefinition>().AnyAsync(x => x.Id == request.MissionId && x.ProvinceId == request.ProvinceId)) return BadRequest(new { message = "Nhiệm vụ không thuộc tỉnh/thành đã chọn." });
-        db.Add(new PremiumVoucherCode { ProvinceId = request.ProvinceId, MissionId = request.MissionId, Scope = request.Scope, Provider = request.Provider, Category = request.Category, Title = request.Title, Benefit = request.Benefit, Terms = request.Terms, Code = request.Code.Trim(), RedemptionUrl = request.RedemptionUrl, ExpiresAtUtc = request.ExpiresAtUtc.ToUniversalTime() });
+        if (request.MissionId.HasValue && !await db.Set<PremiumMissionDefinition>().AnyAsync(x => x.Id == request.MissionId && x.ProvinceId == request.ProvinceId)) return BadRequest(new { message = "Mission does not belong to the selected province." });
+
+        db.Add(new PremiumPublicOffer
+        {
+            ProvinceId = request.ProvinceId,
+            MissionId = request.MissionId,
+            Scope = request.Scope,
+            Provider = request.Provider.Trim(),
+            Category = request.Category.Trim(),
+            Title = request.Title.Trim(),
+            Benefit = request.Benefit.Trim(),
+            Terms = request.Terms.Trim(),
+            PublicUrl = uri.AbsoluteUri,
+            StartsAtUtc = request.StartsAtUtc?.ToUniversalTime(),
+            ExpiresAtUtc = request.ExpiresAtUtc?.ToUniversalTime()
+        });
         await db.SaveChangesAsync();
         return Ok();
     }
@@ -209,11 +241,7 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
     private async global::System.Threading.Tasks.Task AcceptOne(PremiumMissionDefinition mission, Guid userId, Guid? groupId)
     {
         if (await db.Set<PremiumMissionAssignment>().AnyAsync(x => x.MissionId == mission.Id && x.UserId == userId && x.GroupId == groupId)) return;
-        var scope = groupId.HasValue ? "GROUP" : "SPECIAL";
-        var voucher = await db.Set<PremiumVoucherCode>().OrderBy(x => x.ExpiresAtUtc).FirstOrDefaultAsync(x => x.ProvinceId == mission.ProvinceId && x.Scope == scope && x.AssignedToUserId == null && x.ExpiresAtUtc > DateTime.UtcNow && (x.MissionId == mission.Id || x.MissionId == null));
-        if (voucher is null) throw new PremiumApiException(409, $"Chưa đủ voucher còn hiệu lực cho nhiệm vụ: {mission.Title}.");
-        voucher.AssignedToUserId = userId; voucher.GroupId = groupId; voucher.AssignedAtUtc = DateTime.UtcNow;
-        db.Add(new PremiumMissionAssignment { MissionId = mission.Id, UserId = userId, GroupId = groupId, VoucherCodeId = voucher.Id });
+        db.Add(new PremiumMissionAssignment { MissionId = mission.Id, UserId = userId, GroupId = groupId });
     }
 
     private async global::System.Threading.Tasks.Task<List<PremiumMissionView>> Missions(Guid provinceId, Guid? groupId, Guid userId)
@@ -224,5 +252,4 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
     }
 
     private static object GroupSummary(PremiumGroup group, int completed) => new { id = group.Id, provinceId = group.ProvinceId, provinceName = group.Province.Name, memberCount = group.Members.Count, completedCount = completed, members = group.Members.Select(x => new { id = x.UserId, username = x.DisplayName }) };
-    private static object Voucher(PremiumVoucherCode voucher, bool showCode) => new { voucher = new { id = voucher.Id, provider = voucher.Provider, category = voucher.Category, title = voucher.Title, benefit = voucher.Benefit, terms = voucher.Terms, code = showCode ? voucher.Code : null, disaPointCost = 0 }, redemptionUrl = voucher.RedemptionUrl };
 }

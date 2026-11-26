@@ -41,7 +41,10 @@ export default function PremiumPlansScreen() {
     setLoading(true);
     setError(null);
     try {
-      const [nextPlans, nextEntitlement] = await Promise.all([getPremiumPlans(), getPremiumEntitlement()]);
+      const [nextPlans, nextEntitlement] = await Promise.all([
+        checkoutEnabled ? getPremiumPlans() : Promise.resolve([]),
+        getPremiumEntitlement(),
+      ]);
       setPlans(nextPlans);
       setEntitlement(nextEntitlement);
     } catch (err) {
@@ -135,7 +138,6 @@ export default function PremiumPlansScreen() {
             <Button title="Nhiệm vụ nhóm" onPress={() => router.push("/(tabs)/mission/premium/groups")} icon="people-outline" variant="secondary" />
             <Button title="Voucher Premium" onPress={() => router.push("/(tabs)/mission/premium/vouchers")} icon="ticket-outline" variant="outline" />
           </View>}
-          {!checkoutEnabled && <ErrorBanner message="Bản ứng dụng này không hỗ trợ thanh toán Premium trong app." />}
           {checkoutEnabled && <View style={styles.list}>
             {plans.map((plan) => {
               const monthly = plan.priceVnd / plan.durationMonths;

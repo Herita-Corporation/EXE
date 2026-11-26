@@ -22,23 +22,17 @@ public sealed class PremiumController : ControllerBase
     private readonly PremiumDbContext _db;
     private readonly PremiumActivationService _activator;
     private readonly SePayQrService _qr;
-    private readonly GooglePlayVerifier _google;
-    private readonly AppleStoreVerifier _apple;
     private readonly IAMDbContext _iamDb;
 
     public PremiumController(
         PremiumDbContext db,
         PremiumActivationService activator,
         SePayQrService qr,
-        GooglePlayVerifier google,
-        AppleStoreVerifier apple,
         IAMDbContext iamDb)
     {
         _db = db;
         _activator = activator;
         _qr = qr;
-        _google = google;
-        _apple = apple;
         _iamDb = iamDb;
     }
 
@@ -78,9 +72,7 @@ public sealed class PremiumController : ControllerBase
                 p.Code,
                 p.Name,
                 p.DurationMonths,
-                p.PriceVnd,
-                p.GoogleProductId,
-                p.AppleProductId
+                p.PriceVnd
             })
             .ToListAsync(ct);
 
@@ -321,209 +313,4 @@ public sealed class PremiumController : ControllerBase
         return Ok(history);
     }
 
-    // ==========================================
-    // 7. GOOGLE PLAY PURCHASE VERIFICATION
-    // ==========================================
-    [Authorize]
-    [HttpPost("google/verify")]
-    public async Task<IActionResult> Google(
-        [FromBody] VerifyGoogleRequest body,
-        CancellationToken ct)
-    {
-        var plan = await _db.PremiumPlans
-            .SingleOrDefaultAsync(
-                p => p.GoogleProductId == body.ProductId
-                     && p.IsActive,
-                ct);
-
-        if (plan == null)
-        {
-            return BadRequest(new
-            {
-                error = "Unknown Google product"
-            });
-        }
-
-        StorePurchase verified;
-
-        try
-        {
-            verified = await _google.VerifyAsync(
-                body.ProductId,
-                body.PurchaseToken,
-                ct);
-        }
-        catch (Exception)
-        {
-            return BadRequest(new
-            {
-                error = "Google purchase could not be verified"
-            });
-        }
-
-        // Bind verified product to requested plan.
-        if (verified.ProductId != body.ProductId)
-        {
-            return BadRequest(new
-            {
-                error = "Google product mismatch"
-            });
-        }
-
-        string tokenHash =
-            Convert.ToHexString(
-                SHA256.HashData(
-                    Encoding.UTF8.GetBytes(
-                        body.PurchaseToken)));
-
-        var result = await ActivateStorePurchase(
-            "GOOGLE",
-            verified,
-            plan,
-            tokenHash,
-            ct);
-
-        if (result is OkObjectResult)
-        {
-            try
-            {
-                await _google.ConsumeAsync(
-                    body.ProductId,
-                    body.PurchaseToken,
-                    ct);
-            }
-            catch (Exception)
-            {
-                // Production:
-                // Record failure and retry consumption.
-            }
-        }
-
-        return result;
-    }
-
-    // ==========================================
-    // 8. APPLE PURCHASE VERIFICATION
-    // ==========================================
-    [Authorize]
-    [HttpPost("apple/verify")]
-    public async Task<IActionResult> Apple(
-        [FromBody] VerifyAppleRequest body,
-        CancellationToken ct)
-    {
-        StorePurchase verified;
-
-        try
-        {
-            verified = _apple.Verify(
-                body.SignedTransactionInfo);
-        }
-        catch (Exception)
-        {
-            return BadRequest(new
-            {
-                error = "Apple transaction could not be verified"
-            });
-        }
-
-        var plan = await _db.PremiumPlans
-            .SingleOrDefaultAsync(
-                p => p.AppleProductId == verified.ProductId
-                     && p.IsActive,
-                ct);
-
-        if (plan == null)
-        {
-            return BadRequest(new
-            {
-                error = "Unknown Apple product"
-            });
-        }
-
-        return await ActivateStorePurchase(
-            "APPLE",
-            verified,
-            plan,
-            null,
-            ct);
-    }
-
-    // ==========================================
-    // 9. ACTIVATE VERIFIED STORE PURCHASE
-    // ==========================================
-    private async Task<IActionResult> ActivateStorePurchase(
-        string provider,
-        StorePurchase verified,
-        PremiumPlan plan,
-        string? tokenHash,
-        CancellationToken ct)
-    {
-        var userId = CurrentUserId();
-
-        await using var transaction =
-            await _db.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                ct);
-
-        var previous = await _db.PremiumPayments
-            .SingleOrDefaultAsync(
-                p => p.Provider == provider
-                  && p.ProviderTransactionId
-                     == verified.TransactionId,
-                ct);
-
-        if (previous != null)
-        {
-            if (previous.UserId != userId)
-            {
-                return Conflict(new
-                {
-                    error = "Purchase belongs to another user"
-                });
-            }
-
-            return Ok(new
-            {
-                status = previous.Status,
-                expiresAtUtc = previous.AccessUntilUtc,
-                alreadyProcessed = true
-            });
-        }
-
-        var now = DateTime.UtcNow;
-
-        var payment = new PremiumPayment
-        {
-            UserId = userId,
-            PlanId = plan.Id,
-            Plan = plan,
-            Provider = provider,
-            Status = "PENDING",
-            AmountVnd = plan.PriceVnd,
-            OrderCode = provider + "-"
-                + verified.TransactionId,
-            ProviderTransactionId =
-                verified.TransactionId,
-            StoreTokenHash = tokenHash,
-            CreatedAtUtc = now,
-            ExpiresAtUtc = now.AddMinutes(30)
-        };
-
-        _db.PremiumPayments.Add(payment);
-
-        await _db.SaveChangesAsync(ct);
-
-        var expiry = await _activator.ActivateAsync(
-            payment,
-            now,
-            ct);
-
-        await transaction.CommitAsync(ct);
-
-        return Ok(new
-        {
-            status = "PAID",
-            expiresAtUtc = expiry
-        });
-    }
 }

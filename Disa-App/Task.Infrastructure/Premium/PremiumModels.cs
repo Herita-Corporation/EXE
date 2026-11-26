@@ -2,8 +2,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Task.Infrastructure.Premium;
 
-// Premium access itself is authoritative in IAM Service.  These tables only
-// describe mission content, groups and reward inventory owned by Task Service.
+// Premium access itself is authoritative in IAM Service. These tables only
+// describe mission content, groups and public partner offers owned by Task Service.
 public sealed class PremiumProvince
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -26,7 +26,9 @@ public sealed class PremiumMissionDefinition
     public bool IsActive { get; set; } = true;
 }
 
-public sealed class PremiumVoucherCode
+// Public partner benefits are reusable HTTPS links, so accepting a mission
+// never depends on a private voucher code being available.
+public sealed class PremiumPublicOffer
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid ProvinceId { get; set; }
@@ -37,13 +39,10 @@ public sealed class PremiumVoucherCode
     public string Title { get; set; } = "";
     public string Benefit { get; set; } = "";
     public string Terms { get; set; } = "";
-    public string Code { get; set; } = "";
-    public string? RedemptionUrl { get; set; }
-    public DateTime ExpiresAtUtc { get; set; }
-    public Guid? AssignedToUserId { get; set; }
-    public Guid? GroupId { get; set; }
-    public DateTime? AssignedAtUtc { get; set; }
-    public DateTime? RedeemedAtUtc { get; set; }
+    public string PublicUrl { get; set; } = "";
+    public DateTime? StartsAtUtc { get; set; }
+    public DateTime? ExpiresAtUtc { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 public sealed class PremiumMissionAssignment
@@ -56,7 +55,6 @@ public sealed class PremiumMissionAssignment
     public DateTime AcceptedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAtUtc { get; set; }
     public string? EvidenceUrl { get; set; }
-    public Guid? VoucherCodeId { get; set; }
 }
 
 public sealed class PremiumGroup
@@ -96,15 +94,13 @@ public static class PremiumTaskModel
             e.HasIndex(x => new { x.ProvinceId, x.SortOrder }).IsUnique();
             e.HasOne(x => x.Province).WithMany().HasForeignKey(x => x.ProvinceId).OnDelete(DeleteBehavior.Restrict);
         });
-        model.Entity<PremiumVoucherCode>(e =>
+        model.Entity<PremiumPublicOffer>(e =>
         {
-            e.ToTable("PremiumVoucherCodes", "premium"); e.HasKey(x => x.Id);
-            e.Property(x => x.Scope).HasMaxLength(16); e.Property(x => x.Code).HasMaxLength(256);
-            e.Property(x => x.Provider).HasMaxLength(160); e.Property(x => x.Category).HasMaxLength(100);
-            e.Property(x => x.Title).HasMaxLength(250); e.Property(x => x.Benefit).HasMaxLength(500);
-            e.Property(x => x.RedemptionUrl).HasMaxLength(1000);
-            e.HasIndex(x => x.Code).IsUnique();
-            e.HasIndex(x => new { x.ProvinceId, x.MissionId, x.Scope, x.AssignedToUserId, x.ExpiresAtUtc });
+            e.ToTable("PremiumPublicOffers", "premium"); e.HasKey(x => x.Id);
+            e.Property(x => x.Scope).HasMaxLength(16); e.Property(x => x.Provider).HasMaxLength(160);
+            e.Property(x => x.Category).HasMaxLength(100); e.Property(x => x.Title).HasMaxLength(250);
+            e.Property(x => x.Benefit).HasMaxLength(500); e.Property(x => x.PublicUrl).HasMaxLength(1000);
+            e.HasIndex(x => new { x.ProvinceId, x.MissionId, x.Scope, x.IsActive });
         });
         model.Entity<PremiumMissionAssignment>(e =>
         {

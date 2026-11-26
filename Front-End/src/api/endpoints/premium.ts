@@ -8,7 +8,7 @@ import type {
   PremiumMission,
   PremiumGroup,
   PremiumGroupDetail,
-  EarnedPremiumVoucher,
+  EarnedPremiumOffer,
 } from "@/types/premium";
 
 const ROOT = "/api/premium";
@@ -38,11 +38,10 @@ export function acceptSpecialMissions(provinceId: string) { return request<Premi
 export function getPremiumGroups() { return request<PremiumGroup[]>("task", "/api/premium/groups"); }
 export function getPremiumGroup(id: string) { return request<PremiumGroupDetail>("task", `/api/premium/groups/${id}`); }
 export function createPremiumGroup(provinceId: string, accounts: string[]) { return request<PremiumGroup>("task", "/api/premium/groups", { method: "POST", data: { provinceId, accounts } }); }
-export function getEarnedPremiumVouchers() { return request<EarnedPremiumVoucher[]>("task", "/api/premium/special-vouchers"); }
+export function getEarnedPremiumOffers() { return request<EarnedPremiumOffer[]>("task", "/api/premium/special-offers"); }
 export function submitPremiumMission(scope: "special" | "groups", scopeId: string, missionId: string, media: { uri: string; type: "photo" | "video" }) {
   const form = new FormData();
   const name = media.uri.split("/").pop() ?? (media.type === "photo" ? "evidence.jpg" : "evidence.mp4");
   form.append(media.type, { uri: media.uri, name, type: media.type === "photo" ? "image/jpeg" : "video/mp4" } as unknown as Blob);
   return request<PremiumMission[]>("task", `/api/premium/${scope}/${scopeId}/${missionId}/submit`, { method: "POST", data: form, headers: { "Content-Type": "multipart/form-data" }, timeoutMs: 120000 });
 }
-export function redeemPremiumMission(scope: "special" | "groups", scopeId: string, missionId: string) { return request<{ redemptionUrl: string | null; code: string }>("task", `/api/premium/${scope}/${scopeId}/${missionId}/redeem`, { method: "POST" }); }

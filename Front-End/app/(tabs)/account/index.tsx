@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Avatar } from "@/components/Avatar";
+import { Badge, type BadgeTone } from "@/components/Badge";
 import { Card } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -17,6 +18,7 @@ import { changePassword, uploadAvatar } from "@/api/endpoints/auth";
 import { ApiError } from "@/api/http";
 import { getItineraryHistory } from "@/utils/itineraryHistory";
 import { useGamification } from "@/hooks/useGamification";
+import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { useLocale } from "@/i18n/LocaleContext";
 import { colors, radius, shadow, spacing } from "@/theme/colors";
 
@@ -24,6 +26,7 @@ export default function AccountScreen() {
   const { user, logout, refreshMe } = useAuth();
   const { showToast } = useToast();
   const gamification = useGamification();
+  const premium = usePremiumAccess();
   const { t } = useLocale();
   const [tripCount, setTripCount] = useState(0);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -42,6 +45,11 @@ export default function AccountScreen() {
   );
 
   const displayName = user?.username ?? t("common.voyager");
+  const membership = premium.status === "active"
+    ? { label: t("account.premiumMember"), tone: "gold" as BadgeTone }
+    : premium.status === "inactive"
+      ? { label: t("account.standardMember"), tone: "neutral" as BadgeTone }
+      : { label: t("account.membershipChecking"), tone: "neutral" as BadgeTone };
 
   async function onChangePassword() {
     setPwError(null);
@@ -122,6 +130,7 @@ export default function AccountScreen() {
           </Pressable>
         </View>
         <Text style={styles.name}>{displayName}</Text>
+        <Badge label={membership.label} tone={membership.tone} style={styles.membershipBadge} />
         {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
         </View>
 
@@ -235,6 +244,7 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
   },
   name: { fontSize: 18, fontWeight: "800", color: colors.text, marginTop: spacing(0.5) },
+  membershipBadge: { alignSelf: "center" },
   email: { fontSize: 12, color: colors.textMuted },
   statsRow: { flexDirection: "row", gap: spacing(1) },
   statBox: {

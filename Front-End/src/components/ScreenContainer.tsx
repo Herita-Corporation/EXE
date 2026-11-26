@@ -67,7 +67,11 @@ export function ScreenContainer({
   return (
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor }, safeAreaStyle]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      // Android needs an explicit behaviour too.  Combined with
+      // android.softwareKeyboardLayoutMode=resize this keeps long forms
+      // scrollable instead of leaving their lower inputs behind the IME.
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={insets.top}
     >
       {scroll ? (
         <ScrollView

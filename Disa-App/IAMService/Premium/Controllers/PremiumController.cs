@@ -190,6 +190,19 @@ public sealed class PremiumController : ControllerBase
                 RandomNumberGenerator.GetBytes(12));
 
         var now = DateTime.UtcNow;
+        // The client must not calculate renewal time itself.  A still-active
+        // subscription is extended from its current end date; an expired one
+        // starts now.  Return this preview with the QR so the user knows a
+        // renewal is additive, not a duplicate purchase.
+        var existingSubscription = await _db.UserPremiumSubscriptions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(s => s.UserId == CurrentUserId(), ct);
+        var renewalBase = existingSubscription != null
+            && (existingSubscription.Status == "ACTIVE" || existingSubscription.Status == "TRIAL")
+            && existingSubscription.EndAtUtc > now
+                ? existingSubscription.EndAtUtc
+                : now;
+        var projectedExpiresAtUtc = renewalBase.AddMonths(plan.DurationMonths);
 
         var payment = new PremiumPayment
         {
@@ -237,7 +250,8 @@ public sealed class PremiumController : ControllerBase
             bankCode = _qr.BankCode,
             bankAccount = _qr.BankAccount,
             transferContent = orderCode,
-            expiresAtUtc = payment.ExpiresAtUtc
+            expiresAtUtc = payment.ExpiresAtUtc,
+            projectedExpiresAtUtc
         });
     }
 

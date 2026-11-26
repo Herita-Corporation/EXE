@@ -29,6 +29,10 @@ function planDuration(plan: PremiumPlan) {
   return plan.durationMonths === 12 ? "1 năm" : `${plan.durationMonths} tháng`;
 }
 
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("vi-VN");
+}
+
 export default function PremiumPlansScreen() {
   const [plans, setPlans] = useState<PremiumPlan[]>([]);
   const [entitlement, setEntitlement] = useState<PremiumEntitlement | null>(null);
@@ -104,6 +108,9 @@ export default function PremiumPlansScreen() {
             <>
               <Image source={{ uri: payment.qrUrl }} style={styles.qr} contentFit="contain" />
               <Text style={styles.center}>Quét mã QR và chuyển đúng số tiền với nội dung bên dưới.</Text>
+              <Text style={styles.renewalHint}>
+                Sau khi thanh toán thành công, Premium sẽ có hiệu lực đến {formatDate(payment.projectedExpiresAtUtc)}.
+              </Text>
               <Text selectable style={styles.transfer}>{payment.transferContent}</Text>
               <Text style={styles.status}>Trạng thái: {payment.status}</Text>
             </>
@@ -154,7 +161,13 @@ export default function PremiumPlansScreen() {
                       {plan.durationMonths > 1 && <Text style={[styles.monthly, isBest && styles.bestSubtext]}>~ {formatVnd(Math.round(monthly))}/tháng</Text>}
                     </View>
                   </View>
-                  {checkoutEnabled && <Button title="Chọn gói" onPress={() => void startPayment(plan)} loading={pendingCode === plan.code} disabled={pendingCode !== null} variant={isBest ? "amber" : "primary"} />}
+                  <Button
+                    title={entitlement?.isPremium ? `Gia hạn thêm ${planDuration(plan)}` : "Chọn gói"}
+                    onPress={() => void startPayment(plan)}
+                    loading={pendingCode === plan.code}
+                    disabled={pendingCode !== null}
+                    variant={isBest ? "amber" : "primary"}
+                  />
                 </Card>
               );
             })}
@@ -184,6 +197,7 @@ const styles = StyleSheet.create({
   paymentCard: { alignItems: "center", gap: spacing(1.25), padding: spacing(2) },
   qr: { width: 220, height: 220, backgroundColor: "#FFFFFF" },
   center: { color: colors.textMuted, fontSize: 14, textAlign: "center", lineHeight: 20 },
+  renewalHint: { color: colors.navy, fontSize: 13, textAlign: "center", lineHeight: 19, fontWeight: "700" },
   transfer: { color: colors.navy, fontSize: 17, fontWeight: "800", letterSpacing: 0.5 },
   status: { color: colors.textMuted, fontSize: 13 },
   success: { alignItems: "center", gap: spacing(1) },

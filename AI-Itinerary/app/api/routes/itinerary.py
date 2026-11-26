@@ -163,24 +163,30 @@ async def resolve_activity_coordinates(
     if existing and existing.get("lat") is not None and existing.get("lng") is not None:
         return LocationCoords(**existing)
 
-    trip_summary = itinerary_data.get("trip_summary", {})
-    trip_cities = trip_summary.get("cities", [])
     day_city = itinerary_data.get("days", [])[day_index].get("city")
     name = str(activity.get("name") or "").strip()
     location = str(activity.get("location") or "").strip()
+    # A named district/ward is a safety constraint.  A broad city label is
+    # not: requiring an exact spelling for it would discard otherwise valid
+    # geocoder results (e.g. "TP.HCM" vs "Hồ Chí Minh").
+    location_key = location.casefold()
+    expected_locality = (
+        location
+        if any(token in location_key for token in ("quận", "quan", "phường", "phuong", "district", "ward"))
+        else None
+    )
 
     raw_queries = [
-        ", ".join(part for part in (name, trip_cities[0] if trip_cities else None) if part),
-        ", ".join(part for part in (name, location) if part),
+        ", ".join(part for part in (name, location, day_city, "Việt Nam") if part),
+        ", ".join(part for part in (name, day_city, "Việt Nam") if part),
         ", ".join(part for part in (name, day_city) if part),
-        name,
     ]
     queries = list(dict.fromkeys(query for query in raw_queries if query))[:3]
 
     coords = None
     geocoder = OSMClient()
     for query in queries:
-        coords = await geocoder.get_place_coordinates(query)
+        coords = await geocoder.get_place_coordinates(query, expected_locality=expected_locality)
         if coords:
             break
     if not coords:

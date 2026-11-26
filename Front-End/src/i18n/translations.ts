@@ -140,6 +140,9 @@ export const en = {
   },
   account: {
     myAccount: "My Account",
+    premiumMember: "Premium member",
+    standardMember: "Standard member",
+    membershipChecking: "Checking membership…",
     trips: "Trips",
     points: "Points",
     level: "Level",
@@ -319,6 +322,7 @@ export const en = {
   voucher: {
     catalogTitle: "Redeem vouchers",
     filterAll: "All Offers",
+    filterPartnerOffers: "Partner offers",
     filterHotels: "Hotels",
     filterDining: "Dining",
     filterExperience: "Experience",
@@ -776,6 +780,9 @@ export const vi: Translations = {
   },
   account: {
     myAccount: "Tài khoản của tôi",
+    premiumMember: "Thành viên Premium",
+    standardMember: "Thành viên Standard",
+    membershipChecking: "Đang kiểm tra thành viên…",
     trips: "Chuyến đi",
     points: "Điểm",
     level: "Cấp độ",
@@ -955,6 +962,7 @@ export const vi: Translations = {
   voucher: {
     catalogTitle: "Đổi voucher",
     filterAll: "Tất cả ưu đãi",
+    filterPartnerOffers: "Ưu đãi đối tác",
     filterHotels: "Khách sạn",
     filterDining: "Ẩm thực",
     filterExperience: "Trải nghiệm",

@@ -27,6 +27,8 @@ export interface PremiumQrPayment {
   bankAccount: string;
   transferContent: string;
   expiresAtUtc: string;
+  /** Server-calculated end date after this pending payment is confirmed. */
+  projectedExpiresAtUtc: string;
 }
 
 export interface PremiumPaymentStatus {

@@ -64,9 +64,8 @@ export default function OnboardingScreen() {
           <View key={slide.titleKey} style={{ width, height }}>
             <Image
               source={slide.image}
-              style={[styles.slideImage, { height: Math.max(420, height * 0.58) }]}
+              style={StyleSheet.absoluteFill}
               contentFit="cover"
-              cachePolicy="memory-disk"
             />
             <LinearGradient
               colors={["transparent", "rgba(8,27,51,0.95)"]}
@@ -114,10 +113,6 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
-  // Bundled landmark photos are landscape images. Keeping them in the upper
-  // portion avoids enlarging a ~960 px photo to the full height of a modern
-  // high-density phone, which was the source of the visibly soft intro.
-  slideImage: { position: "absolute", top: 0, left: 0, right: 0, width: "100%" },
   topRow: {
     position: "absolute",
     left: spacing(2.5),

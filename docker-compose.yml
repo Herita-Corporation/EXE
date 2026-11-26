@@ -77,7 +77,7 @@ services:
       - ./Disa-App/DATABASE:/scripts:ro
     networks:
       - disa-network
-    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql"]
+    entrypoint: ["/bin/bash", "-c", "/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/GamificatonDBb.sql && /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$SA_PASSWORD\" -C -i /scripts/PremiumTask.sql"]
 
   # ── PostgreSQL + pgvector (AI-Itinerary database) ───────────────────────────
   postgres:
@@ -278,6 +278,8 @@ services:
       Jwt__Key: "${JWT_SECRET_KEY}"
       Jwt__Issuer: IAMService
       Jwt__Audience: IAMClient
+      Premium__IamBaseUrl: http://iam-service:8080
+      Premium__AiTourBaseUrl: http://aitour-service:8080
     volumes:
       # Mission evidence photos/videos — survives container restart/rebuild.
       - ./Disa-App/Task.Presentation/Uploads:/app/Uploads

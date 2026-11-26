@@ -26,6 +26,7 @@ namespace Task.Infrastructure.Persistence
         {
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(TaskDbContext).Assembly);
             Task.Infrastructure.PartnerVouchers.PartnerVoucherModel.Configure(modelBuilder);
+            Task.Infrastructure.Premium.PremiumTaskModel.Configure(modelBuilder);
         }
     }
 }

@@ -41,6 +41,7 @@ limiter = Limiter(key_func=get_remote_address)
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_production_settings()
     logger.info(
         "startup",
         extra={

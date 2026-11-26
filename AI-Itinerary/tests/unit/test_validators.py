@@ -84,12 +84,12 @@ class TestGenerateItineraryRequestSchema:
         )
         assert len(req.cities) == 3
 
-    def test_more_than_five_days_is_rejected(self):
-        with pytest.raises(ValidationError, match="limited to 5 days"):
-            GenerateItineraryRequest(
-                cities=["Da Nang"], budget=5_000_000,
-                start_date=date(2027, 1, 1), end_date=date(2027, 1, 6),
-            )
+    def test_more_than_five_days_is_valid(self):
+        request = GenerateItineraryRequest(
+            cities=["Da Nang"], budget=5_000_000,
+            start_date=date(2027, 1, 1), end_date=date(2027, 1, 14),
+        )
+        assert request.trip_duration_days == 14
 
     def test_five_days_is_valid_at_domain_layer(self):
         req = GenerateItineraryRequest(

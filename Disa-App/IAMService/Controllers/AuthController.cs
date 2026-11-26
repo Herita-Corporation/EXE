@@ -9,6 +9,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
+using IAMService.Premium.Services;
 
 namespace IAMService.Controllers;
 
@@ -22,6 +23,7 @@ public class AuthController : ControllerBase
     private readonly IFileStorageService _fileStorageService;
     private readonly IConfiguration _configuration;
     private readonly IEmailSender _emailSender;
+    private readonly PremiumActivationService _premium;
 
     public AuthController(
         IAMDbContext context,
@@ -29,7 +31,8 @@ public class AuthController : ControllerBase
         BCryptPassworkHasher hasher,
         IFileStorageService fileStorageService,
         IConfiguration configuration,
-        IEmailSender emailSender)
+        IEmailSender emailSender,
+        PremiumActivationService premium)
     {
         _context = context;
         _jwt = jwt;
@@ -37,6 +40,7 @@ public class AuthController : ControllerBase
         _fileStorageService = fileStorageService;
         _configuration = configuration;
         _emailSender = emailSender;
+        _premium = premium;
     }
 
     private static string BuildVerificationEmailHtml(string code) =>
@@ -90,6 +94,7 @@ public class AuthController : ControllerBase
         _context.Users.Add(user);
 
         await _context.SaveChangesAsync();
+        await _premium.GrantWelcomeTrialAsync(user.Id, HttpContext.RequestAborted);
 
         var code = await IssueVerificationCodeAsync(user.Id, "EmailToken", user.Email);
         await _emailSender.SendAsync(user.Email, "Xác thực email DISA Travel", BuildVerificationEmailHtml(code.Code));
@@ -148,7 +153,9 @@ public class AuthController : ControllerBase
 
         var clientIds = _configuration
             .GetSection("GoogleAuth:ClientIds")
-            .Get<string[]>();
+            .Get<string[]>()?
+            .Where(clientId => !string.IsNullOrWhiteSpace(clientId))
+            .ToArray();
 
         if (clientIds == null || clientIds.Length == 0)
             return StatusCode(500, "Chưa cấu hình Google Client ID");
@@ -219,6 +226,7 @@ public class AuthController : ControllerBase
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+            await _premium.GrantWelcomeTrialAsync(user.Id, HttpContext.RequestAborted);
         }
 
         if (!user.IsActive)

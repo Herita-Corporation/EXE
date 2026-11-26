@@ -4,20 +4,20 @@ import { router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { Card } from "@/components/Card";
 import { Avatar } from "@/components/Avatar";
 import { SectionHeader } from "@/components/SectionHeader";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
-import { VoucherIcon } from "@/components/VoucherIcon";
+import { PartnerLogoStrip } from "@/components/PartnerLogoStrip";
+import { PartnerOfferCarousel } from "@/components/PartnerOfferCarousel";
 import { useAuth } from "@/context/AuthContext";
+import { PARTNER_OFFERS } from "@/data/partnerOffers";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { TranslationKey } from "@/i18n/LocaleContext";
-import { HOME_OFFERS } from "@/mocks/homeOffers";
 import { FEATURED_MISSIONS } from "@/mocks/featuredMissions";
 import { colors, isDark, radius, spacing } from "@/theme/colors";
 import { GradientHero } from "@/components/GradientHero";
-import { PartnerOffers } from "@/components/PartnerOffers";
+import { PremiumHomeCard } from "@/components/PremiumEntry";
 
 // One consistent tile style for every action (soft blue tile, navy icon)
 // instead of a different solid color per action — the old rainbow grid was
@@ -56,8 +56,6 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Hero: the one gradient block on the page — greeting, points and the
-          screen's single amber CTA (create itinerary) together. */}
       <GradientHero style={styles.hero} markStyle={{ right: -40, width: 180 }}>
         <View style={styles.heroTop}>
           <Avatar name={displayName} size={44} />
@@ -86,7 +84,8 @@ export default function HomeScreen() {
         </View>
       </GradientHero>
 
-      <PartnerOffers />
+      <PremiumHomeCard />
+
       <View style={styles.quickRow}>
         {QUICK_ACTIONS.map((action) => (
           <Pressable
@@ -104,10 +103,21 @@ export default function HomeScreen() {
         ))}
       </View>
 
+      <PartnerLogoStrip offers={PARTNER_OFFERS} />
+
+      <View style={styles.offers}>
+        <SectionHeader
+          title={t("home.specialOffers")}
+          actionLabel={t("home.viewAll")}
+          onAction={() => router.push("/(tabs)/voucher")}
+        />
+        <PartnerOfferCarousel offers={PARTNER_OFFERS} />
+      </View>
+
       <SectionHeader
         title={t("home.featuredMissions")}
         actionLabel={t("home.viewAll")}
-        onAction={() => router.push("/(tabs)/mission")}
+        onAction={() => router.navigate("/(tabs)/missions")}
       />
       <ScrollView
         horizontal
@@ -129,31 +139,6 @@ export default function HomeScreen() {
               ])
             }
           />
-        ))}
-      </ScrollView>
-
-      <SectionHeader
-        title={t("home.specialOffers")}
-        actionLabel={t("home.viewAll")}
-        onAction={() => router.push("/(tabs)/voucher")}
-      />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.carousel}
-        contentContainerStyle={styles.carouselContent}
-      >
-        {HOME_OFFERS.map((offer) => (
-          <Pressable key={offer.id} onPress={() => router.push("/(tabs)/voucher")}>
-            <Card variant="elevated" style={styles.offerCard}>
-              <VoucherIcon category={offer.category} icon={offer.icon} size={48} />
-              <View style={styles.offerInfo}>
-                <Text style={styles.offerTitle} numberOfLines={1}>{t(offer.titleKey)}</Text>
-                <Text style={styles.offerLocation} numberOfLines={1}>{t(offer.locationKey)}</Text>
-                <Text style={styles.offerText} numberOfLines={1}>{t(offer.offerKey)}</Text>
-              </View>
-            </Card>
-          </Pressable>
         ))}
       </ScrollView>
     </ScreenContainer>
@@ -214,6 +199,7 @@ const styles = StyleSheet.create({
   },
   quickLabel: { fontSize: 11, color: colors.text, textAlign: "center", fontWeight: "600" },
 
+  offers: { gap: spacing(1.25) },
 
   // Bleeds to the screen edges so cards scroll off-screen; first card is
   // re-inset by the content container's paddingLeft.
@@ -224,16 +210,4 @@ const styles = StyleSheet.create({
     paddingBottom: spacing(1.5),
     gap: spacing(1.5),
   },
-
-  offerCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing(1.5),
-    width: 240,
-    padding: spacing(1.5),
-  },
-  offerInfo: { flex: 1, gap: 1 },
-  offerTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
-  offerLocation: { fontSize: 12, color: colors.textMuted },
-  offerText: { fontSize: 13, fontWeight: "700", color: colors.link, marginTop: 2 },
 });

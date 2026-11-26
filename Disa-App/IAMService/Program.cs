@@ -7,6 +7,7 @@ using IAM.Infrastructure.Security;
 
 using IAMService.Services;
 using IAMService.Premium;
+using IAMService.Premium.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,20 @@ namespace IAMService
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            if (builder.Environment.IsProduction())
+            {
+                RequireProductionSettings(builder.Configuration,
+                    "ConnectionStrings:IAMDb",
+                    "Jwt:Key");
+                if (string.Equals(builder.Configuration["SePay:Environment"], "LIVE", StringComparison.OrdinalIgnoreCase))
+                {
+                    RequireProductionSettings(builder.Configuration,
+                        "SePay:BankCode",
+                        "SePay:BankAccount",
+                        "SePay:WebhookSecret");
+                }
+            }
 
             // ==========================================
             // 1. CONTROLLERS + SWAGGER
@@ -146,9 +161,6 @@ namespace IAMService
                 });
 
             builder.Services.AddAuthorization();
-            builder.Services.AddCors(options => options.AddPolicy("DisaFrontend", policy =>
-                policy.WithOrigins(builder.Configuration.GetSection("PartnerVouchers:WebOrigins").Get<string[]>() ?? new[] { "http://localhost:5173", "http://localhost:5020" })
-                    .AllowAnyHeader().AllowAnyMethod()));
 
             // ==========================================
             // 4. IAM SERVICES
@@ -163,21 +175,6 @@ namespace IAMService
             builder.Services.AddHostedService<IAMService.Services.PartnerPublicationWorker>();
             builder.Services.AddScoped<IFileStorageService, FileStorageService>();
             builder.Services.AddScoped<IPushNotificationService, ExpoPushNotificationService>();
-
-
-            builder.Services.AddHttpContextAccessor();
-
-            builder.Services.AddScoped<
-                IFileStorageService,
-                FileStorageService>();
-
-            builder.Services.AddScoped<
-                IPushNotificationService,
-                ExpoPushNotificationService>();
-
-            builder.Services.AddScoped<
-                IEmailSender,
-                SmtpEmailSender>();
 
             // ==========================================
             // 5. TWILIO SMS OTP
@@ -212,19 +209,16 @@ namespace IAMService
             // 7. CORS
             // ==========================================
 
-            builder.Services.AddCors(options =>
-            {
-                options.AddPolicy(
-                    "DisaFrontend",
-                    policy =>
-                    {
-                        policy.WithOrigins(
-                            "http://localhost:5173",
-                            "https://disa-landing.vercel.app")
-                            .AllowAnyHeader()
-                            .AllowAnyMethod();
-                    });
-            });
+            var corsOrigins = builder.Configuration
+                .GetSection("Cors:AllowedOrigins")
+                .Get<string[]>()
+                ?? ["http://localhost:5173", "http://localhost:5020", "https://disa-landing.vercel.app"];
+
+            builder.Services.AddCors(options => options.AddPolicy(
+                "DisaFrontend",
+                policy => policy.WithOrigins(corsOrigins)
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()));
 
             // ==========================================
             // 8. BUILD APPLICATION
@@ -239,6 +233,14 @@ namespace IAMService
 
             using (var scope = app.Services.CreateScope())
             {
+                var premiumDb = scope.ServiceProvider
+                    .GetRequiredService<PremiumDbContext>();
+
+                if (builder.Configuration.GetValue<bool>("Premium:ApplyMigrationsOnStartup"))
+                {
+                    premiumDb.Database.Migrate();
+                }
+
                 var db = scope.ServiceProvider
                     .GetRequiredService<IAMDbContext>();
 
@@ -305,6 +307,13 @@ namespace IAMService
             // ==========================================
 
             app.Run();
+        }
+
+        private static void RequireProductionSettings(IConfiguration configuration, params string[] keys)
+        {
+            var missing = keys.Where(key => string.IsNullOrWhiteSpace(configuration[key])).ToArray();
+            if (missing.Length > 0)
+                throw new InvalidOperationException($"Missing required production configuration: {string.Join(", ", missing)}");
         }
     }
 }

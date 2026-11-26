@@ -32,10 +32,6 @@ public static class PremiumRegistration
         // HMAC-SHA256 webhook verification.
         services.AddScoped<SePaySignatureVerifier>();
 
-        // Existing store purchase verification.
-        services.AddScoped<GooglePlayVerifier>();
-        services.AddScoped<AppleStoreVerifier>();
-
         services.AddHttpClient();
 
         return services;

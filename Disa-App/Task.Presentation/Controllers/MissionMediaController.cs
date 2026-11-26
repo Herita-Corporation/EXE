@@ -14,7 +14,11 @@ public class MissionMediaController(TaskDbContext db, Oc3IamAccess access) : Con
         await access.Check(HttpContext);
         if (kind is not ("images" or "videos") || name != Path.GetFileName(name) || !Guid.TryParse(Path.GetFileNameWithoutExtension(name), out _)) return NotFound();
         var uid = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        if (!await db.MissionEvidences.AnyAsync(e => e.MediaUrl.EndsWith("/" + name) && (e.Submission.UserMission.UserId == uid || User.IsInRole("Admin")))) return NotFound();
+        var ownedRegular = await db.MissionEvidences.AnyAsync(e => e.MediaUrl.EndsWith("/" + name) && (e.Submission.UserMission.UserId == uid || User.IsInRole("Admin")));
+        var ownedPremium = await db.Set<global::Task.Infrastructure.Premium.PremiumMissionAssignment>()
+            .AnyAsync(a => a.EvidenceUrl != null && a.EvidenceUrl.EndsWith("/" + name) &&
+                (a.UserId == uid || a.GroupId != null && db.Set<global::Task.Infrastructure.Premium.PremiumGroupMember>().Any(m => m.GroupId == a.GroupId && m.UserId == uid) || User.IsInRole("Admin")));
+        if (!ownedRegular && !ownedPremium) return NotFound();
         var path = Path.GetFullPath(Path.Combine("PrivateUploads", kind == "images" ? "Images" : "Videos", name));
         if (!System.IO.File.Exists(path)) return NotFound();
         Response.Headers.CacheControl = "private, no-store";

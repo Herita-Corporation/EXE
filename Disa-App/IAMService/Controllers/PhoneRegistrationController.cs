@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 using Twilio.Exceptions;
+using IAMService.Premium.Services;
 
 namespace IAMService.Controllers;
 
@@ -20,17 +21,20 @@ public class PhoneRegistrationController : ControllerBase
     private readonly TwilioOtpService _otp;
     private readonly BCryptPassworkHasher _hasher;
     private readonly ILogger<PhoneRegistrationController> _logger;
+    private readonly PremiumActivationService _premium;
 
     public PhoneRegistrationController(
         IAMDbContext db,
         TwilioOtpService otp,
         BCryptPassworkHasher hasher,
-        ILogger<PhoneRegistrationController> logger)
+        ILogger<PhoneRegistrationController> logger,
+        PremiumActivationService premium)
     {
         _db = db;
         _otp = otp;
         _hasher = hasher;
         _logger = logger;
+        _premium = premium;
     }
 
     private static string? NormalizePhone(string? phone)
@@ -200,12 +204,13 @@ public class PhoneRegistrationController : ControllerBase
         }
 
         bool verified;
+        var otp = request.Otp!;
 
         try
         {
             verified = await _otp.VerifyOtpAsync(
                 phone,
-                request.Otp);
+                otp);
         }
         catch (Exception ex)
         {
@@ -272,6 +277,7 @@ public class PhoneRegistrationController : ControllerBase
 
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
+            await _premium.GrantWelcomeTrialAsync(user.Id, HttpContext.RequestAborted);
 
             return Ok(new
             {

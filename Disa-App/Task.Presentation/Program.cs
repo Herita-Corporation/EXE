@@ -13,6 +13,30 @@ using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+if (builder.Environment.IsProduction())
+{
+    var missing = new[] { "ConnectionStrings:TaskDb", "Jwt:Key" }
+        .Where(key => string.IsNullOrWhiteSpace(builder.Configuration[key]))
+        .ToArray();
+    if (missing.Length > 0)
+        throw new InvalidOperationException($"Missing required production configuration: {string.Join(", ", missing)}");
+
+    if (builder.Configuration.GetValue<bool>("PartnerVouchers:Enabled"))
+    {
+        var partnerVoucherMissing = new[]
+        {
+            "PartnerVouchers:TokenKey",
+            "PartnerVouchers:SyncKey",
+            "PartnerVouchers:IamBaseUrl"
+        }
+        .Where(key => string.IsNullOrWhiteSpace(builder.Configuration[key]))
+        .ToArray();
+
+        if (partnerVoucherMissing.Length > 0)
+            throw new InvalidOperationException($"Missing required Partner Voucher configuration: {string.Join(", ", partnerVoucherMissing)}");
+    }
+}
+
 builder.Services.AddControllers();
 
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -29,6 +53,10 @@ builder.Services.AddScoped<Oc3IamAccess>();
 builder.Services.AddScoped<global::Task.Presentation.MissionTripGuard>();
 builder.Services.AddScoped<global::Task.Presentation.PartnerTripOfferMatcher>();
 builder.Services.AddHttpClient("Oc3Iam", c => c.Timeout = TimeSpan.FromSeconds(8));
+builder.Services.AddHttpClient("PremiumIam", c => c.Timeout = TimeSpan.FromSeconds(8));
+builder.Services.AddScoped<global::Task.Presentation.PremiumIamClient>();
+builder.Services.AddHttpClient("PremiumTripEligibility", c => c.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddScoped<global::Task.Presentation.PremiumTripEligibilityClient>();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
@@ -73,6 +101,8 @@ using (var scope = app.Services.CreateScope())
         var db = scope.ServiceProvider.GetRequiredService<TaskDbContext>();
         var seeded = await DemoVoucherSeeder.SeedAsync(db);
         if (seeded > 0) app.Logger.LogInformation("Seeded {Count} demo voucher(s).", seeded);
+        await Task.Infrastructure.Premium.PremiumSchemaUpgrader.ApplyAsync(db);
+        await Task.Infrastructure.Premium.PremiumCatalogSeeder.SeedAsync(db);
     }
     catch (Exception ex)
     {
@@ -103,6 +133,16 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+
+app.Use(async (context, next) =>
+{
+    try { await next(); }
+    catch (global::Task.Presentation.PremiumApiException ex)
+    {
+        context.Response.StatusCode = ex.Status;
+        await context.Response.WriteAsJsonAsync(new { message = ex.Message, error_code = ex.Code, requestId = context.TraceIdentifier });
+    }
+});
 
 app.Use(async (context, next) =>
 {

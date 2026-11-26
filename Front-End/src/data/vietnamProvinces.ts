@@ -67,6 +67,7 @@ export const VIETNAM_PROVINCES: Province[] = [
     ["Bình Chánh", "Vùng ven, khu du lịch Lê Minh Xuân"],
     ["Hóc Môn", "Vùng ven, nông trại sinh thái"],
     ["Nhà Bè", "Vùng sông nước ven đô"],
+    ["Vũng Tàu", "Biển, hải đăng và các cung đường ven biển"],
   ]),
   p("Hải Phòng", 3, [
     ["Cát Bà", "Đảo, vịnh Lan Hạ"],

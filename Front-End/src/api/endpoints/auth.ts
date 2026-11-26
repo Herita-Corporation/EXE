@@ -7,6 +7,8 @@ import type {
   ChangePhoneResponse,
   ForgotPasswordRequest,
   ForgotPasswordResult,
+  GoogleLoginRequest,
+  GoogleLoginResponse,
   LoginRequest,
   LoginResponse,
   LogoutRequest,
@@ -26,6 +28,14 @@ import type {
 
 export function login(payload: LoginRequest) {
   return request<LoginResponse>("iam", "/api/auth/login", {
+    method: "POST",
+    data: payload,
+    auth: false,
+  });
+}
+
+export function loginWithGoogle(payload: GoogleLoginRequest) {
+  return request<GoogleLoginResponse>("iam", "/api/auth/google-login", {
     method: "POST",
     data: payload,
     auth: false,

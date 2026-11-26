@@ -200,8 +200,8 @@ export default function CreateItineraryScreen() {
     setHighlight(name);
     setHighlightPickerOpen(false);
   }
-  const [startDate, setStartDate] = useState(todayPlus(14));
-  const [endDate, setEndDate] = useState(todayPlus(18));
+  const [startDate, setStartDate] = useState(todayPlus(1));
+  const [endDate, setEndDate] = useState(todayPlus(5));
   const [clockNow, setClockNow] = useState(() => new Date());
   const earliestStartDate = earliestStartIso(clockNow);
   const [showStartPicker, setShowStartPicker] = useState(false);
@@ -255,6 +255,10 @@ export default function CreateItineraryScreen() {
     const expectedDays = Math.round(
       (fromIsoDate(endDate).getTime() - fromIsoDate(startDate).getTime()) / 86_400_000
     ) + 1;
+    if (expectedDays > 5) {
+      setError(locale === "vi" ? "Lịch trình tối đa 5 ngày." : "An itinerary can be at most 5 days.");
+      return;
+    }
     if (styles_.length === 0) {
       setError(t("createItinerary.errorSelectStyle"));
       return;
@@ -466,6 +470,7 @@ export default function CreateItineraryScreen() {
               setStartDate(next);
               // Keep the selected date range valid when the start date moves.
               if (endDate < next) setEndDate(next);
+              else if (endDate > datePlus(next, 4)) setEndDate(datePlus(next, 4));
             }}
             onDismiss={() => setShowStartPicker(false)}
           />
@@ -475,6 +480,7 @@ export default function CreateItineraryScreen() {
             value={fromIsoDate(endDate)}
             mode="date"
             minimumDate={fromIsoDate(startDate)}
+            maximumDate={fromIsoDate(datePlus(startDate, 4))}
             display={Platform.OS === "ios" ? "inline" : "default"}
             onValueChange={(_, date) => {
               setShowEndPicker(false);

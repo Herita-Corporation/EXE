@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Task.Application.DTOs.Requests;
 using Task.Application.Interfaces.Services;
 
@@ -32,6 +33,7 @@ public class MissionTemplateController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async System.Threading.Tasks.Task<IActionResult> Create(CreateMissionTemplateRequest request)
     {
@@ -39,6 +41,7 @@ public class MissionTemplateController : ControllerBase
         return Ok("Mission template created successfully.");
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id}")]
     public async System.Threading.Tasks.Task<IActionResult> Update(Guid id, CreateMissionTemplateRequest request)
     {
@@ -46,6 +49,7 @@ public class MissionTemplateController : ControllerBase
         return Ok("Mission template updated successfully.");
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id}")]
     public async System.Threading.Tasks.Task<IActionResult> Delete(Guid id)
     {

@@ -11,17 +11,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from main import app
 
 
 # ── Auth helper ───────────────────────────────────────────────────────────────
-API_KEY_HEADER = {"X-API-Key": "change-me"}
+API_KEY_HEADER = {"X-API-Key": settings.API_KEY}
 
 
 @pytest.fixture
-def client():
-    with TestClient(app) as c:
-        yield c
+def client(test_client):
+    """Use the in-memory SQLite dependency supplied by the shared fixture."""
+    yield test_client
 
 
 @pytest.fixture

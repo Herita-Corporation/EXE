@@ -9,6 +9,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
+using IAMService.Premium.Services;
 
 namespace IAMService.Controllers;
 
@@ -22,6 +23,7 @@ public class AuthController : ControllerBase
     private readonly IFileStorageService _fileStorageService;
     private readonly IConfiguration _configuration;
     private readonly IEmailSender _emailSender;
+    private readonly PremiumActivationService _premium;
 
     public AuthController(
         IAMDbContext context,
@@ -29,7 +31,8 @@ public class AuthController : ControllerBase
         BCryptPassworkHasher hasher,
         IFileStorageService fileStorageService,
         IConfiguration configuration,
-        IEmailSender emailSender)
+        IEmailSender emailSender,
+        PremiumActivationService premium)
     {
         _context = context;
         _jwt = jwt;
@@ -37,6 +40,7 @@ public class AuthController : ControllerBase
         _fileStorageService = fileStorageService;
         _configuration = configuration;
         _emailSender = emailSender;
+        _premium = premium;
     }
 
     private static string BuildVerificationEmailHtml(string code) =>
@@ -90,6 +94,7 @@ public class AuthController : ControllerBase
         _context.Users.Add(user);
 
         await _context.SaveChangesAsync();
+        await _premium.GrantWelcomeTrialAsync(user.Id, HttpContext.RequestAborted);
 
         var code = await IssueVerificationCodeAsync(user.Id, "EmailToken", user.Email);
         await _emailSender.SendAsync(user.Email, "Xác thực email DISA Travel", BuildVerificationEmailHtml(code.Code));
@@ -221,6 +226,7 @@ public class AuthController : ControllerBase
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+            await _premium.GrantWelcomeTrialAsync(user.Id, HttpContext.RequestAborted);
         }
 
         if (!user.IsActive)
@@ -391,9 +397,17 @@ public class AuthController : ControllerBase
             return BadRequest("Mật khẩu không chính xác");
         }
 
+        // Partner ownership requires a deliberate handoff; do not cascade
+        // away business records or leave an orphaned venue.
+        if (await _context.PartnerProfiles.AnyAsync(p => p.UserId == userId))
+            return Conflict(new { code = "PARTNER_HANDOFF_REQUIRED", message = "Vui lòng chuyển quyền đối tác qua quản trị viên trước khi xóa tài khoản." });
+        if (_configuration.GetValue<bool>("PartnerVouchers:Enabled"))
+        {
+            var memberships = await _context.Set<IAM.Infrastructure.Data.Entities.PartnerLocationMember>().Where(m => m.UserId == userId).ToListAsync();
+            _context.RemoveRange(memberships);
+        }
         if (!string.IsNullOrWhiteSpace(user.AvatarUrl))
             await _fileStorageService.DeleteAsync(user.AvatarUrl);
-
         _context.Users.Remove(user);
         await _context.SaveChangesAsync();
 

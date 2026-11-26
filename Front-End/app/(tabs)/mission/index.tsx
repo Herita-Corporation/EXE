@@ -22,6 +22,7 @@ import { haptics } from "@/utils/haptics";
 import { MissionThumb } from "@/components/MissionThumb";
 import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { GradientHero } from "@/components/GradientHero";
+import { PremiumHomeCard } from "@/components/PremiumEntry";
 import { deleteMission, listUserMissions, pruneMissions } from "@/api/endpoints/missions";
 import { useToast } from "@/context/ToastContext";
 import { ApiError } from "@/api/http";
@@ -232,6 +233,8 @@ export default function MissionHomeScreen() {
           </View>
         </View>
       </GradientHero>
+
+      <PremiumHomeCard />
 
       {/* Segmented control */}
       <View style={styles.tabRow}>

@@ -39,7 +39,8 @@ class TestHaversine:
     def test_known_distance(self):
         # Da Nang → Hoi An ≈ 30 km
         d = haversine_km(16.0678, 108.2208, 15.8801, 108.3380)
-        assert 25 < d < 40
+        # Haversine measures straight-line distance, not the longer road route.
+        assert 23 < d < 26
 
     def test_symmetry(self):
         d1 = haversine_km(16.0, 108.0, 15.0, 107.0)

@@ -5,7 +5,7 @@
 ```bash
 cd Front-End
 npm install
-npx expo install --fix     # đồng bộ version thư viện với Expo Go/CLI đang cài
+npx expo install --fix     # đồng bộ thư viện với phiên bản Expo SDK của dự án
 ```
 
 ## 2. Cấu hình địa chỉ API
@@ -61,6 +61,17 @@ Quét mã QR hiện ra bằng app **Expo Go** (Android/iOS).
 
 ## 5. Nếu gặp lỗi
 
+- **Expo Go báo SDK không tương thích** → dự án hiện dùng **Expo SDK 58**,
+  nên điện thoại cần Expo Go hỗ trợ SDK 58. Sau khi cập nhật code, chạy trong
+  đúng thư mục `Front-End`:
+  ```powershell
+  npm.cmd ci
+  npx.cmd expo install --check
+  npx.cmd expo start -c
+  ```
+  `-c` chỉ xóa cache Metro, không nâng SDK. Dùng `npm.cmd`/`npx.cmd` nếu
+  PowerShell chặn `npm.ps1`/`npx.ps1`. Development build/APK cần build lại
+  khi nâng SDK để đồng bộ phần native.
 - **App không kết nối được service nào** → vào Profile → ⚙ API Settings,
   bấm "Kiểm tra kết nối" từng service để biết cái nào sai IP/chưa chạy.
 - **Đổi Wi-Fi / đổi máy** → chỉ cần sửa lại trong Settings, không cần build

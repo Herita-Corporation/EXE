@@ -41,6 +41,7 @@ limiter = Limiter(key_func=get_remote_address)
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_production_settings()
     logger.info(
         "startup",
         extra={
@@ -152,6 +153,8 @@ def create_app() -> FastAPI:
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health.router, tags=["Health"])
     app.include_router(itinerary.router, prefix="/api/v1", tags=["Itinerary"])
+    from app.api.routes import trip_lifecycle
+    app.include_router(trip_lifecycle.router, prefix="/api/v1", tags=["Trip lifecycle"])
     app.include_router(retrieval.router, prefix="/api/v1", tags=["Retrieval"])
 
     return app

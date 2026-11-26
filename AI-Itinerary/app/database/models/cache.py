@@ -3,11 +3,13 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import TEXT, DateTime, func
+from sqlalchemy import JSON, TEXT, DateTime, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.session import Base
+
+JsonValue = JSON().with_variant(JSONB, "postgresql")
 
 
 class AICache(Base):
@@ -17,7 +19,7 @@ class AICache(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     cache_key: Mapped[str] = mapped_column(TEXT, unique=True, nullable=False)
-    cache_value: Mapped[dict | None] = mapped_column(JSONB)
+    cache_value: Mapped[dict | None] = mapped_column(JsonValue)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

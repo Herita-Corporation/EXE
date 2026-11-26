@@ -24,13 +24,14 @@ public class FileStorageService : IFileStorageService
             ? uri.AbsolutePath
             : mediaUrl;
         var normalized = path.Replace('\\', '/').ToLowerInvariant();
-        var folder = normalized.StartsWith("/uploads/videos/") ? "Videos"
-            : normalized.StartsWith("/uploads/images/") ? "Images"
+        var privateMedia = normalized.StartsWith("/api/mission-media/");
+        var folder = normalized.StartsWith("/uploads/videos/") || normalized.StartsWith("/api/mission-media/videos/") ? "Videos"
+            : normalized.StartsWith("/uploads/images/") || normalized.StartsWith("/api/mission-media/images/") ? "Images"
             : null;
         if (folder == null) return System.Threading.Tasks.Task.CompletedTask;
 
         var fileName = Path.GetFileName(path);
-        var root = Path.GetFullPath(Path.Combine("Uploads", folder));
+        var root = Path.GetFullPath(Path.Combine(privateMedia ? "PrivateUploads" : "Uploads", folder));
         var target = Path.GetFullPath(Path.Combine(root, fileName));
         if (target.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && File.Exists(target))
             File.Delete(target);
@@ -43,7 +44,7 @@ public class FileStorageService : IFileStorageService
     // frontend can load directly, instead of the raw on-disk path.
     private async System.Threading.Tasks.Task<string> SaveAsync(IFormFile file, string folderName, string urlSegment)
     {
-        var folder = Path.Combine("Uploads", folderName);
+        var folder = Path.Combine("PrivateUploads", folderName);
 
         if (!Directory.Exists(folder))
             Directory.CreateDirectory(folder);
@@ -59,8 +60,8 @@ public class FileStorageService : IFileStorageService
 
         var request = _httpContextAccessor.HttpContext?.Request;
         if (request == null)
-            return $"/uploads/{urlSegment}/{fileName}";
+            return $"/api/mission-media/{urlSegment}/{fileName}";
 
-        return $"{request.Scheme}://{request.Host}/uploads/{urlSegment}/{fileName}";
+        return $"{request.Scheme}://{request.Host}/api/mission-media/{urlSegment}/{fileName}";
     }
 }

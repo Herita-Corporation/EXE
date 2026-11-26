@@ -25,6 +25,8 @@ namespace Task.Infrastructure.Persistence
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(TaskDbContext).Assembly);
+            Task.Infrastructure.PartnerVouchers.PartnerVoucherModel.Configure(modelBuilder);
+            Task.Infrastructure.Premium.PremiumTaskModel.Configure(modelBuilder);
         }
     }
 }

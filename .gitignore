@@ -3,3 +3,10 @@
 
 # Project-local language runtimes (installed for development only).
 .runtime/
+
+# Runtime evidence/credentials are never source artifacts.
+**/PrivateUploads/
+**/Uploads/
+**/uploads/
+**/bin/
+**/obj/

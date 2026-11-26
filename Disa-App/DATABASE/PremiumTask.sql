@@ -3,6 +3,7 @@
 /* Filtered indexes below require these SQL Server session options. */
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
+USE TaskDb;
 
 IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = N'premium') EXEC(N'CREATE SCHEMA premium');
 

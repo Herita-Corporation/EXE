@@ -1,5 +1,4 @@
 import React, { useCallback, useRef, useState } from "react";
-import { evidenceImage } from "@/utils/evidenceImage";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as Location from "expo-location";
@@ -10,11 +9,11 @@ import { IconButton } from "@/components/IconButton";
 import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
+import { MissionEvidencePicker, useMissionEvidence } from "@/components/MissionEvidencePicker";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { getUserMission, submitMission } from "@/api/endpoints/missions";
 import { ApiError } from "@/api/http";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { consumePendingCapturedPhoto, consumePendingCapturedVideo } from "@/utils/pendingCapture";
 import {
   MISSION_STATUS_KEY,
   MISSION_TYPE_KEY,
@@ -32,7 +31,7 @@ const COMPLETED_STATUS = 2;
 
 // Must match MissionSubmissionService.MaxDistanceMeters — the server is the
 // real check; this just avoids uploading a photo/video that will be rejected.
-const MAX_DISTANCE_METERS = 500;
+const MAX_DISTANCE_METERS = 1000;
 
 function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const R = 6371000;
@@ -64,9 +63,7 @@ export default function MissionDetailScreen() {
   const [mission, setMission] = useState<UserMission | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [videoUri, setVideoUri] = useState<string | null>(null);
-  const [videoDuration, setVideoDuration] = useState(0);
+  const evidence = useMissionEvidence(mission?.title ?? t("missionDetail.fallbackTitle"), mission?.minVideoSeconds);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -99,42 +96,6 @@ export default function MissionDetailScreen() {
       };
     }, [id, t])
   );
-
-  // Picks up a photo captured on mission/camera.tsx, if any.
-  useFocusEffect(
-    useCallback(() => {
-      const pending = consumePendingCapturedPhoto();
-      if (pending) setPhotoUri(pending);
-    }, [])
-  );
-
-  // Picks up a video captured on mission/record.tsx, if any.
-  useFocusEffect(
-    useCallback(() => {
-      const pending = consumePendingCapturedVideo();
-      if (pending) {
-        setVideoUri(pending.uri);
-        setVideoDuration(pending.durationSec);
-      }
-    }, [])
-  );
-
-  function openCamera() {
-    router.push({
-      pathname: "/(tabs)/mission/camera",
-      params: { missionTitle: mission?.title ?? t("missionDetail.fallbackTitle") },
-    });
-  }
-
-  function openRecorder() {
-    router.push({
-      pathname: "/(tabs)/mission/record",
-      params: {
-        missionTitle: mission?.title ?? t("missionDetail.fallbackTitle"),
-        minSeconds: mission?.minVideoSeconds ? String(mission.minVideoSeconds) : undefined,
-      },
-    });
-  }
 
   const target =
     mission?.targetLatitude != null && mission?.targetLongitude != null
@@ -192,11 +153,9 @@ export default function MissionDetailScreen() {
           return;
         }
       }
-      await submitMission({
-        userMissionId: id,
-        photoUri,
-        videoUri,
-        videoDurationSeconds: videoDuration || undefined,
+      await submitMission(id, {
+        photo: evidence.photo,
+        video: evidence.video,
         latitude: here?.lat,
         longitude: here?.lng,
         takenAt: new Date().toISOString(),
@@ -237,7 +196,7 @@ export default function MissionDetailScreen() {
   // photo of the mission's place (or the generic region fallback).
   const heroSource =
     mission.evidenceUrl && mission.evidenceType === MISSION_TYPE_PHOTO
-      ? evidenceImage(mission.evidenceUrl)
+      ? { uri: mission.evidenceUrl }
       : getRegionImage(placeFromTitle(mission.title));
   const typeKey = MISSION_TYPE_KEY[mission.type];
   const statusKey = MISSION_STATUS_KEY[mission.status];
@@ -300,40 +259,11 @@ export default function MissionDetailScreen() {
           <Card style={styles.submitCard}>
             <Text style={styles.submitTitle}>{t("missionDetail.submitTitle")}</Text>
 
-            {videoUri ? (
-              <View style={styles.videoPreview}>
-                <Ionicons name="videocam" size={28} color={colors.navy} />
-                <Text style={styles.videoPreviewText}>
-                  {t("missionDetail.videoRecorded", { seconds: videoDuration })}
-                </Text>
-              </View>
-            ) : photoUri ? (
-              <Image source={{ uri: photoUri }} style={styles.photoPreview} contentFit="cover" />
-            ) : (
-              <View style={styles.evidencePlaceholder}>
-                <Ionicons
-                  name={mission.requiresVideo ? "videocam-outline" : "image-outline"}
-                  size={26}
-                  color={colors.textMuted}
-                />
-                <Text style={styles.evidencePlaceholderText}>{t("missionDetail.evidenceHint")}</Text>
-              </View>
-            )}
-
-            <View style={styles.submitButtonRow}>
-              {mission.requiresPhoto ? (
-                <Button title={t("missionDetail.takePhoto")} variant="secondary" icon="camera-outline" onPress={openCamera} style={{ flex: 1 }} />
-              ) : null}
-              {mission.requiresVideo ? (
-                <Button
-                  title={videoUri ? t("missionDetail.reRecord") : t("missionDetail.recordVideo")}
-                  variant="secondary"
-                  icon="videocam-outline"
-                  onPress={openRecorder}
-                  style={{ flex: 1 }}
-                />
-              ) : null}
-            </View>
+            <MissionEvidencePicker
+              evidence={evidence}
+              requiresPhoto={mission.requiresPhoto}
+              requiresVideo={mission.requiresVideo}
+            />
 
             <Button
               title={
@@ -363,7 +293,7 @@ export default function MissionDetailScreen() {
               title={t("missionDetail.submit")}
               onPress={onSubmit}
               loading={submitting}
-              disabled={(mission.requiresPhoto && !photoUri) || (mission.requiresVideo && !videoUri)}
+              disabled={(mission.requiresPhoto && !evidence.photo) || (mission.requiresVideo && !evidence.video)}
             />
           </Card>
         ) : null}
@@ -400,30 +330,4 @@ const styles = StyleSheet.create({
   rewardValue: { fontSize: 13, fontWeight: "700", color: colors.text, textAlign: "center" },
   submitCard: { gap: spacing(1) },
   submitTitle: { fontSize: 15, fontWeight: "700", color: colors.text },
-  photoPreview: { width: "100%", height: 180, borderRadius: radius.md },
-  videoPreview: {
-    width: "100%",
-    height: 180,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing(0.5),
-  },
-  videoPreviewText: { color: colors.navy, fontSize: 13, fontWeight: "700" },
-  evidencePlaceholder: {
-    width: "100%",
-    height: 100,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing(0.5),
-    paddingHorizontal: spacing(2),
-  },
-  evidencePlaceholderText: { color: colors.textMuted, fontSize: 12, fontWeight: "600", textAlign: "center" },
-  submitButtonRow: { flexDirection: "row", gap: spacing(1) },
 });

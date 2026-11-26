@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,28 +24,21 @@ import { IconButton } from "@/components/IconButton";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
-import { deleteItinerary, generateItinerary } from "@/api/endpoints/itinerary";
+import { PartnerRecommendations } from "@/components/PartnerRecommendations";
+import { PremiumAccessGate } from "@/components/PremiumAccessGate";
+import { generateItinerary } from "@/api/endpoints/itinerary";
 import { pruneMissions } from "@/api/endpoints/missions";
+import { getSpecialMissions } from "@/api/endpoints/premium";
 import { ApiError } from "@/api/http";
 import { useAuth } from "@/context/AuthContext";
-import {
-  addItineraryToHistory,
-  getLiveItineraryIds,
-  setLastGeneratedItinerary,
-} from "@/utils/itineraryHistory";
+import { getLiveItineraryIds, setLastGeneratedItinerary } from "@/utils/itineraryHistory";
 import { useSmartBack } from "@/utils/backNavigation";
 import { VIETNAM_PROVINCES, type ProvinceHighlight } from "@/data/vietnamProvinces";
 import { getRegionImage } from "@/data/regionImages";
 import { useLocale, type TranslationKey } from "@/i18n/LocaleContext";
-import {
-  formatDate,
-  fromIsoDate,
-  toIsoDate,
-  vietnamHour,
-  vietnamTodayIso,
-} from "@/utils/date";
+import type { PremiumMission } from "@/types/premium";
+import { formatDate, fromIsoDate, toIsoDate } from "@/utils/date";
 import { colors, radius, spacing } from "@/theme/colors";
-import type { ItineraryResponse } from "@/types/itinerary";
 
 const TRAVEL_STYLE_KEYS: Array<{ key: string; labelKey: TranslationKey; icon: keyof typeof Ionicons.glyphMap }> = [
   { key: "food", labelKey: "createItinerary.styleFood", icon: "restaurant-outline" },
@@ -56,36 +49,6 @@ const TRAVEL_STYLE_KEYS: Array<{ key: string; labelKey: TranslationKey; icon: ke
 
 const MIN_BUDGET_VND = 2_000_000;
 const MAX_BUDGET_VND = 125_000_000;
-const SAME_DAY_BOOKING_CUTOFF_HOUR = 18;
-const MEAL_TYPES = new Set(["breakfast", "lunch", "dinner"]);
-const EXPLORATION_TYPES = new Set(["attraction", "experience", "market", "shopping"]);
-
-function firstUnusableDay(
-  itinerary: ItineraryResponse,
-  partialFirstDay: boolean
-): number | null {
-  for (let index = 0; index < itinerary.days.length; index += 1) {
-    const activities = itinerary.days[index].activities;
-    const partial = partialFirstDay && index === 0;
-    const minimumActivities = partial ? 2 : index === 0 ? 4 : 5;
-    const hasMeal = activities.some((activity) => MEAL_TYPES.has(activity.type));
-    const hasExploration = activities.some((activity) =>
-      EXPLORATION_TYPES.has(activity.type)
-    );
-    const hasPaidHotel = activities.some(
-      (activity) => activity.type === "hotel" && activity.cost > 0
-    );
-
-    if (
-      activities.length < minimumActivities ||
-      !hasPaidHotel ||
-      (partial ? !hasMeal && !hasExploration : !hasMeal || !hasExploration)
-    ) {
-      return index + 1;
-    }
-  }
-  return null;
-}
 
 function formatVnd(n: number): string {
   return `${Math.round(n).toLocaleString("vi-VN")} VND`;
@@ -96,20 +59,9 @@ function formatVndShort(n: number, unit: string): string {
 }
 
 function todayPlus(days: number): string {
-  return datePlus(vietnamTodayIso(), days);
-}
-
-function datePlus(iso: string, days: number): string {
-  const d = fromIsoDate(iso);
+  const d = new Date();
   d.setDate(d.getDate() + days);
   return toIsoDate(d);
-}
-
-function earliestStartIso(now = new Date()): string {
-  const today = vietnamTodayIso(now);
-  return vietnamHour(now) >= SAME_DAY_BOOKING_CUTOFF_HOUR
-    ? datePlus(today, 1)
-    : today;
 }
 
 /** Accent-insensitive match so "da lat" finds "Đà Lạt". */
@@ -171,11 +123,45 @@ function FeaturedAreaCard({
 }
 
 export default function CreateItineraryScreen() {
+  const { missionProvinceId } = useLocalSearchParams<{ missionProvinceId?: string }>();
+  const content = <CreateItineraryContent />;
+  return missionProvinceId ? <PremiumAccessGate>{content}</PremiumAccessGate> : content;
+}
+
+function CreateItineraryContent() {
   const insets = useSafeAreaInsets();
   const goBack = useSmartBack();
   const { t, locale } = useLocale();
   const { user } = useAuth();
-  const [province, setProvince] = useState<string | null>(null);
+  const { missionProvinceId } = useLocalSearchParams<{ missionProvinceId?: string }>();
+  const [provinceSelection, setProvince] = useState<string | null>(null);
+  const [missionPlaces, setMissionPlaces] = useState<PremiumMission[]>([]);
+  const [missionPlacesLoading, setMissionPlacesLoading] = useState(!!missionProvinceId);
+  const [missionPlacesFailed, setMissionPlacesFailed] = useState(false);
+  const [missionPlacesAttempt, setMissionPlacesAttempt] = useState(0);
+  const province = missionProvinceId ? missionPlaces[0]?.provinceName ?? null : provinceSelection;
+
+  useEffect(() => {
+    if (!missionProvinceId) return;
+
+    let active = true;
+    setMissionPlaces([]);
+    setMissionPlacesLoading(true);
+    setMissionPlacesFailed(false);
+    getSpecialMissions(missionProvinceId)
+      .then((missions) => {
+        if (active) setMissionPlaces(missions.filter((mission) => mission.accepted));
+      })
+      .catch(() => {
+        if (active) setMissionPlacesFailed(true);
+      })
+      .finally(() => {
+        if (active) setMissionPlacesLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [missionProvinceId, missionPlacesAttempt]);
+
   const [provincePickerOpen, setProvincePickerOpen] = useState(false);
   const [provinceQuery, setProvinceQuery] = useState("");
   const provinceResults = provinceQuery.trim()
@@ -200,39 +186,15 @@ export default function CreateItineraryScreen() {
     setHighlight(name);
     setHighlightPickerOpen(false);
   }
-  const [startDate, setStartDate] = useState(todayPlus(1));
-  const [endDate, setEndDate] = useState(todayPlus(5));
-  const [clockNow, setClockNow] = useState(() => new Date());
-  const earliestStartDate = earliestStartIso(clockNow);
+  const [startDate, setStartDate] = useState(todayPlus(14));
+  const [endDate, setEndDate] = useState(todayPlus(18));
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [travelers, setTravelers] = useState(2);
   const [budgetVnd, setBudgetVnd] = useState(30_000_000);
   const [styles_, setStyles_] = useState<string[]>(["food"]);
   const [loading, setLoading] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState<{
-    days: number;
-    chunks: number;
-  } | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const timer = setInterval(() => setClockNow(new Date()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (startDate >= earliestStartDate) return;
-    const durationOffset = Math.max(
-      0,
-      Math.round(
-        (fromIsoDate(endDate).getTime() - fromIsoDate(startDate).getTime()) /
-          86_400_000
-      )
-    );
-    setStartDate(earliestStartDate);
-    setEndDate(datePlus(earliestStartDate, durationOffset));
-  }, [earliestStartDate, startDate, endDate]);
 
   function toggle(list: string[], key: string, setList: (v: string[]) => void) {
     setList(list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
@@ -244,19 +206,8 @@ export default function CreateItineraryScreen() {
       setError(t("createItinerary.errorSelectProvince"));
       return;
     }
-    if (startDate < earliestStartDate || endDate < earliestStartDate) {
-      setError(t("createItinerary.errorPastDate"));
-      return;
-    }
     if (startDate > endDate) {
       setError(t("createItinerary.errorDateOrder"));
-      return;
-    }
-    const expectedDays = Math.round(
-      (fromIsoDate(endDate).getTime() - fromIsoDate(startDate).getTime()) / 86_400_000
-    ) + 1;
-    if (expectedDays > 5) {
-      setError(locale === "vi" ? "Lịch trình tối đa 5 ngày." : "An itinerary can be at most 5 days.");
       return;
     }
     if (styles_.length === 0) {
@@ -264,76 +215,43 @@ export default function CreateItineraryScreen() {
       return;
     }
 
-    setGenerationProgress({
-      days: expectedDays,
-      chunks: Math.ceil(expectedDays / 5),
-    });
     setLoading(true);
     try {
       const result = await generateItinerary({
-        cities: [highlight ? `${highlight}, ${province}` : province],
+        cities: [highlight && !missionProvinceId ? `${highlight}, ${province}` : province],
         // The slider is per person; AI-Itinerary plans against the whole
         // trip budget (schemas/request.py: "Total trip budget in VND").
         budget: budgetVnd * travelers,
-        travelers,
         start_date: startDate,
         end_date: endDate,
         preferences: styles_,
+        mission_province_id: missionProvinceId,
       });
-      if (result.days.length !== expectedDays) {
-        throw new ApiError(
-          t("createItinerary.errorIncompleteDays", {
-            expected: expectedDays,
-            actual: result.days.length,
-          }),
-          502,
-          "INCOMPLETE_ITINERARY"
-        );
-      }
-      const unusableDay = firstUnusableDay(
-        result,
-        startDate === vietnamTodayIso()
-      );
-      if (unusableDay !== null) {
-        // The backend already persisted this response. Remove the unusable
-        // row best-effort so it does not pollute "My itineraries".
-        try {
-          await deleteItinerary(result.itinerary_id);
-        } catch {}
-        throw new ApiError(
-          t("createItinerary.errorIncompleteActivities", { day: unusableDay }),
-          502,
-          "UNUSABLE_ITINERARY"
-        );
-      }
       // Drop missions left over from itineraries that no longer exist — only
       // saved ones ("Lộ trình của tôi") and this new one keep theirs.
       // Best-effort: a failure here must not block opening the new itinerary.
       if (user) {
         try {
-          await addItineraryToHistory(user.id, {
-            id: result.itinerary_id,
-            cities: result.trip_summary.cities,
-            totalCost: result.total_cost,
-            createdAt: result.created_at,
-          });
           await setLastGeneratedItinerary(user.id, result.itinerary_id);
           await pruneMissions(user.id, await getLiveItineraryIds(user.id));
         } catch {}
       }
-      // The server already persisted the result and the local history was
-      // updated above, so moving to a mission cannot make this trip disappear.
-      router.replace({
-        pathname: "/(tabs)/mission/itinerary/[id]",
-        params: { id: result.itinerary_id, from: "home" },
-      });
+      // Not saved to "My Itineraries" yet — only once the user reviews and
+      // taps "Xác nhận tạo lộ trình" on the detail screen (see [id].tsx).
+      if (missionProvinceId && result.unscheduled_mission_destinations?.length) {
+        router.push({
+          pathname: "/(tabs)/mission/itinerary/[id]",
+          params: { id: result.itinerary_id, adjustMissionDates: "1" },
+        });
+      } else {
+        router.replace(`/(tabs)/mission/itinerary/${result.itinerary_id}`);
+      }
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : t("createItinerary.errorGenerateFailed")
       );
     } finally {
       setLoading(false);
-      setGenerationProgress(null);
     }
   }
 
@@ -363,15 +281,51 @@ export default function CreateItineraryScreen() {
         <ErrorBanner message={error} />
 
         <Text style={styles.label}>{t("createItinerary.whereLabel")}</Text>
-        <Pressable style={styles.selectBox} onPress={() => setProvincePickerOpen(true)}>
-          <Ionicons name="location-outline" size={18} color={colors.textMuted} />
-          <Text style={[styles.selectText, !province && styles.placeholderText]}>
-            {province ?? t("createItinerary.provincePlaceholder")}
-          </Text>
-          <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
-        </Pressable>
+        {!missionProvinceId && (
+          <Pressable style={styles.selectBox} onPress={() => setProvincePickerOpen(true)}>
+            <Ionicons name="location-outline" size={18} color={colors.textMuted} />
+            <Text style={[styles.selectText, !province && styles.placeholderText]}>
+              {province ?? t("createItinerary.provincePlaceholder")}
+            </Text>
+            <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+          </Pressable>
+        )}
 
-        {selectedProvince && featuredAreas.length > 0 ? (
+        {province && <PartnerRecommendations destinations={[province]} />}
+
+        {missionProvinceId ? (
+          <View style={styles.missionPlacesCard}>
+            {missionPlacesLoading ? <ActivityIndicator color={colors.navy} /> : null}
+            {missionPlacesFailed ? (
+              <>
+                <ErrorBanner message={t("createItinerary.missionPlacesLoadFailed")} />
+                <Button
+                  title={t("createItinerary.retryMissionPlaces")}
+                  variant="secondary"
+                  onPress={() => setMissionPlacesAttempt((attempt) => attempt + 1)}
+                />
+              </>
+            ) : null}
+            {!missionPlacesLoading && !missionPlacesFailed && !missionPlaces.length ? (
+              <ErrorBanner message={t("createItinerary.missionPlacesEmpty")} />
+            ) : null}
+            {missionPlaces.length > 0 ? (
+              <>
+                <Text style={styles.missionPlacesTitle}>
+                  {province} · {t("createItinerary.missionPlacesTitle")}
+                </Text>
+                {missionPlaces.map((mission) => (
+                  <View key={mission.id} style={styles.missionPlaceRow}>
+                    <Ionicons name="location-outline" size={16} color={colors.link} />
+                    <Text style={styles.missionPlaceName}>{mission.placeName}</Text>
+                  </View>
+                ))}
+              </>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!missionProvinceId && selectedProvince && featuredAreas.length > 0 ? (
           <View style={styles.featuredBox}>
             <View style={styles.featuredHeader}>
               <Ionicons name="star" size={14} color={colors.warning} />
@@ -462,17 +416,16 @@ export default function CreateItineraryScreen() {
           <DateTimePicker
             value={fromIsoDate(startDate)}
             mode="date"
-            minimumDate={fromIsoDate(earliestStartDate)}
+            minimumDate={new Date()}
             display={Platform.OS === "ios" ? "inline" : "default"}
-            onValueChange={(_, date) => {
+            onChange={(_, date) => {
               setShowStartPicker(false);
+              if (!date) return;
               const next = toIsoDate(date);
               setStartDate(next);
-              // Keep the selected date range valid when the start date moves.
+              // Keep the range valid instead of erroring on submit.
               if (endDate < next) setEndDate(next);
-              else if (endDate > datePlus(next, 4)) setEndDate(datePlus(next, 4));
             }}
-            onDismiss={() => setShowStartPicker(false)}
           />
         ) : null}
         {showEndPicker ? (
@@ -480,13 +433,11 @@ export default function CreateItineraryScreen() {
             value={fromIsoDate(endDate)}
             mode="date"
             minimumDate={fromIsoDate(startDate)}
-            maximumDate={fromIsoDate(datePlus(startDate, 4))}
             display={Platform.OS === "ios" ? "inline" : "default"}
-            onValueChange={(_, date) => {
+            onChange={(_, date) => {
               setShowEndPicker(false);
-              setEndDate(toIsoDate(date));
+              if (date) setEndDate(toIsoDate(date));
             }}
-            onDismiss={() => setShowEndPicker(false)}
           />
         ) : null}
 
@@ -571,6 +522,7 @@ export default function CreateItineraryScreen() {
           iconPosition="right"
           onPress={onGenerate}
           loading={loading}
+          disabled={!!missionProvinceId && !missionPlaces.length}
           style={{ marginTop: spacing(1) }}
         />
       </View>
@@ -725,24 +677,14 @@ export default function CreateItineraryScreen() {
 
       {/* AI generation can take up to a minute — a blocking, explained wait
           instead of a tiny spinner inside the button. */}
-      <Modal
-        visible={loading}
-        transparent
-        animationType="fade"
-        hardwareAccelerated
-        onRequestClose={() => {}}
-      >
+      <Modal visible={loading} transparent animationType="fade">
         <View style={styles.generatingBackdrop}>
           <View style={styles.generatingCard}>
             <View style={styles.generatingIcon}>
               <Ionicons name="sparkles" size={26} color={colors.gold} />
             </View>
             <Text style={styles.generatingTitle}>{t("extra.generatingTitle")}</Text>
-            <Text style={styles.generatingText}>
-              {generationProgress
-                ? t("extra.generatingProgress", generationProgress)
-                : t("extra.generatingSubtitle")}
-            </Text>
+            <Text style={styles.generatingText}>{t("extra.generatingSubtitle")}</Text>
             <ActivityIndicator color={colors.navy} style={{ marginTop: spacing(1) }} />
           </View>
         </View>
@@ -783,6 +725,17 @@ const styles = StyleSheet.create({
   },
   selectText: { flex: 1, color: colors.text, fontSize: 14 },
   placeholderText: { color: colors.textMuted },
+  missionPlacesCard: {
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing(1.75),
+    gap: spacing(1),
+  },
+  missionPlacesTitle: { color: colors.navy, fontWeight: "800", fontSize: 15 },
+  missionPlaceRow: { flexDirection: "row", alignItems: "center", gap: spacing(1) },
+  missionPlaceName: { flex: 1, color: colors.text, fontSize: 14 },
   dateRow: { flexDirection: "row", gap: spacing(1.5) },
   card: {
     backgroundColor: colors.surface,

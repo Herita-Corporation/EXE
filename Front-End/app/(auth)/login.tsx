@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, type TextInputInstance, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Image } from "expo-image";
@@ -21,36 +21,37 @@ WebBrowser.maybeCompleteAuthSession();
 const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
 const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const hasGoogleAuthConfig = Boolean(googleWebClientId && googleAndroidClientId);
 
-export default function LoginScreen() {
-  const { login, loginWithGoogle } = useAuth();
+function GoogleLoginButton({
+  disabled,
+  onError,
+}: {
+  disabled: boolean;
+  onError: (message: string) => void;
+}) {
+  const { loginWithGoogle } = useAuth();
   const { locale, t } = useLocale();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const passwordRef = useRef<TextInputInstance>(null);
   const handledGoogleToken = useRef<string | null>(null);
+  // This component is rendered only when both IDs are present. Keeping the
+  // hook here prevents a missing local .env value from crashing LoginScreen.
   const [googleRequest, googleResponse, promptGoogleLogin] = Google.useIdTokenAuthRequest({
-    webClientId: googleWebClientId,
-    androidClientId: googleAndroidClientId,
+    webClientId: googleWebClientId!,
+    androidClientId: googleAndroidClientId!,
     iosClientId: googleIosClientId,
     selectAccount: true,
   });
-  const googleLabel = locale === "vi" ? "Tiếp tục với Google" : "Continue with Google";
-  const googleNotConfigured = locale === "vi"
-    ? "Đăng nhập Google chưa được cấu hình cho bản build này."
-    : "Google sign-in has not been configured for this build.";
 
   useEffect(() => {
     if (googleResponse?.type !== "success") return;
 
     const idToken = googleResponse.params.id_token;
     if (!idToken) {
-      setGoogleLoading(false);
-      setError(t("auth.loginFailed"));
+      queueMicrotask(() => {
+        setGoogleLoading(false);
+        onError(t("auth.loginFailed"));
+      });
       return;
     }
     if (handledGoogleToken.current === idToken) return;
@@ -61,12 +62,57 @@ export default function LoginScreen() {
         await loginWithGoogle(idToken);
         router.replace("/(tabs)/home");
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : t("auth.loginFailed"));
+        onError(err instanceof ApiError ? err.message : t("auth.loginFailed"));
       } finally {
         setGoogleLoading(false);
       }
     })();
-  }, [googleResponse, loginWithGoogle, t]);
+  }, [googleResponse, loginWithGoogle, onError, t]);
+
+  async function onGoogleSubmit() {
+    onError("");
+    setGoogleLoading(true);
+    try {
+      const result = await promptGoogleLogin();
+      if (result.type !== "success") setGoogleLoading(false);
+    } catch {
+      setGoogleLoading(false);
+      onError(t("auth.loginFailed"));
+    }
+  }
+
+  return (
+    <>
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>{locale === "vi" ? "hoặc" : "or"}</Text>
+        <View style={styles.dividerLine} />
+      </View>
+      <Button
+        title={locale === "vi" ? "Tiếp tục với Google" : "Continue with Google"}
+        onPress={onGoogleSubmit}
+        loading={googleLoading}
+        disabled={!googleRequest || disabled}
+        variant="outline"
+        size="lg"
+        icon="logo-google"
+      />
+    </>
+  );
+}
+
+export default function LoginScreen() {
+  const { login } = useAuth();
+  const { t } = useLocale();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
+  const reportGoogleError = useCallback((message: string) => {
+    setError(message || null);
+  }, []);
 
   async function onSubmit() {
     setError(null);
@@ -82,23 +128,6 @@ export default function LoginScreen() {
       setError(err instanceof ApiError ? err.message : t("auth.loginFailed"));
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function onGoogleSubmit() {
-    setError(null);
-    if (!googleWebClientId || !googleAndroidClientId) {
-      setError(googleNotConfigured);
-      return;
-    }
-
-    setGoogleLoading(true);
-    try {
-      const result = await promptGoogleLogin();
-      if (result.type !== "success") setGoogleLoading(false);
-    } catch {
-      setGoogleLoading(false);
-      setError(t("auth.loginFailed"));
     }
   }
 
@@ -174,21 +203,12 @@ export default function LoginScreen() {
           iconPosition="right"
         />
 
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>{locale === "vi" ? "hoặc" : "or"}</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <Button
-          title={googleLabel}
-          onPress={onGoogleSubmit}
-          loading={googleLoading}
-          disabled={!googleRequest || loading}
-          variant="outline"
-          size="lg"
-          icon="logo-google"
-        />
+        {hasGoogleAuthConfig ? (
+          <GoogleLoginButton
+            disabled={loading}
+            onError={reportGoogleError}
+          />
+        ) : null}
       </Card>
 
       <View style={styles.registerRow}>

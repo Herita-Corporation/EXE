@@ -18,6 +18,7 @@ type Shape = "rounded" | "pill";
 interface Props {
   title: string;
   onPress: () => void;
+  accessibilityLabel?: string;
   variant?: Variant;
   size?: Size;
   shape?: Shape;
@@ -27,13 +28,13 @@ interface Props {
   leftElement?: React.ReactNode;
   loading?: boolean;
   disabled?: boolean;
-  accessibilityLabel?: string;
   style?: ViewStyle;
 }
 
 export function Button({
   title,
   onPress,
+  accessibilityLabel,
   variant = "primary",
   size = "md",
   shape = "pill",
@@ -42,7 +43,6 @@ export function Button({
   leftElement,
   loading = false,
   disabled = false,
-  accessibilityLabel,
   style,
 }: Props) {
   const isDisabled = disabled || loading;
@@ -57,7 +57,9 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
-      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.base,
         sizeStyles[size],

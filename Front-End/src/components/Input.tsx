@@ -3,8 +3,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TextInputProps,
   type TextInputInstance,
+  TextInputProps,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

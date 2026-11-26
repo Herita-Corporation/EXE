@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { GradientHero } from "@/components/GradientHero";
+import { usePremiumAccess } from "@/hooks/usePremiumAccess";
+import { useLocale } from "@/i18n/LocaleContext";
 import { colors, radius, spacing } from "@/theme/colors";
 
 export function PremiumBenefits() {
@@ -46,6 +48,44 @@ export function PremiumHomeCard() {
   );
 }
 
+/** Ditan's mission entry treatment, kept independent of checkout/pricing UI. */
+export function PremiumMissionEntries() {
+  const { status } = usePremiumAccess();
+  const { t } = useLocale();
+  const unlocked = status === "active";
+
+  return (
+    <View style={styles.missionEntries}>
+      <Pressable
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.missionEntry, pressed && styles.pressed]}
+        onPress={() => router.push("/(tabs)/mission/premium/special")}
+      >
+        <Ionicons name="flag-outline" size={23} color={colors.navy} />
+        <View style={styles.missionEntryCopy}>
+          <Text style={styles.missionEntryText}>{t("premium.special")}</Text>
+          <Text style={styles.missionEntrySubtitle}>{t(unlocked ? "premium.specialByProvince" : "premium.specialLocked")}</Text>
+        </View>
+        <Ionicons name={unlocked ? "chevron-forward" : "lock-closed-outline"} size={18} color={colors.textMuted} />
+      </Pressable>
+      {unlocked ? (
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.missionEntry, pressed && styles.pressed]}
+          onPress={() => router.push("/(tabs)/mission/premium/groups")}
+        >
+          <Ionicons name="people-outline" size={23} color={colors.navy} />
+          <View style={styles.missionEntryCopy}>
+            <Text style={styles.missionEntryText}>{t("premium.groups")}</Text>
+            <Text style={styles.missionEntrySubtitle}>{t("premium.groupCompletionRule")}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: { flexDirection: "row", alignItems: "center", gap: spacing(1), padding: spacing(1.5) },
   mark: { width: 110, opacity: 0.08 },
@@ -56,5 +96,10 @@ const styles = StyleSheet.create({
   benefit: { flexDirection: "row", gap: spacing(1), alignItems: "flex-start" },
   benefitTitle: { color: colors.navy, fontSize: 14, fontWeight: "700" },
   benefitBody: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
+  missionEntries: { gap: spacing(1) },
+  missionEntry: { flexDirection: "row", alignItems: "center", minHeight: 54, padding: spacing(1.25), gap: spacing(1), borderRadius: radius.md, backgroundColor: colors.blueSoft },
+  missionEntryCopy: { flex: 1 },
+  missionEntryText: { color: colors.navy, fontSize: 15, fontWeight: "700" },
+  missionEntrySubtitle: { color: colors.textMuted, fontSize: 13 },
   pressed: { opacity: 0.78 },
 });

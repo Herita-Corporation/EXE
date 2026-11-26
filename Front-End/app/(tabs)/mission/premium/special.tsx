@@ -1,55 +1,129 @@
-import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useRef, useState } from "react";
+import { ActivityIndicator, StyleSheet, Text } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { acceptSpecialMissions, getPremiumProvinces, getSpecialMissions } from "@/api/endpoints/premium";
 import { ApiError } from "@/api/http";
 import { BackHeader } from "@/components/BackHeader";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { PartnerRecommendations } from "@/components/PartnerRecommendations";
 import { PremiumAccessGate } from "@/components/PremiumAccessGate";
+import { PremiumMissionRow } from "@/components/PremiumMissionRow";
 import { PremiumProvincePicker } from "@/components/PremiumProvincePicker";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { colors, radius, spacing } from "@/theme/colors";
+import { useLocale } from "@/i18n/LocaleContext";
+import { colors } from "@/theme/colors";
 import type { PremiumMission, PremiumProvince } from "@/types/premium";
 
-export default function PremiumSpecialScreen() {
+export default function SpecialMissionsScreen() {
+  return <PremiumAccessGate from="special"><SpecialMissionsContent /></PremiumAccessGate>;
+}
+
+function SpecialMissionsContent() {
+  const { t } = useLocale();
   const [provinces, setProvinces] = useState<PremiumProvince[]>([]);
-  const [province, setProvince] = useState<PremiumProvince | null>(null);
+  const [province, setProvince] = useState<PremiumProvince>();
   const [missions, setMissions] = useState<PremiumMission[]>([]);
+  const [selected, setSelected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const load = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      if (province) setMissions(await getSpecialMissions(province.id));
-      else setProvinces(await getPremiumProvinces());
-    } catch (e) { setError(e instanceof ApiError ? e.message : "Không thể tải nhiệm vụ Premium."); }
-    finally { setLoading(false); }
-  }, [province]);
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  const [loadVersion, setLoadVersion] = useState(0);
+  const busy = useRef(false);
+
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const load = province
+      ? getSpecialMissions(province.id).then((list) => { if (!cancelled) setMissions(list); })
+      : getPremiumProvinces().then((list) => { if (!cancelled) setProvinces(list); });
+    load.catch((err) => {
+      if (!cancelled) {
+        setError(err instanceof ApiError ? err.message : t("premium.loadFailed"));
+        setMissions([]);
+      }
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [province, loadVersion, t]));
 
   async function acceptAll() {
-    if (!province) return;
-    setSaving(true); setError(null);
-    try { setMissions(await acceptSpecialMissions(province.id)); }
-    catch (e) { setError(e instanceof ApiError ? e.message : "Không thể nhận nhiệm vụ."); }
-    finally { setSaving(false); }
+    if (!province || busy.current) return;
+    busy.current = true;
+    setSaving(true);
+    setError(null);
+    try {
+      setMissions(await acceptSpecialMissions(province.id));
+      setSelected(false);
+      router.push({
+        pathname: "/(tabs)/mission/create",
+        params: { missionProvinceId: province.id },
+      });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("premium.acceptFailed"));
+    } finally {
+      busy.current = false;
+      setSaving(false);
+    }
   }
 
-  return <PremiumAccessGate from="special"><ScreenContainer>
-    <BackHeader title="Nhiệm vụ đặc biệt" onBack={() => province ? setProvince(null) : router.back()} />
-    <Text style={styles.copy}>Chọn tỉnh/thành, nhận nhiệm vụ và nộp đúng loại minh chứng để mở khóa voucher 0 DisaPoint.</Text>
-    <ErrorBanner message={error} />
-    {loading ? <ActivityIndicator color={colors.navy} /> : !province ? <PremiumProvincePicker provinces={provinces} onSelect={setProvince} /> : <>
-      <Card style={styles.headerCard}><View style={{ flex: 1 }}><Text style={styles.title}>{province.name}</Text><Text style={styles.copy}>{missions.filter(m => m.accepted).length}/{missions.length} nhiệm vụ đã nhận</Text></View><Button title="Nhận tất cả" size="sm" onPress={() => void acceptAll()} loading={saving} /></Card>
-      {missions.map(m => <Pressable key={m.id} style={({ pressed }) => [styles.mission, pressed && styles.pressed]} disabled={!m.accepted || !!m.completedAt} onPress={() => router.push({ pathname: "/(tabs)/mission/premium/evidence/[missionId]", params: { missionId: m.id, scope: "special", scopeId: province.id, title: m.title, evidenceType: m.evidenceType } })}>
-        <Ionicons name={m.completedAt ? "checkmark-circle" : m.evidenceType === "video" ? "videocam-outline" : "image-outline"} size={24} color={m.completedAt ? colors.success : colors.navy} />
-        <View style={{ flex: 1 }}><Text style={styles.missionTitle}>{m.title}</Text><Text style={styles.copy}>{m.instruction}</Text></View><Ionicons name={m.accepted ? "chevron-forward" : "lock-closed-outline"} size={18} color={colors.textMuted} />
-      </Pressable>)}
-    </>}
-  </ScreenContainer></PremiumAccessGate>;
+  const acceptedCount = missions.filter((mission) => mission.accepted).length;
+  const total = missions.length;
+
+  return (
+    <ScreenContainer>
+      <BackHeader title={t("premium.special")} onBack={() => router.navigate("/(tabs)/missions")} />
+      <Text style={styles.guide}>{t("premium.specialGuide")}</Text>
+      {!!provinces.length && (
+        <PremiumProvincePicker
+          provinces={provinces}
+          selected={province}
+          onSelect={(next) => {
+            if (busy.current || next.id === province?.id) return;
+            setMissions([]);
+            setSelected(false);
+            setProvince(next);
+          }}
+        />
+      )}
+      {province && <PartnerRecommendations destinations={[province.name]} />}
+      <ErrorBanner message={error} />
+      {loading ? <ActivityIndicator color={colors.navy} /> : (
+        <>
+          {error && total === 0 && (
+            <Button title={t("premium.retry")} variant="outline" onPress={() => setLoadVersion((version) => version + 1)} />
+          )}
+          {province && total > 0 && (
+            <>
+              <Card>
+                <Text style={styles.count}>{t("premium.acceptedCount", { count: acceptedCount, total })}</Text>
+                <Text style={styles.guide}>{t("premium.noMissionPoints")}</Text>
+                <Button
+                  title={t("premium.selectAll")}
+                  icon={selected ? "checkbox-outline" : "square-outline"}
+                  variant="secondary"
+                  onPress={() => setSelected((value) => !value)}
+                  disabled={saving}
+                />
+                {selected && (
+                  <Button title={t("premium.acceptAll")} variant="amber" onPress={acceptAll} loading={saving} icon="sparkles-outline" />
+                )}
+              </Card>
+              {missions.map((mission) => (
+                <PremiumMissionRow key={mission.id} mission={mission} scope="special" scopeId={province.id} selected={selected} />
+              ))}
+            </>
+          )}
+        </>
+      )}
+    </ScreenContainer>
+  );
 }
-const styles = StyleSheet.create({ copy: { color: colors.textMuted, fontSize: 13, lineHeight: 19 }, grid: { gap: spacing(1) }, province: { padding: spacing(1.5), borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, flexDirection: "row", justifyContent: "space-between" }, provinceText: { color: colors.navy, fontWeight: "700" }, headerCard: { flexDirection: "row", alignItems: "center", gap: spacing(1) }, title: { color: colors.navy, fontWeight: "800", fontSize: 17 }, mission: { flexDirection: "row", gap: spacing(1), alignItems: "center", padding: spacing(1.25), borderRadius: radius.md, backgroundColor: colors.blueSoft }, missionTitle: { color: colors.navy, fontWeight: "700" }, pressed: { opacity: 0.7 } });
+
+const styles = StyleSheet.create({
+  count: { color: colors.navy, fontSize: 14, fontWeight: "700" },
+  guide: { color: colors.textMuted, fontSize: 14, lineHeight: 21 },
+});

@@ -9,20 +9,19 @@ import { Card } from "@/components/Card";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
-import { getItinerary, listMyItineraries } from "@/api/endpoints/itinerary";
-import { ApiError } from "@/api/http";
+import { getItinerary } from "@/api/endpoints/itinerary";
 import { getItineraryHistory, type ItineraryHistoryEntry } from "@/utils/itineraryHistory";
 import { useSmartBack } from "@/utils/backNavigation";
 import { useAuth } from "@/context/AuthContext";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { ItineraryResponse } from "@/types/itinerary";
 import { getRegionImage } from "@/data/regionImages";
-import { formatDateRange, vietnamTodayIso } from "@/utils/date";
+import { formatDateRange, toIsoDate } from "@/utils/date";
 import { Image } from "expo-image";
 import { colors, spacing } from "@/theme/colors";
 
 function todayIso() {
-  return vietnamTodayIso();
+  return toIsoDate(new Date());
 }
 
 export default function MyItinerariesScreen() {
@@ -30,7 +29,6 @@ export default function MyItinerariesScreen() {
   const { user } = useAuth();
   const { t, locale } = useLocale();
   const [loading, setLoading] = useState(true);
-  const [cloudError, setCloudError] = useState("");
   const [items, setItems] = useState<
     { entry: ItineraryHistoryEntry; data: ItineraryResponse }[]
   >([]);
@@ -38,17 +36,6 @@ export default function MyItinerariesScreen() {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    setItems([]); setCloudError("");
-    try {
-      const trips = await listMyItineraries();
-      setItems(trips.map(data => ({ data, entry: { id: data.itinerary_id, cities: data.trip_summary.cities, totalCost: data.total_cost, createdAt: data.created_at ?? "" } })));
-      setLoading(false); return;
-    } catch (e) {
-      if (!(e instanceof ApiError) || (e.status !== 404 && e.status !== 405)) {
-        setCloudError(e instanceof Error ? e.message : "Unable to load cloud history"); setLoading(false); return;
-      }
-      setCloudError(locale === "vi" ? "Máy chủ chưa hỗ trợ lịch sử cloud; đang xem dữ liệu thiết bị." : "Cloud history is not deployed; showing this device's history.");
-    }
     const history = await getItineraryHistory(user.id);
     // Sorted newest-first by the local history's own createdAt.
     const results = await Promise.all(
@@ -68,7 +55,7 @@ export default function MyItinerariesScreen() {
       )
     );
     setLoading(false);
-  }, [user, locale]);
+  }, [user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -77,63 +64,21 @@ export default function MyItinerariesScreen() {
   );
 
   const today = todayIso();
-  const group = (data: ItineraryResponse) => data.display_group ?? (data.lifecycle?.status === "COMPLETED" || data.lifecycle?.status === "CANCELLED" || data.trip_summary.end_date < today ? "PAST" : data.trip_summary.start_date > today ? "UPCOMING" : "ONGOING");
-  // Calendar dates determine Current/Future/Past. `startedAt` records a user
-  // action only; it is not lifecycle truth for a scheduled itinerary.
-  const currentItems = items.filter(
-    ({ data }) =>
-      group(data) === "ONGOING"
+  // "Current journey" now requires the user to have explicitly tapped
+  // "Bắt đầu lộ trình" on the detail screen (entry.startedAt set) — a saved
+  // itinerary that was never started just sits in the list below, it no
+  // longer auto-promotes itself to the active-journey card based on dates
+  // alone. The badge on each "past" item still reflects its own state
+  // (Chưa bắt đầu / Sắp tới / Đã hoàn thành).
+  const currentIndex = items.findIndex(
+    (i) => !!i.entry.startedAt && i.data.trip_summary.end_date >= today
   );
-  const future = items
-    .filter(({ data }) => group(data) === "UPCOMING")
-    .sort((a, b) =>
-      a.data.trip_summary.start_date.localeCompare(b.data.trip_summary.start_date)
-    );
-  const past = items
-    .filter(({ data }) => group(data) === "PAST")
-    .sort((a, b) =>
-      b.data.trip_summary.end_date.localeCompare(a.data.trip_summary.end_date)
-    );
-  const current = currentItems[0] ?? null;
-  const additionalCurrent = currentItems.slice(1);
-
-  const renderCompactCards = (
-    list: { entry: ItineraryHistoryEntry; data: ItineraryResponse }[],
-    label: string,
-    tone: React.ComponentProps<typeof Badge>["tone"]
-  ) =>
-    list.map(({ data }) => (
-      <Card
-        key={data.itinerary_id}
-        variant="media"
-        style={styles.pastCard}
-        imageSource={getRegionImage(data.trip_summary.cities[0])}
-        overlay={<Badge label={label} tone={tone} />}
-      >
-        <Text style={styles.pastDates}>
-          {formatDateRange(
-            data.trip_summary.start_date,
-            data.trip_summary.end_date,
-            locale
-          )}
-        </Text>
-        <Text style={styles.pastTitle}>
-          {data.trip_summary.cities.join(" → ")}
-        </Text>
-        <Button
-          title={t("itineraries.details")}
-          variant="outline"
-          onPress={() =>
-            router.push(`/(tabs)/mission/itinerary/${data.itinerary_id}`)
-          }
-        />
-      </Card>
-    ));
+  const current = currentIndex >= 0 ? items[currentIndex] : null;
+  const past = items.filter((_, idx) => idx !== currentIndex);
 
   return (
     <ScreenContainer backgroundColor={colors.surface}>
       <BackHeader title={t("itineraries.title")} onBack={goBack} />
-      {!!cloudError && <Text style={{ padding: 16, color: colors.textMuted }}>{cloudError}</Text>}
       <Text style={styles.subtitle}>
         {t("itineraries.subtitle")}
       </Text>
@@ -182,20 +127,6 @@ export default function MyItinerariesScreen() {
                   }
                 />
               </Card>
-              {renderCompactCards(
-                additionalCurrent,
-                t("itineraries.active"),
-                "success"
-              )}
-            </>
-          ) : null}
-
-          {future.length > 0 ? (
-            <>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionLabel}>{t("itineraries.upcoming")}</Text>
-              </View>
-              {renderCompactCards(future, t("itineraries.upcoming"), "gold")}
             </>
           ) : null}
 
@@ -204,7 +135,38 @@ export default function MyItinerariesScreen() {
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionLabel}>{t("itineraries.pastAdventures")}</Text>
               </View>
-              {renderCompactCards(past, t("itineraries.completed"), "primary")}
+              {past.map(({ entry, data }) => {
+                const isUpcoming = data.trip_summary.start_date > today;
+                const label = !entry.startedAt
+                  ? t("itineraries.notStarted")
+                  : isUpcoming
+                  ? t("itineraries.upcoming")
+                  : t("itineraries.completed");
+                const tone = !entry.startedAt ? "neutral" : isUpcoming ? "gold" : "primary";
+                return (
+                <Card
+                  key={data.itinerary_id}
+                  variant="media"
+                  style={styles.pastCard}
+                  imageSource={getRegionImage(data.trip_summary.cities[0])}
+                  overlay={<Badge label={label} tone={tone} />}
+                >
+                  <Text style={styles.pastDates}>
+                    {formatDateRange(data.trip_summary.start_date, data.trip_summary.end_date, locale)}
+                  </Text>
+                  <Text style={styles.pastTitle}>
+                    {data.trip_summary.cities.join(" → ")}
+                  </Text>
+                  <Button
+                    title={t("itineraries.details")}
+                    variant="outline"
+                    onPress={() =>
+                      router.push(`/(tabs)/mission/itinerary/${data.itinerary_id}`)
+                    }
+                  />
+                </Card>
+                );
+              })}
             </>
           ) : null}
         </>

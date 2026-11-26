@@ -9,14 +9,20 @@ interface Props {
   accessibilityLabel?: string;
 }
 
-/** Onboarding-style dot row; the active dot is gold and pill-shaped. */
-export function PaginationDots({ count, activeIndex, onLightBackground = false, accessibilityLabel }: Props) {
+export function PaginationDots({ count, activeIndex, onLightBackground, accessibilityLabel }: Props) {
+  const activeColor = onLightBackground ? colors.primary : colors.gold;
+  const inactiveColor = onLightBackground ? colors.textMuted : "rgba(255,255,255,0.5)";
+
   return (
-    <View style={styles.row} accessibilityLabel={accessibilityLabel}>
+    <View style={styles.row} accessible={accessibilityLabel !== undefined} accessibilityLabel={accessibilityLabel}>
       {Array.from({ length: count }, (_, i) => (
         <View
           key={i}
-          style={[styles.dot, i === activeIndex ? styles.dotActive : styles.dotInactive, onLightBackground && i !== activeIndex && styles.dotInactiveLight]}
+          style={[
+            styles.dot,
+            i === activeIndex ? styles.dotActive : styles.dotInactive,
+            { backgroundColor: i === activeIndex ? activeColor : inactiveColor },
+          ]}
         />
       ))}
     </View>
@@ -24,9 +30,8 @@ export function PaginationDots({ count, activeIndex, onLightBackground = false, 
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", gap: 6, alignItems: "center" },
+  row: { flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center" },
   dot: { height: 8, borderRadius: 4 },
-  dotActive: { width: 24, backgroundColor: colors.gold },
-  dotInactive: { width: 8, backgroundColor: "rgba(255,255,255,0.5)" },
-  dotInactiveLight: { backgroundColor: colors.border },
+  dotActive: { width: 24 },
+  dotInactive: { width: 8 },
 });

@@ -101,7 +101,34 @@ export interface SubmitMissionParams {
   takenAt?: string; // ISO string; defaults server-side to UtcNow if omitted
 }
 
-export function submitMission({
+export interface MissionEvidence {
+  photo?: { uri: string } | null;
+  video?: { uri: string } | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  takenAt?: string;
+}
+
+export function submitMission(params: SubmitMissionParams): ReturnType<typeof postMissionSubmission>;
+export function submitMission(userMissionId: string, evidence: MissionEvidence): ReturnType<typeof postMissionSubmission>;
+export function submitMission(
+  paramsOrMissionId: SubmitMissionParams | string,
+  evidence?: MissionEvidence,
+) {
+  if (typeof paramsOrMissionId === "string") {
+    return postMissionSubmission({
+      userMissionId: paramsOrMissionId,
+      photoUri: evidence?.photo?.uri ?? null,
+      videoUri: evidence?.video?.uri ?? null,
+      latitude: evidence?.latitude ?? null,
+      longitude: evidence?.longitude ?? null,
+      takenAt: evidence?.takenAt,
+    });
+  }
+  return postMissionSubmission(paramsOrMissionId);
+}
+
+function postMissionSubmission({
   userMissionId,
   photoUri,
   videoUri,

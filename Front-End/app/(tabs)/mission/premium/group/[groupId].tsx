@@ -1,18 +1,95 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { getPremiumGroup } from "@/api/endpoints/premium";
 import { ApiError } from "@/api/http";
 import { BackHeader } from "@/components/BackHeader";
+import { Badge } from "@/components/Badge";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { PartnerRecommendations } from "@/components/PartnerRecommendations";
+import { PremiumMissionRow } from "@/components/PremiumMissionRow";
+import { PremiumAccessGate } from "@/components/PremiumAccessGate";
+import { ProgressBar } from "@/components/ProgressBar";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { colors, radius, spacing } from "@/theme/colors";
+import { useLocale } from "@/i18n/LocaleContext";
+import { colors, spacing } from "@/theme/colors";
 import type { PremiumGroupDetail } from "@/types/premium";
 
-export default function PremiumGroupScreen() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>(); const [group, setGroup] = useState<PremiumGroupDetail | null>(null); const [error, setError] = useState<string | null>(null);
-  const load = useCallback(async () => { try { setGroup(await getPremiumGroup(groupId)); setError(null); } catch (e) { setError(e instanceof ApiError ? e.message : "Không thể tải nhóm."); } }, [groupId]); useFocusEffect(useCallback(() => { void load(); }, [load]));
-  return <ScreenContainer><BackHeader title={group?.provinceName ?? "Nhiệm vụ nhóm"} onBack={() => router.back()} /><ErrorBanner message={error} />{!group ? <ActivityIndicator color={colors.navy} /> : <><View style={styles.members}><Text style={styles.title}>{group.completedCount}/8 nhiệm vụ hoàn thành</Text><Text style={styles.copy}>{group.members.map(x => x.username).join(", ")}</Text></View>{group.missions.map(m => <Pressable key={m.id} disabled={!!m.completedAt} onPress={() => router.push({ pathname: "/(tabs)/mission/premium/evidence/[missionId]", params: { missionId: m.id, scope: "groups", scopeId: group.id, title: m.title, evidenceType: m.evidenceType } })} style={styles.mission}><Ionicons name={m.completedAt ? "checkmark-circle" : m.evidenceType === "video" ? "videocam-outline" : "image-outline"} size={23} color={m.completedAt ? colors.success : colors.navy} /><View style={{ flex: 1 }}><Text style={styles.title}>{m.title}</Text><Text style={styles.copy}>{m.instruction}</Text></View></Pressable>)}</>}</ScreenContainer>;
+export default function PremiumGroupDetailScreen() {
+  return <PremiumAccessGate><PremiumGroupDetailContent /></PremiumAccessGate>;
 }
-const styles = StyleSheet.create({ members: { padding: spacing(1.25), borderRadius: radius.md, backgroundColor: colors.blueSoft }, mission: { flexDirection: "row", gap: spacing(1), alignItems: "center", padding: spacing(1.25), borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }, title: { color: colors.navy, fontWeight: "800" }, copy: { color: colors.textMuted, fontSize: 13, lineHeight: 18 } });
+
+function PremiumGroupDetailContent() {
+  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const { t } = useLocale();
+  const [group, setGroup] = useState<PremiumGroupDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadVersion, setLoadVersion] = useState(0);
+
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getPremiumGroup(groupId).then((result) => {
+      if (!cancelled) setGroup(result);
+    }).catch((err) => {
+      if (cancelled) return;
+      setGroup(null);
+      setError(err instanceof ApiError ? err.message : t("premium.loadFailed"));
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [groupId, loadVersion, t]));
+
+  function onBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/mission/premium/groups");
+  }
+
+  return (
+    <ScreenContainer
+      refreshControl={<RefreshControl
+        refreshing={loading}
+        onRefresh={() => setLoadVersion((version) => version + 1)}
+        tintColor={colors.navy}
+      />}
+    >
+      <BackHeader title={group?.provinceName ?? t("premium.groups")} onBack={onBack} />
+      <ErrorBanner message={error} />
+      {loading ? <ActivityIndicator color={colors.navy} /> : group ? (
+        <>
+          <PartnerRecommendations destinations={[group.provinceName]} />
+          <Card>
+            <View style={styles.groupHeader}>
+              <Text style={styles.title}>{t("premium.members")}</Text>
+              <Badge label={t("premium.memberCount", { count: group.memberCount })} tone="tint" />
+            </View>
+            <View style={styles.members}>
+              {group.members.map((member) => <Badge key={member.id} label={member.username} />)}
+            </View>
+            <Text style={styles.progress}>{t("premium.completedCount", { count: group.completedCount, total: group.missions.length })}</Text>
+            <Text style={styles.rule}>{t("premium.groupCompletionRule")}</Text>
+            <ProgressBar progress={group.completedCount / Math.max(group.missions.length, 1)} color={colors.navy} />
+          </Card>
+          {group.missions.map((mission) => (
+            <PremiumMissionRow key={mission.id} mission={mission} scope="groups" scopeId={group.id} />
+          ))}
+        </>
+      ) : (
+        <Button title={t("premium.retry")} variant="outline" onPress={() => setLoadVersion((version) => version + 1)} />
+      )}
+    </ScreenContainer>
+  );
+}
+
+const styles = StyleSheet.create({
+  groupHeader: { flexDirection: "row", alignItems: "center", gap: spacing(1), justifyContent: "space-between" },
+  title: { fontSize: 16, fontWeight: "700", color: colors.navy },
+  members: { flexDirection: "row", flexWrap: "wrap", gap: spacing(0.75) },
+  progress: { fontSize: 13, fontWeight: "700", color: colors.navy, marginTop: spacing(0.75) },
+  rule: { fontSize: 13, lineHeight: 19, color: colors.textMuted },
+});

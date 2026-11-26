@@ -13,7 +13,7 @@ public record ImportPremiumOfferRequest(Guid ProvinceId, Guid? MissionId, string
 public sealed record PremiumMissionView(Guid Id, string ProvinceName, string Title, string EvidenceType, string Instruction, string PlaceName, string Locality, string PlaceQuery, bool Accepted, DateTime? CompletedAt);
 
 [ApiController, Authorize, Route("api/premium")]
-public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient iam, IFileStorageService files, IConfiguration config) : ControllerBase
+public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient iam, PremiumTripEligibilityClient trips, IFileStorageService files, IConfiguration config) : ControllerBase
 {
     private Guid UserId => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
         ? id : throw new PremiumApiException(401, "Bạn cần đăng nhập.");
@@ -24,8 +24,27 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
     public async global::System.Threading.Tasks.Task<IActionResult> Provinces()
     {
         await RequirePremium();
-        return Ok(await db.Set<PremiumProvince>().AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name)
+        return Ok(await db.Set<PremiumProvince>().AsNoTracking().Where(x => x.IsActive && x.AreaType == "PROVINCE").OrderBy(x => x.Name)
             .Select(x => new { id = x.Id, name = x.Name }).ToListAsync());
+    }
+
+    [HttpGet("mission-areas")]
+    public async global::System.Threading.Tasks.Task<IActionResult> MissionAreas()
+    {
+        await RequirePremium();
+        var areas = await db.Set<PremiumProvince>().AsNoTracking().Where(x => x.IsActive)
+            .OrderBy(x => x.AreaType == "DESTINATION" ? 0 : 1).ThenBy(x => x.Name)
+            .Select(x => new { x.Id, x.Name, x.AreaType, x.ParentProvinceId, x.Aliases }).ToListAsync();
+        var names = areas.ToDictionary(x => x.Id, x => x.Name);
+        return Ok(areas.Select(x => new { id = x.Id, name = x.Name, areaType = x.AreaType, parentProvinceId = x.ParentProvinceId, parentProvinceName = x.ParentProvinceId.HasValue && names.TryGetValue(x.ParentProvinceId.Value, out var name) ? name : null, aliases = x.Aliases.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) }));
+    }
+
+    [HttpGet("mission-areas/{provinceId:guid}/eligibility")]
+    public async global::System.Threading.Tasks.Task<IActionResult> Eligibility(Guid provinceId)
+    {
+        await RequirePremium();
+        var result = await trips.Check(HttpContext, await Area(provinceId));
+        return Ok(new { eligible = result.Eligible, itineraryId = result.ItineraryId, message = result.Message });
     }
 
     [HttpGet("special/{provinceId:guid}")]
@@ -40,8 +59,9 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
     public async global::System.Threading.Tasks.Task<IActionResult> AcceptAll(Guid provinceId)
     {
         await RequirePremium();
+        await RequireOngoingTrip(provinceId);
         var definitions = await Definitions(provinceId);
-        if (definitions.Count != 8) return Conflict(new { message = "Danh mục nhiệm vụ của tỉnh/thành chưa hoàn chỉnh." });
+        if (definitions.Count != 10) return Conflict(new { message = "Danh mục nhiệm vụ của khu vực chưa hoàn chỉnh." });
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         foreach (var mission in definitions)
             await AcceptOne(mission, UserId, null);
@@ -54,6 +74,7 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
     public async global::System.Threading.Tasks.Task<IActionResult> Accept(Guid provinceId, Guid missionId)
     {
         await RequirePremium();
+        await RequireOngoingTrip(provinceId);
         var mission = await db.Set<PremiumMissionDefinition>().SingleOrDefaultAsync(x => x.Id == missionId && x.ProvinceId == provinceId && x.IsActive);
         if (mission is null) return NotFound();
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
@@ -90,7 +111,7 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
         if (resolved.Any(x => x.Id == UserId)) return BadRequest(new { message = "Không nhập lại tài khoản của bạn trong danh sách thành viên." });
         var members = resolved.Append(new PremiumMember(UserId, User.Identity?.Name ?? "Bạn")).ToArray();
         var definitions = await Definitions(province.Id);
-        if (definitions.Count != 8) return Conflict(new { message = "Danh mục nhiệm vụ của tỉnh/thành chưa hoàn chỉnh." });
+        if (definitions.Count != 10) return Conflict(new { message = "Danh mục nhiệm vụ của khu vực chưa hoàn chỉnh." });
 
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var group = new PremiumGroup { ProvinceId = province.Id, Province = province, CreatedByUserId = UserId };
@@ -152,8 +173,9 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
                 var all = await db.Set<PremiumMissionAssignment>().Where(x => x.GroupId == groupId && x.MissionId == missionId).ToListAsync();
                 if (all.Count == 0) return NotFound();
                 foreach (var item in all) { item.CompletedAtUtc = DateTime.UtcNow; item.EvidenceUrl = url; }
+                await IssueVirtualVouchers(all, assignment.Mission.SortOrder);
             }
-            else { assignment.CompletedAtUtc = DateTime.UtcNow; assignment.EvidenceUrl = url; }
+            else { assignment.CompletedAtUtc = DateTime.UtcNow; assignment.EvidenceUrl = url; await IssueVirtualVouchers([assignment], assignment.Mission.SortOrder); }
             await db.SaveChangesAsync(); await tx.CommitAsync();
         }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
@@ -204,6 +226,22 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
         return Ok(result);
     }
 
+    [HttpGet("vouchers")]
+    public async global::System.Threading.Tasks.Task<IActionResult> VirtualVouchers()
+    {
+        await RequirePremium();
+        var vouchers = await db.Set<PremiumVirtualVoucher>().AsNoTracking()
+            .Include(x => x.Template).Include(x => x.Assignment).ThenInclude(x => x.Mission).ThenInclude(x => x.Province)
+            .Where(x => x.UserId == UserId).OrderByDescending(x => x.IssuedAtUtc).ToListAsync();
+        return Ok(vouchers.Select(x => new
+        {
+            id = x.Id, issuedAtUtc = x.IssuedAtUtc, missionId = x.Assignment.MissionId,
+            missionTitle = x.Assignment.Mission.Title, areaName = x.Assignment.Mission.Province.Name,
+            partnerKey = x.Template.PartnerKey, provider = x.Template.Provider, category = x.Template.Category,
+            title = x.Template.Title, benefit = x.Template.Benefit, terms = x.Template.Terms, publicUrl = x.Template.PublicUrl
+        }));
+    }
+
     [Authorize(Roles = "Admin")]
     [HttpPost("special-offers/import")]
     public async global::System.Threading.Tasks.Task<IActionResult> ImportPublicOffer(ImportPremiumOfferRequest request)
@@ -237,6 +275,28 @@ public sealed class PremiumMissionsController(TaskDbContext db, PremiumIamClient
     }
 
     private async global::System.Threading.Tasks.Task<List<PremiumMissionDefinition>> Definitions(Guid provinceId) => await db.Set<PremiumMissionDefinition>().Include(x => x.Province).Where(x => x.ProvinceId == provinceId && x.IsActive).OrderBy(x => x.SortOrder).ToListAsync();
+
+    private async global::System.Threading.Tasks.Task<PremiumProvince> Area(Guid id) => await db.Set<PremiumProvince>().SingleOrDefaultAsync(x => x.Id == id && x.IsActive)
+        ?? throw new PremiumApiException(404, "Không tìm thấy khu vực nhiệm vụ.", "PREMIUM_MISSION_AREA_NOT_FOUND");
+
+    private async global::System.Threading.Tasks.Task RequireOngoingTrip(Guid areaId)
+    {
+        var eligibility = await trips.Check(HttpContext, await Area(areaId));
+        if (!eligibility.Eligible)
+            throw new PremiumApiException(409, eligibility.Message ?? "Bạn cần có hành trình đang diễn ra tại khu vực này.", "PREMIUM_ONGOING_ITINERARY_REQUIRED");
+    }
+
+    private async global::System.Threading.Tasks.Task IssueVirtualVouchers(IEnumerable<PremiumMissionAssignment> assignments, int sortOrder)
+    {
+        var templates = await db.Set<PremiumVirtualVoucherTemplate>().Where(x => x.IsActive).OrderBy(x => x.PartnerKey).ToListAsync();
+        if (templates.Count == 0) throw new PremiumApiException(503, "Danh mục voucher demo chưa sẵn sàng.", "PREMIUM_VOUCHER_CATALOG_UNAVAILABLE");
+        var ids = assignments.Select(x => x.Id).ToArray();
+        var issued = await db.Set<PremiumVirtualVoucher>().Where(x => ids.Contains(x.AssignmentId)).Select(x => x.AssignmentId).ToListAsync();
+        var known = issued.ToHashSet();
+        var template = templates[(sortOrder - 1) % templates.Count];
+        foreach (var assignment in assignments.Where(x => !known.Contains(x.Id)))
+            db.Add(new PremiumVirtualVoucher { AssignmentId = assignment.Id, UserId = assignment.UserId, TemplateId = template.Id });
+    }
 
     private async global::System.Threading.Tasks.Task AcceptOne(PremiumMissionDefinition mission, Guid userId, Guid? groupId)
     {

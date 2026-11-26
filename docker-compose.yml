@@ -279,6 +279,7 @@ services:
       Jwt__Issuer: IAMService
       Jwt__Audience: IAMClient
       Premium__IamBaseUrl: http://iam-service:8080
+      Premium__AiTourBaseUrl: http://aitour-service:8080
     volumes:
       # Mission evidence photos/videos — survives container restart/rebuild.
       - ./Disa-App/Task.Presentation/Uploads:/app/Uploads

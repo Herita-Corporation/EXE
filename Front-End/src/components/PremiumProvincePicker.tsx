@@ -11,14 +11,14 @@ function normalize(value: string) {
   return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").trim();
 }
 
-export function PremiumProvincePicker({
+export function PremiumProvincePicker<T extends PremiumProvince>({
   provinces,
   selected,
   onSelect,
 }: {
-  provinces: PremiumProvince[];
-  selected?: PremiumProvince;
-  onSelect: (province: PremiumProvince) => void;
+  provinces: T[];
+  selected?: T;
+  onSelect: (province: T) => void;
 }) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);

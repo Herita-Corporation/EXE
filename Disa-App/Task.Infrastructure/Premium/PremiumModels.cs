@@ -9,6 +9,12 @@ public sealed class PremiumProvince
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
+    // Kept under the legacy table name for backward compatibility. A row can
+    // now represent either one of the 34 administrative provinces or a
+    // featured travel destination within one of them.
+    public string AreaType { get; set; } = "PROVINCE";
+    public Guid? ParentProvinceId { get; set; }
+    public string Aliases { get; set; } = "";
     public bool IsActive { get; set; } = true;
 }
 
@@ -57,6 +63,33 @@ public sealed class PremiumMissionAssignment
     public string? EvidenceUrl { get; set; }
 }
 
+// A template is a public demo offer. It deliberately contains no coupon code,
+// inventory or partner credential. Completing a mission creates a distinct
+// user voucher record referring to one of these templates.
+public sealed class PremiumVirtualVoucherTemplate
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string PartnerKey { get; set; } = "";
+    public string Provider { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Benefit { get; set; } = "";
+    public string Terms { get; set; } = "";
+    public string PublicUrl { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class PremiumVirtualVoucher
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid AssignmentId { get; set; }
+    public PremiumMissionAssignment Assignment { get; set; } = null!;
+    public Guid UserId { get; set; }
+    public Guid TemplateId { get; set; }
+    public PremiumVirtualVoucherTemplate Template { get; set; } = null!;
+    public DateTime IssuedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed class PremiumGroup
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -84,7 +117,10 @@ public static class PremiumTaskModel
         {
             e.ToTable("PremiumProvinces", "premium"); e.HasKey(x => x.Id);
             e.Property(x => x.Code).HasMaxLength(32); e.Property(x => x.Name).HasMaxLength(120);
+            e.Property(x => x.AreaType).HasMaxLength(16);
+            e.Property(x => x.Aliases).HasMaxLength(2000);
             e.HasIndex(x => x.Code).IsUnique();
+            e.HasIndex(x => new { x.AreaType, x.IsActive, x.Name });
         });
         model.Entity<PremiumMissionDefinition>(e =>
         {
@@ -109,6 +145,22 @@ public static class PremiumTaskModel
             e.HasIndex(x => new { x.MissionId, x.UserId, x.GroupId }).IsUnique().HasFilter("[GroupId] IS NOT NULL");
             e.HasIndex(x => new { x.MissionId, x.UserId }).IsUnique().HasFilter("[GroupId] IS NULL");
             e.HasOne(x => x.Mission).WithMany().HasForeignKey(x => x.MissionId).OnDelete(DeleteBehavior.Restrict);
+        });
+        model.Entity<PremiumVirtualVoucherTemplate>(e =>
+        {
+            e.ToTable("PremiumVirtualVoucherTemplates", "premium"); e.HasKey(x => x.Id);
+            e.Property(x => x.PartnerKey).HasMaxLength(80); e.HasIndex(x => x.PartnerKey).IsUnique();
+            e.Property(x => x.Provider).HasMaxLength(160); e.Property(x => x.Category).HasMaxLength(100);
+            e.Property(x => x.Title).HasMaxLength(250); e.Property(x => x.Benefit).HasMaxLength(500);
+            e.Property(x => x.PublicUrl).HasMaxLength(1000);
+        });
+        model.Entity<PremiumVirtualVoucher>(e =>
+        {
+            e.ToTable("PremiumVirtualVouchers", "premium"); e.HasKey(x => x.Id);
+            e.HasIndex(x => x.AssignmentId).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.IssuedAtUtc });
+            e.HasOne(x => x.Assignment).WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Template).WithMany().HasForeignKey(x => x.TemplateId).OnDelete(DeleteBehavior.Restrict);
         });
         model.Entity<PremiumGroup>(e =>
         {

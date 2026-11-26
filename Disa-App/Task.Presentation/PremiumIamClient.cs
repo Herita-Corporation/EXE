@@ -44,7 +44,8 @@ public sealed class PremiumIamClient(IHttpClientFactory clients, IConfiguration 
 }
 
 public sealed record PremiumMember(Guid Id, string Username);
-public sealed class PremiumApiException(int status, string message) : Exception(message)
+public sealed class PremiumApiException(int status, string message, string? code = null) : Exception(message)
 {
     public int Status { get; } = status;
+    public string? Code { get; } = code;
 }

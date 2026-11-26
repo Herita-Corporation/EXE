@@ -55,6 +55,8 @@ builder.Services.AddScoped<global::Task.Presentation.PartnerTripOfferMatcher>();
 builder.Services.AddHttpClient("Oc3Iam", c => c.Timeout = TimeSpan.FromSeconds(8));
 builder.Services.AddHttpClient("PremiumIam", c => c.Timeout = TimeSpan.FromSeconds(8));
 builder.Services.AddScoped<global::Task.Presentation.PremiumIamClient>();
+builder.Services.AddHttpClient("PremiumTripEligibility", c => c.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddScoped<global::Task.Presentation.PremiumTripEligibilityClient>();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
@@ -99,6 +101,7 @@ using (var scope = app.Services.CreateScope())
         var db = scope.ServiceProvider.GetRequiredService<TaskDbContext>();
         var seeded = await DemoVoucherSeeder.SeedAsync(db);
         if (seeded > 0) app.Logger.LogInformation("Seeded {Count} demo voucher(s).", seeded);
+        await Task.Infrastructure.Premium.PremiumSchemaUpgrader.ApplyAsync(db);
         await Task.Infrastructure.Premium.PremiumCatalogSeeder.SeedAsync(db);
     }
     catch (Exception ex)
@@ -137,7 +140,7 @@ app.Use(async (context, next) =>
     catch (global::Task.Presentation.PremiumApiException ex)
     {
         context.Response.StatusCode = ex.Status;
-        await context.Response.WriteAsJsonAsync(new { message = ex.Message, requestId = context.TraceIdentifier });
+        await context.Response.WriteAsJsonAsync(new { message = ex.Message, error_code = ex.Code, requestId = context.TraceIdentifier });
     }
 });
 

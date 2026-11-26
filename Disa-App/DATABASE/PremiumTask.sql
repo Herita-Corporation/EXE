@@ -9,7 +9,19 @@ IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = N'premium') EXEC(N'CREATE 
 IF OBJECT_ID(N'premium.PremiumProvinces', N'U') IS NULL
 CREATE TABLE premium.PremiumProvinces (
   Id uniqueidentifier NOT NULL PRIMARY KEY, Code nvarchar(32) NOT NULL UNIQUE,
-  Name nvarchar(120) NOT NULL, IsActive bit NOT NULL CONSTRAINT DF_PremiumProvinces_Active DEFAULT 1);
+  Name nvarchar(120) NOT NULL, AreaType nvarchar(16) NOT NULL CONSTRAINT DF_PremiumProvinces_AreaType DEFAULT 'PROVINCE',
+  ParentProvinceId uniqueidentifier NULL, Aliases nvarchar(2000) NOT NULL CONSTRAINT DF_PremiumProvinces_Aliases DEFAULT '',
+  IsActive bit NOT NULL CONSTRAINT DF_PremiumProvinces_Active DEFAULT 1);
+
+/* Upgrades installations created before destination areas existed. */
+IF COL_LENGTH('premium.PremiumProvinces', 'AreaType') IS NULL
+  ALTER TABLE premium.PremiumProvinces ADD AreaType nvarchar(16) NOT NULL CONSTRAINT DF_PremiumProvinces_AreaType_Upgrade DEFAULT 'PROVINCE';
+IF COL_LENGTH('premium.PremiumProvinces', 'ParentProvinceId') IS NULL
+  ALTER TABLE premium.PremiumProvinces ADD ParentProvinceId uniqueidentifier NULL;
+IF COL_LENGTH('premium.PremiumProvinces', 'Aliases') IS NULL
+  ALTER TABLE premium.PremiumProvinces ADD Aliases nvarchar(2000) NOT NULL CONSTRAINT DF_PremiumProvinces_Aliases_Upgrade DEFAULT '';
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_PremiumProvinces_AreaType_Active_Name' AND object_id = OBJECT_ID(N'premium.PremiumProvinces'))
+  CREATE INDEX IX_PremiumProvinces_AreaType_Active_Name ON premium.PremiumProvinces (AreaType, IsActive, Name);
 
 IF OBJECT_ID(N'premium.PremiumMissionDefinitions', N'U') IS NULL
 CREATE TABLE premium.PremiumMissionDefinitions (
@@ -56,4 +68,24 @@ CREATE TABLE premium.PremiumMissionAssignments (
   CONSTRAINT FK_PremiumMissionAssignments_Mission FOREIGN KEY (MissionId) REFERENCES premium.PremiumMissionDefinitions(Id));
 CREATE UNIQUE INDEX UX_PremiumMissionAssignments_Special ON premium.PremiumMissionAssignments (MissionId, UserId) WHERE GroupId IS NULL;
 CREATE UNIQUE INDEX UX_PremiumMissionAssignments_Group ON premium.PremiumMissionAssignments (MissionId, UserId, GroupId) WHERE GroupId IS NOT NULL;
+END
+
+/* Virtual rewards are user-specific records, backed only by reusable public
+   demo links. No private code or real partner inventory is stored. */
+IF OBJECT_ID(N'premium.PremiumVirtualVoucherTemplates', N'U') IS NULL
+CREATE TABLE premium.PremiumVirtualVoucherTemplates (
+  Id uniqueidentifier NOT NULL PRIMARY KEY, PartnerKey nvarchar(80) NOT NULL UNIQUE,
+  Provider nvarchar(160) NOT NULL, Category nvarchar(100) NOT NULL,
+  Title nvarchar(250) NOT NULL, Benefit nvarchar(500) NOT NULL, Terms nvarchar(max) NOT NULL,
+  PublicUrl nvarchar(1000) NOT NULL, IsActive bit NOT NULL CONSTRAINT DF_PremiumVirtualVoucherTemplates_Active DEFAULT 1);
+
+IF OBJECT_ID(N'premium.PremiumVirtualVouchers', N'U') IS NULL
+BEGIN
+CREATE TABLE premium.PremiumVirtualVouchers (
+  Id uniqueidentifier NOT NULL PRIMARY KEY, AssignmentId uniqueidentifier NOT NULL, UserId uniqueidentifier NOT NULL,
+  TemplateId uniqueidentifier NOT NULL, IssuedAtUtc datetime2 NOT NULL,
+  CONSTRAINT FK_PremiumVirtualVouchers_Assignment FOREIGN KEY (AssignmentId) REFERENCES premium.PremiumMissionAssignments(Id),
+  CONSTRAINT FK_PremiumVirtualVouchers_Template FOREIGN KEY (TemplateId) REFERENCES premium.PremiumVirtualVoucherTemplates(Id),
+  CONSTRAINT UQ_PremiumVirtualVouchers_Assignment UNIQUE (AssignmentId));
+CREATE INDEX IX_PremiumVirtualVouchers_UserIssued ON premium.PremiumVirtualVouchers (UserId, IssuedAtUtc DESC);
 END

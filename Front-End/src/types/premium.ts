@@ -43,6 +43,17 @@ export interface PremiumPaymentStatus {
 }
 
 export interface PremiumProvince { id: string; name: string; }
+export interface PremiumMissionArea extends PremiumProvince {
+  areaType: "PROVINCE" | "DESTINATION";
+  parentProvinceId: string | null;
+  parentProvinceName: string | null;
+  aliases: string[];
+}
+export interface PremiumMissionEligibility {
+  eligible: boolean;
+  itineraryId: string | null;
+  message: string | null;
+}
 export type PremiumMissionScope = "special" | "groups";
 export interface PremiumMission {
   id: string;
@@ -80,4 +91,18 @@ export interface EarnedPremiumOffer {
   scope: "special" | "groups";
   scopeId: string;
   missionId: string;
+}
+export interface PremiumVirtualVoucher {
+  id: string;
+  issuedAtUtc: string;
+  missionId: string;
+  missionTitle: string;
+  areaName: string;
+  partnerKey: string;
+  provider: string;
+  category: string;
+  title: string;
+  benefit: string;
+  terms: string;
+  publicUrl: string;
 }

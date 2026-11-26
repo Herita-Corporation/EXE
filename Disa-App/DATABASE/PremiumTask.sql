@@ -1,5 +1,9 @@
 /* Idempotent Premium mission schema for TaskDb. TaskDb is initialized from
    SQL scripts, so this avoids applying legacy EF migrations to an existing DB. */
+/* Filtered indexes below require these SQL Server session options. */
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+
 IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = N'premium') EXEC(N'CREATE SCHEMA premium');
 
 IF OBJECT_ID(N'premium.PremiumProvinces', N'U') IS NULL

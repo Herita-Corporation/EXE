@@ -637,6 +637,46 @@ public class AuthController : ControllerBase
         return Ok("Đã cập nhật email, vui lòng xác thực lại");
     }
 
+    [Authorize]
+    [HttpPost("change-username")]
+    public async Task<IActionResult> ChangeUsername(ChangeUsernameRequest request)
+    {
+        var username = request.NewUsername?.Trim() ?? string.Empty;
+        if (username.Length is < 3 or > 100 ||
+            username.Any(c => !char.IsLetterOrDigit(c) && c is not '_' and not '.'))
+        {
+            return BadRequest("Tên đăng nhập phải dài từ 3 đến 100 ký tự và chỉ gồm chữ cái, số, dấu gạch dưới hoặc dấu chấm");
+        }
+
+        var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var user = await _context.Users.FirstOrDefaultAsync(x => x.Id == userId);
+        if (user == null) return NotFound("Không tìm thấy người dùng");
+
+        if (string.Equals(user.Username, username, StringComparison.Ordinal))
+            return Ok(new { Message = "Tên đăng nhập không thay đổi", Username = user.Username });
+
+        var usernameExists = await _context.Users
+            .AnyAsync(x => x.Id != userId && x.Username == username);
+        if (usernameExists)
+            return Conflict("Tên đăng nhập đã tồn tại");
+
+        user.Username = username;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // The unique database index remains the final protection if two
+            // people choose the same name at the same moment.
+            return Conflict("Tên đăng nhập đã tồn tại");
+        }
+
+        return Ok(new { Message = "Đã cập nhật tên đăng nhập", Username = user.Username });
+    }
+
     // ── Helper ─────────────────────────────────────────────────────────────
 
     private async Task<VerificationCode> IssueVerificationCodeAsync(Guid userId, string type, string target)

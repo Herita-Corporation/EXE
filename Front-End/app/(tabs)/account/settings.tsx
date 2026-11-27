@@ -29,7 +29,8 @@ export default function AccountSettingsScreen() {
   // behavior behind them, so they were removed rather than faked.
   const [pushEnabled, setPushEnabled] = useState(false);
 
-  const [editingField, setEditingField] = useState<"email" | "phone" | null>(null);
+  const [editingField, setEditingField] = useState<"username" | "email" | "phone" | null>(null);
+  const [newUsername, setNewUsername] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [savingField, setSavingField] = useState(false);
@@ -83,6 +84,21 @@ export default function AccountSettingsScreen() {
     }
   }
 
+  async function onSaveUsername() {
+    if (!newUsername.trim()) return;
+    setSavingField(true);
+    try {
+      await authApi.changeUsername({ newUsername: newUsername.trim() });
+      await refreshMe();
+      setEditingField(null);
+      showToast(locale === "vi" ? "Đã cập nhật tên đăng nhập" : "Username updated", "success");
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : locale === "vi" ? "Không thể đổi tên đăng nhập" : "Could not change username", "error");
+    } finally {
+      setSavingField(false);
+    }
+  }
+
   async function onSavePhone() {
     if (!newPhone.trim()) return;
     setSavingField(true);
@@ -103,6 +119,33 @@ export default function AccountSettingsScreen() {
 
       <Text style={styles.sectionLabel}>{t("settings.verification")}</Text>
       <Card style={styles.sectionCard}>
+        <SettingsRow
+          icon="person-outline"
+          label={locale === "vi" ? "Tên đăng nhập" : "Username"}
+          description={user?.username}
+          onPress={() => {
+            setEditingField(editingField === "username" ? null : "username");
+            setNewUsername(user?.username ?? "");
+          }}
+        />
+        {editingField === "username" ? (
+          <View style={styles.editRow}>
+            <Input
+              value={newUsername}
+              onChangeText={setNewUsername}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={locale === "vi" ? "3–100 ký tự: chữ, số, _ hoặc ." : "3–100 characters: letters, numbers, _ or ."}
+            />
+            <View style={styles.editButtonsRow}>
+              <Button title={t("common.cancel")} variant="ghost" size="sm" onPress={() => setEditingField(null)} />
+              <Button title={t("common.save")} size="sm" loading={savingField} onPress={onSaveUsername} />
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.divider} />
+
         <SettingsRow
           icon="mail-outline"
           label={t("settings.email")}

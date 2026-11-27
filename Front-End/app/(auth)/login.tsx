@@ -1,10 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, type TextInputInstance, View } from "react-native";
 import { Link, router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import * as Google from "expo-auth-session/providers/google";
-import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Input } from "@/components/Input";
@@ -17,16 +15,11 @@ import { ApiError } from "@/api/http";
 import { useLocale } from "@/i18n/LocaleContext";
 import { colors, isDark, spacing } from "@/theme/colors";
 
-WebBrowser.maybeCompleteAuthSession();
-
 const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-const hasGoogleAuthConfig = Boolean(googleWebClientId && googleAndroidClientId);
-// Expo Go cannot own the app's disatravel:// redirect scheme. Showing the
-// button there starts an OAuth request that Google rejects before returning
-// to the app. Google sign-in is therefore tested in a development build or
-// one of the signed APK/AAB variants, never Expo Go.
+const hasGoogleAuthConfig = Boolean(googleWebClientId);
+// Native Google Sign-In uses the installed app's package + signing
+// certificate. Expo Go cannot load this native module, so it remains a
+// development-only environment for password login.
 const isExpoGo = Constants.appOwnership === "expo";
 
 function GoogleLoginButton({
@@ -39,51 +32,39 @@ function GoogleLoginButton({
   const { loginWithGoogle } = useAuth();
   const { locale, t } = useLocale();
   const [googleLoading, setGoogleLoading] = useState(false);
-  const handledGoogleToken = useRef<string | null>(null);
-  // This component is rendered only when both IDs are present. Keeping the
-  // hook here prevents a missing local .env value from crashing LoginScreen.
-  const [googleRequest, googleResponse, promptGoogleLogin] = Google.useIdTokenAuthRequest({
-    webClientId: googleWebClientId!,
-    androidClientId: googleAndroidClientId!,
-    iosClientId: googleIosClientId,
-    selectAccount: true,
-  });
+  // Do not import this native module at file scope: Expo Go has no matching
+  // native binary. GoogleLoginButton is never rendered there.
+  const googleSignin = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional loading keeps Expo Go usable for password login
+    const native = require("@react-native-google-signin/google-signin") as typeof import("@react-native-google-signin/google-signin");
+    return native.GoogleSignin;
+  }, []);
 
   useEffect(() => {
-    if (googleResponse?.type !== "success") return;
-
-    const idToken = googleResponse.params.id_token;
-    if (!idToken) {
-      queueMicrotask(() => {
-        setGoogleLoading(false);
-        onError(t("auth.loginFailed"));
-      });
-      return;
-    }
-    if (handledGoogleToken.current === idToken) return;
-    handledGoogleToken.current = idToken;
-
-    void (async () => {
-      try {
-        await loginWithGoogle(idToken);
-        router.replace("/(tabs)/home");
-      } catch (err) {
-        onError(err instanceof ApiError ? err.message : t("auth.loginFailed"));
-      } finally {
-        setGoogleLoading(false);
-      }
-    })();
-  }, [googleResponse, loginWithGoogle, onError, t]);
+    // Requesting an ID token for the web OAuth client makes the token audience
+    // stable for both Android variants. The native SDK separately validates
+    // the installed package and its signing SHA-1 with Google Play Services.
+    googleSignin.configure({ webClientId: googleWebClientId!, offlineAccess: false });
+  }, [googleSignin]);
 
   async function onGoogleSubmit() {
     onError("");
     setGoogleLoading(true);
     try {
-      const result = await promptGoogleLogin();
-      if (result.type !== "success") setGoogleLoading(false);
-    } catch {
+      await googleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result = await googleSignin.signIn();
+      if (result.type !== "success") return;
+      const idToken = result.data.idToken;
+      if (!idToken) {
+        onError(t("auth.loginFailed"));
+        return;
+      }
+      await loginWithGoogle(idToken);
+      router.replace("/(tabs)/home");
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : t("auth.loginFailed"));
+    } finally {
       setGoogleLoading(false);
-      onError(t("auth.loginFailed"));
     }
   }
 
@@ -98,7 +79,7 @@ function GoogleLoginButton({
         title={locale === "vi" ? "Tiếp tục với Google" : "Continue with Google"}
         onPress={onGoogleSubmit}
         loading={googleLoading}
-        disabled={!googleRequest || disabled}
+        disabled={disabled || googleLoading}
         variant="outline"
         size="lg"
         icon="logo-google"

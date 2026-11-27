@@ -1,6 +1,8 @@
 import { request } from "@/api/http";
 import type {
   ChangeEmailRequest,
+  ChangeUsernameRequest,
+  ChangeUsernameResponse,
   DeleteAccountRequest,
   ChangePasswordRequest,
   ChangePhoneRequest,
@@ -129,6 +131,13 @@ export function changePhone(payload: ChangePhoneRequest) {
 
 export function changeEmail(payload: ChangeEmailRequest) {
   return request<string>("iam", "/api/auth/change-email", {
+    method: "POST",
+    data: payload,
+  });
+}
+
+export function changeUsername(payload: ChangeUsernameRequest) {
+  return request<ChangeUsernameResponse>("iam", "/api/auth/change-username", {
     method: "POST",
     data: payload,
   });

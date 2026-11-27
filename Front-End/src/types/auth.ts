@@ -72,6 +72,15 @@ export interface ChangeEmailRequest {
   newEmail: string;
 }
 
+export interface ChangeUsernameRequest {
+  newUsername: string;
+}
+
+export interface ChangeUsernameResponse {
+  message: string;
+  username: string;
+}
+
 export interface ChangePasswordRequest {
   oldPassword: string;
   newPassword: string;

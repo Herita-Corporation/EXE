@@ -7,6 +7,18 @@ using Task.Infrastructure.PartnerVouchers;
 
 static void Check(bool condition, string name)
 { if (!condition) throw new Exception("FAIL: " + name); Console.WriteLine("PASS: " + name); }
+var gate = Task.Infrastructure.Premium.DiscoveryCheckpoint.For("Đà Lạt", 4)!;
+var clock = new DateTimeOffset(2026,11,27,0,0,0,TimeSpan.Zero);
+Check(gate.Matches(gate.Latitude,gate.Longitude,8,clock,clock), "fresh accurate shoreline check-in");
+Check(!gate.Matches(gate.Latitude+1,gate.Longitude,8,clock,clock) && !gate.Matches(gate.Latitude,gate.Longitude,8,clock.AddMinutes(-5),clock), "reject distant and stale fixes");
+Check(gate.BonusAt(clock)==30 && gate.BonusAt(clock.AddHours(2))==0, "Vietnam bonus window uses exclusive end");
+foreach (var city in new[] {"Đà Lạt","Đà Nẵng","Vũng Tàu","Phú Quốc","TP. Hồ Chí Minh","Huế","Nha Trang"}) {
+    var rules = Enumerable.Range(1,10).Select(i=>Task.Infrastructure.Premium.DiscoveryCheckpoint.For(city,i)).OfType<Task.Infrastructure.Premium.DiscoveryCheckpoint>().ToList();
+    Check(rules.Count >= 2 && rules.Select(x=>x.Title).Distinct().Count()==rules.Count, "distinct local discoveries: " + city);
+}
+var dawn = Task.Infrastructure.Premium.DiscoveryCheckpoint.For("Đà Lạt",2)!;
+var start = DateTimeOffset.Parse("2026-11-27T05:00:00+07:00");
+Check(dawn.RequiresWindow && dawn.BonusAt(start.AddSeconds(-1))==0 && dawn.BonusAt(start)>0 && dawn.BonusAt(start.AddHours(2))==0, "05:00 inclusive, 07:00 exclusive");
 var now = DateTime.UtcNow;
 var rulesCampaign = new Campaign { MinSpend = 100000, DiscountType = "PERCENT", PercentageBps = 1000, MaxDiscountAmount = 30000, Location = new LocationSnapshot() };
 Check(VoucherRules.Discount(rulesCampaign, 200000) == 20000, "percent discount");

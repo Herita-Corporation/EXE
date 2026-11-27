@@ -24,9 +24,10 @@ export function PremiumMissionRow({
       accessibilityRole="button"
       onPress={() => router.push({
         pathname: "/(tabs)/mission/premium/evidence/[missionId]",
-        params: { missionId: mission.id, scope, scopeId },
+        params: { missionId: mission.id, scope, scopeId, title: mission.title, evidenceType: mission.evidenceType, instruction: mission.instruction, gps: mission.checkpoint ? '1':'0' },
       })}
-      style={({ pressed }) => [styles.row, selected && styles.selected, pressed && styles.pressed]}
+      disabled={!mission.accepted || !!mission.completedAt}
+      style={({ pressed }) => [styles.row, selected && styles.selected, mission.checkpoint && { borderLeftWidth: 4, borderLeftColor: {easy:'#138663', medium:'#996600', advanced:'#8145ac'}[mission.checkpoint.difficulty] }, pressed && styles.pressed]}
     >
       <View style={styles.icon}>
         <Ionicons name={mission.evidenceType === "photo" ? "camera-outline" : "videocam-outline"} size={21} color={colors.navy} />
@@ -34,6 +35,8 @@ export function PremiumMissionRow({
       <View style={styles.info}>
         <Text style={styles.title}>{mission.title}</Text>
         <Text style={styles.subtitle}>{mission.placeName} · {t(mission.evidenceType === "photo" ? "premium.photo" : "premium.video")}</Text>
+        {!!mission.checkpoint && <Text style={styles.subtitle}>{{easy:'Dễ', medium:'Vừa', advanced:'Thử thách'}[mission.checkpoint.difficulty]} · GPS 120 m · {mission.checkpoint.requiresWindow ? 'Chỉ nhận minh chứng trong khung giờ' : 'Khung thưởng'} · +{mission.checkpoint.bonus} điểm từ {mission.checkpoint.fromHour}h đến trước {mission.checkpoint.untilHour}h (giờ Việt Nam)</Text>}
+        <Text style={styles.subtitle}>{mission.instruction}</Text>
         {mission.completedAt ? <Badge label={t("premium.completed")} tone="success" /> : (
           mission.accepted && scope === "special" && <Badge label={t("premium.accepted")} tone="tint" />
         )}

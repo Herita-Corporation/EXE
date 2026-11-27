@@ -31,6 +31,7 @@ export default function PremiumVouchersScreen() {
   return <ScreenContainer>
     <BackHeader title="Voucher Premium" onBack={() => router.back()} />
     <Text style={styles.notice}>Voucher trong mục này là ưu đãi demo theo liên kết công khai, không có mã giảm giá hay xác nhận đặt chỗ.</Text>
+    <Button title="Mở ví voucher sử dụng tại cơ sở" onPress={() => router.push("/partner-vouchers")} variant="outline" />
     <ErrorBanner message={error} />
     {loading ? <ActivityIndicator color={colors.navy} /> : items.length === 0 ? <Text style={styles.copy}>Hoàn thành nhiệm vụ đặc biệt để nhận voucher demo của đối tác.</Text> : items.map((item) => <Card key={item.id}>
       <Text style={styles.title}>{item.title}</Text><Text style={styles.provider}>{item.provider}</Text>

@@ -68,6 +68,8 @@ export interface PremiumMission {
   placeQuery: string;
   accepted: boolean;
   completedAt: string | null;
+  checkpoint?: { requiresWindow?: boolean; difficulty: 'easy' | 'medium' | 'advanced'; fromHour: number; untilHour: number; bonus: number; latitude: number; longitude: number } | null;
+  bonusPoints?: number;
 }
 export interface PremiumGroup {
   id: string;

@@ -122,6 +122,7 @@ public class VoucherService : IVoucherService
             .Where(x => x.Status == MissionStatus.Completed)
             .Sum(x => x.RewardXP);
 
+        earnedPoints += await _voucherRepository.GetDiscoveryBonusAsync(userId);
         var spentPoints = await _voucherRepository.GetTotalSpentPointsAsync(userId);
         return (earnedPoints, spentPoints, earnedPoints - spentPoints);
     }

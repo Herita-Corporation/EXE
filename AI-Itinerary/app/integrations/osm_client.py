@@ -80,7 +80,8 @@ class OSMClient:
             )
             result = None
 
-        _PLACE_COORDS_CACHE[key] = result
+        if result is not None:
+            _PLACE_COORDS_CACHE[key] = result
         return result
 
     async def _nominatim_point_lookup(
@@ -124,9 +125,9 @@ class OSMClient:
             if normalized_expected:
                 results = [
                     item for item in results
-                    if normalized_expected in _normalise_locality(
+                    if f' {normalized_expected} ' in (' ' + _normalise_locality(
                         f"{item.get('display_name', '')} {json.dumps(item.get('address', {}), ensure_ascii=False)}"
-                    )
+                    ) + ' ')
                 ]
         if not results:
             return None
@@ -134,8 +135,8 @@ class OSMClient:
 
 
 def _normalise_locality(value: str) -> str:
-    return " ".join(
-        value.casefold()
+    import re
+    return " ".join(re.sub(r"[^\w]+", " ", value.casefold())
         .replace("đ", "d")
         .replace("quận", "quan")
         .replace("phường", "phuong")

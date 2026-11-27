@@ -70,6 +70,9 @@ public class VoucherRepository : IVoucherRepository
         await _context.SaveChangesAsync();
     }
 
+    public async System.Threading.Tasks.Task<int> GetDiscoveryBonusAsync(Guid userId) =>
+        await _context.Set<Task.Infrastructure.Premium.PremiumMissionAssignment>().Where(x => x.UserId == userId && x.CompletedAtUtc != null).SumAsync(x => (int?)x.BonusPoints) ?? 0;
+
     public async System.Threading.Tasks.Task<int> GetTotalSpentPointsAsync(Guid userId)
     {
         return await _context.PointSpends

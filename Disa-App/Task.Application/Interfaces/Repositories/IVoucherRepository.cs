@@ -22,5 +22,6 @@ public interface IVoucherRepository
 
     System.Threading.Tasks.Task AddPointSpendAsync(PointSpend spend);
 
+    System.Threading.Tasks.Task<int> GetDiscoveryBonusAsync(Guid userId);
     System.Threading.Tasks.Task<int> GetTotalSpentPointsAsync(Guid userId);
 }

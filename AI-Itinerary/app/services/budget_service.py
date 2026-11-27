@@ -292,6 +292,6 @@ class BudgetService:
         city_str = ",".join(sorted(normalize(city) for city in cities))
         pref_str = ",".join(sorted(normalize(preference) for preference in preferences))
         return (
-            f"v=6|city={city_str}|duration={trip_duration_days}"
+            f"v=7|city={city_str}|duration={trip_duration_days}"
             f"|budget={int(budget)}|travelers={travelers}|preferences={pref_str}"
         )

@@ -128,8 +128,8 @@ public sealed class PremiumController : ControllerBase
 
         var accounts = request.Accounts?.Select(x => x.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
             ?? Array.Empty<string>();
-        if (accounts.Length == 0 || accounts.Length > 19)
-            return BadRequest(new { error = "Provide between 1 and 19 unique usernames or email addresses." });
+        if (accounts.Length == 0 || accounts.Length > 9)
+            return BadRequest(new { error = "Provide between 1 and 9 unique usernames or email addresses." });
 
         var users = await _iamDb.Users.AsNoTracking()
             .Where(x => x.IsActive && (accounts.Contains(x.Username) || accounts.Contains(x.Email)))

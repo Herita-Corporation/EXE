@@ -1,7 +1,4 @@
-// Static intro content, no backend involved. Images are real landmark
-// photos bundled from Wikimedia Commons (same set as
-// src/mocks/featuredMissions.ts — see its header comment for licensing).
-// Copy lives in i18n (onboarding.*) so it follows the app language.
+// Local partner imagery; no network request on first launch.
 import type { TranslationKey } from "@/i18n/LocaleContext";
 
 export interface OnboardingSlide {
@@ -13,17 +10,17 @@ export interface OnboardingSlide {
 
 export const ONBOARDING_SLIDES: OnboardingSlide[] = [
   {
-    image: require("@/assets/images/missions/fansipan.jpg"),
+    image: require("@/assets/images/partners/emerald-phu-quoc-cover.jpg"),
     titleKey: "onboarding.slide1Title",
     bodyKey: "onboarding.slide1Body",
   },
   {
-    image: require("@/assets/images/missions/cau-vang.jpg"),
+    image: require("@/assets/images/partners/sus-house-coffee-cover.jpg"),
     titleKey: "onboarding.slide2Title",
     bodyKey: "onboarding.slide2Body",
   },
   {
-    image: require("@/assets/images/missions/hoi-an-den-hoa-dang.jpg"),
+    image: require("@/assets/images/partners/lat-valley-villa-cover.jpg"),
     titleKey: "onboarding.slide3Title",
     bodyKey: "onboarding.slide3Body",
   },

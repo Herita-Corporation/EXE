@@ -1,12 +1,11 @@
 import React from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { Avatar } from "@/components/Avatar";
 import { SectionHeader } from "@/components/SectionHeader";
-import { FeaturedMissionCard } from "@/components/FeaturedMissionCard";
 import { PartnerLogoStrip } from "@/components/PartnerLogoStrip";
 import { PartnerOfferCarousel } from "@/components/PartnerOfferCarousel";
 import { useAuth } from "@/context/AuthContext";
@@ -14,10 +13,9 @@ import { PARTNER_OFFERS } from "@/data/partnerOffers";
 import { useGamification } from "@/hooks/useGamification";
 import { useLocale } from "@/i18n/LocaleContext";
 import type { TranslationKey } from "@/i18n/LocaleContext";
-import { FEATURED_MISSIONS } from "@/mocks/featuredMissions";
 import { colors, isDark, radius, spacing } from "@/theme/colors";
 import { GradientHero } from "@/components/GradientHero";
-import { PremiumHomeCard } from "@/components/PremiumEntry";
+import { PremiumHomeCard, PremiumMissionEntries } from "@/components/PremiumEntry";
 import { Badge, type BadgeTone } from "@/components/Badge";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 
@@ -123,33 +121,8 @@ export default function HomeScreen() {
         <PartnerOfferCarousel offers={PARTNER_OFFERS} />
       </View>
 
-      <SectionHeader
-        title={t("home.featuredMissions")}
-        actionLabel={t("home.viewAll")}
-        onAction={() => router.navigate("/(tabs)/missions")}
-      />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.carousel}
-        contentContainerStyle={styles.carouselContent}
-      >
-        {FEATURED_MISSIONS.map((m) => (
-          <FeaturedMissionCard
-            key={m.id}
-            mission={m}
-            onPress={() =>
-              Alert.alert(t("mission.sampleTitle"), t("mission.sampleMessage"), [
-                { text: t("common.cancel"), style: "cancel" },
-                {
-                  text: t("mission.createToUnlock"),
-                  onPress: () => router.push("/(tabs)/mission/create?from=home"),
-                },
-              ])
-            }
-          />
-        ))}
-      </ScrollView>
+      <SectionHeader title={t("premium.special")} actionLabel={t("home.viewAll")} onAction={() => router.push("/(tabs)/mission/premium/special")} />
+      <PremiumMissionEntries />
     </ScreenContainer>
   );
 }

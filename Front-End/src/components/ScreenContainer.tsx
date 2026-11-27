@@ -1,6 +1,8 @@
 import React from "react";
 import {
   KeyboardAvoidingView,
+  Keyboard,
+  TextInput,
   Platform,
   ScrollView,
   ScrollViewProps,
@@ -45,6 +47,15 @@ export function ScreenContainer({
   backgroundColor = colors.background,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const scrollRef = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
+  React.useEffect(() => {
+    if (!scroll || Platform.OS !== "android") return;
+    const sub = Keyboard.addListener("keyboardDidShow", () => {
+      const input = TextInput.State.currentlyFocusedInput();
+      if (input) scrollRef.current?.getScrollResponder()?.scrollResponderScrollNativeHandleToKeyboard(input, spacing(2), true);
+    });
+    return () => sub.remove();
+  }, [scroll]);
 
   // Full-bleed screens compute their own insets for overlay positioning
   // (see onboarding.tsx) — applying safe-area padding here too would push
@@ -71,12 +82,12 @@ export function ScreenContainer({
       // android.softwareKeyboardLayoutMode=resize this keeps long forms
       // scrollable instead of leaving their lower inputs behind the IME.
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={insets.top}
+      keyboardVerticalOffset={0}
     >
       {scroll ? (
-        <ScrollView
+        <ScrollView ref={scrollRef}
           style={styles.flex}
-          contentContainerStyle={[styles.scrollContent, avoidTabBar && { paddingBottom: TAB_BAR_CLEARANCE }]}
+          contentContainerStyle={[styles.scrollContent, avoidTabBar && { paddingBottom: TAB_BAR_CLEARANCE + (noPadding ? insets.bottom : 0) }]}
           keyboardShouldPersistTaps="handled"
           refreshControl={refreshControl}
         >

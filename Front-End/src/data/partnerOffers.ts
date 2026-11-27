@@ -31,7 +31,7 @@ export const PARTNER_OFFERS: readonly PartnerOffer[] = [
     partnerId: "emerald-phu-quoc",
     name: "Emerald Boutique Hotel Phú Quốc",
     address: "S09-10/SS24 Sonasea Villas và Resort, ấp Đường Bào, đặc khu Phú Quốc, An Giang 92513, Việt Nam",
-    destinations: ["An Giang", "Phú Quốc", "Kiên Giang"],
+    destinations: ["Phú Quốc"],
     category: "Hotels",
     benefit: {
       vi: "Giảm 10% khi đặt trên Booking.com bằng điện thoại",
@@ -45,7 +45,7 @@ export const PARTNER_OFFERS: readonly PartnerOffer[] = [
     partnerId: "lat-valley-villa",
     name: "Lat Valley Villa",
     address: "02 Đường Khởi Nghĩa Bắc Sơn, Xuân Hương - Đà Lạt, Lâm Đồng 670000, Việt Nam",
-    destinations: ["Lâm Đồng", "Đà Lạt"],
+    destinations: ["Đà Lạt"],
     category: "Hotels",
     benefit: {
       vi: "Giảm 10% và tặng buffet sáng",

@@ -71,6 +71,9 @@ CREATE UNIQUE INDEX UX_PremiumMissionAssignments_Special ON premium.PremiumMissi
 CREATE UNIQUE INDEX UX_PremiumMissionAssignments_Group ON premium.PremiumMissionAssignments (MissionId, UserId, GroupId) WHERE GroupId IS NOT NULL;
 END
 
+IF COL_LENGTH('premium.PremiumMissionAssignments', 'BonusPoints') IS NULL
+  ALTER TABLE premium.PremiumMissionAssignments ADD BonusPoints int NOT NULL DEFAULT 0;
+
 /* Virtual rewards are user-specific records, backed only by reusable public
    demo links. No private code or real partner inventory is stored. */
 IF OBJECT_ID(N'premium.PremiumVirtualVoucherTemplates', N'U') IS NULL

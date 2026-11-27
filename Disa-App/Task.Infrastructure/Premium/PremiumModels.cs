@@ -61,6 +61,7 @@ public sealed class PremiumMissionAssignment
     public DateTime AcceptedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAtUtc { get; set; }
     public string? EvidenceUrl { get; set; }
+    public int BonusPoints { get; set; }
 }
 
 // A template is a public demo offer. It deliberately contains no coupon code,

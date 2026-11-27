@@ -788,7 +788,10 @@ export default function ItineraryDetailScreen() {
 
     setAssigningKey(key);
     try {
-      const target = await resolvePlaceCoords(activity, data.trip_summary.cities[0]);
+      const city = data.days.find(day => day.activities.some(a => a.activity_id === activity.activity_id))?.city;
+      const target = activity.coordinates ?? await resolveActivityCoordinates(data.itinerary_id, activity.activity_id)
+        .catch(() => resolvePlaceCoords(activity, city));
+      if (!target) throw new ApiError("Chưa xác minh được vị trí của " + activity.name + ".");
       await assignMission({
         userId: user.id,
         tripId: data.itinerary_id,
@@ -800,7 +803,7 @@ export default function ItineraryDetailScreen() {
       });
       setAssignedKeys((prev) => new Set(prev).add(key));
       haptics.success();
-      showToast(`Đã nhận nhiệm vụ: ${label} tại ${activity.name} 🎯`, "success");
+      showToast(`Đã nhận nhiệm vụ: ${label} tại ${activity.name}`, "success");
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : t("itineraryDetail.assignFailed"), "error");
     } finally {
@@ -1051,6 +1054,7 @@ export default function ItineraryDetailScreen() {
             destinations={data.trip_summary.cities}
             style={screenStyles.partnerRecommendations}
           />
+          <Button title={t("premium.special")} icon="sparkles-outline" variant="outline" onPress={() => router.push({pathname:"/(tabs)/mission/premium/special", params:{destination:data.trip_summary.cities[0]}})} />
           {unscheduledMissionStops.length ? (
             <View style={screenStyles.unscheduledCard}>
               <View style={screenStyles.unscheduledHeading}>

@@ -45,9 +45,10 @@ export function getPremiumGroup(id: string) { return request<PremiumGroupDetail>
 export function createPremiumGroup(provinceId: string, accounts: string[]) { return request<PremiumGroup>("task", "/api/premium/groups", { method: "POST", data: { provinceId, accounts } }); }
 export function getEarnedPremiumOffers() { return request<EarnedPremiumOffer[]>("task", "/api/premium/special-offers"); }
 export function getPremiumVirtualVouchers() { return request<PremiumVirtualVoucher[]>("task", "/api/premium/vouchers"); }
-export function submitPremiumMission(scope: "special" | "groups", scopeId: string, missionId: string, media: { uri: string; type: "photo" | "video" }) {
+export function submitPremiumMission(scope: "special" | "groups", scopeId: string, missionId: string, media: { uri: string; type: "photo" | "video" }, fix?: { latitude: number; longitude: number; accuracy: number; capturedAtUtc: string }) {
   const form = new FormData();
+  if (fix) Object.entries(fix).forEach(([key, value]) => form.append(key, String(value)));
   const name = media.uri.split("/").pop() ?? (media.type === "photo" ? "evidence.jpg" : "evidence.mp4");
   form.append(media.type, { uri: media.uri, name, type: media.type === "photo" ? "image/jpeg" : "video/mp4" } as unknown as Blob);
-  return request<PremiumMission[]>("task", `/api/premium/${scope}/${scopeId}/${missionId}/submit`, { method: "POST", data: form, headers: { "Content-Type": "multipart/form-data" }, timeoutMs: 120000 });
+  return request<PremiumMission>("task", `/api/premium/${scope}/${scopeId}/${missionId}/submit`, { method: "POST", data: form, headers: { "Content-Type": "multipart/form-data" }, timeoutMs: 120000 });
 }

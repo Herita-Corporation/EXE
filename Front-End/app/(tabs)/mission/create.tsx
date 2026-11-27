@@ -230,7 +230,7 @@ function CreateItineraryContent() {
   }
 
   return (
-    <ScreenContainer scroll noPadding backgroundColor={colors.surface}>
+    <ScreenContainer scroll noPadding avoidTabBar backgroundColor={colors.surface}>
       <View style={styles.hero}>
         <Image
           source={getRegionImage(highlight, province)}
@@ -265,7 +265,8 @@ function CreateItineraryContent() {
           </Pressable>
         )}
 
-        {province && <PartnerRecommendations destinations={[province]} />}
+        {province && !missionContext && <Button title={t("premium.special")} variant="outline" icon="sparkles-outline" onPress={() => router.push({pathname: "/(tabs)/mission/premium/special", params: {destination: highlight ? highlight + ", " + province : province}})} />}
+        {province && <PartnerRecommendations destinations={[highlight ? `${highlight}, ${province}` : province]} />}
 
         {missionContext ? (
           <View style={styles.missionPlacesCard}>
@@ -537,7 +538,7 @@ function CreateItineraryContent() {
       >
         <View style={styles.modalBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setHighlightPickerOpen(false)} />
-          <View style={[styles.modalSheet, styles.areaSheet]}>
+          <View style={[styles.modalSheet, styles.areaSheet, { paddingBottom: spacing(3) + insets.bottom }]}>
             <View style={styles.areaSheetHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>

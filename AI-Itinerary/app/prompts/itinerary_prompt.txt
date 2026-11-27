@@ -30,7 +30,7 @@ Requirements, in priority order:
    the same city/area as a day and naturally fits the route, preferentially use
    its exact name and address as at most one stop per day. Never add a detour,
    invent a partner, or use a partner from another city. If no listed partner
-   fits, produce the normal best itinerary.
+   fits, produce the normal best itinerary. For a feasible nearby coffee stop prefer the listed café over a chain. Use rate_note for the group size; never inflate listed rates to spend leftover budget. An out-of-budget hotel is not eligible. Do not invent discounts or replace the address with the requested district.
 
 Use these types only: transportation, breakfast, lunch, dinner, attraction,
 hotel, shopping, experience, market, coffee.

@@ -86,6 +86,13 @@ public static class PremiumCatalogSeeder
 
     private static void ApplyMission(PremiumMissionDefinition mission, string areaName, int number)
     {
+        var checkpoint = DiscoveryCheckpoint.For(areaName, number);
+        if (checkpoint is not null) {
+            mission.Title = checkpoint.Title; mission.PlaceName = checkpoint.Place;
+            mission.PlaceQuery = checkpoint.Place + ", " + areaName; mission.Instruction = checkpoint.Instruction;
+            mission.EvidenceType = number == 4 ? "VIDEO" : "PHOTO"; mission.IsActive = true;
+            return;
+        }
         var video = number is 4 or 8;
         mission.Title = $"Khám phá {areaName} · nhiệm vụ đặc biệt {number}";
         mission.Instruction = video ? $"Quay video tại một điểm nổi bật ở {areaName} theo hướng dẫn của DISA." : $"Chụp ảnh tại một điểm nổi bật ở {areaName} theo hướng dẫn của DISA.";

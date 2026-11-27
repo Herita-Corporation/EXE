@@ -61,11 +61,15 @@ public class AIItineraryClient
             "Calling AI-Itinerary generate: cities={Cities}, budget={Budget}",
             string.Join(", ", request.Cities), request.Budget);
 
-        var response = await _httpClient.PostAsJsonAsync(
-            "/api/v1/itinerary/generate",
-            request,
-            _jsonOptions,
-            cancellationToken);
+        Task<HttpResponseMessage> Send() => _httpClient.PostAsJsonAsync("/api/v1/itinerary/generate", request, _jsonOptions, cancellationToken);
+        HttpResponseMessage response;
+        try { response = await Send(); }
+        catch (HttpRequestException ex) when (ex.GetBaseException() is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionRefused }) {
+            // No connection was established: safe to retry once without creating a second trip.
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+            response = await Send();
+        }
+        using var ownedResponse = response;
 
         var result = await HandleResponseAsync<ItineraryResponse>(
             response, "GenerateItinerary", cancellationToken);

@@ -31,6 +31,8 @@ public static class PremiumSchemaUpgrader
               Id uniqueidentifier NOT NULL PRIMARY KEY, MissionId uniqueidentifier NOT NULL, UserId uniqueidentifier NOT NULL,
               GroupId uniqueidentifier NULL, AcceptedAtUtc datetime2 NOT NULL, CompletedAtUtc datetime2 NULL, EvidenceUrl nvarchar(1000) NULL,
               CONSTRAINT FK_PremiumMissionAssignments_Mission_Runtime FOREIGN KEY (MissionId) REFERENCES premium.PremiumMissionDefinitions(Id));
+            IF COL_LENGTH('premium.PremiumMissionAssignments', 'BonusPoints') IS NULL
+              ALTER TABLE premium.PremiumMissionAssignments ADD BonusPoints int NOT NULL DEFAULT 0;
             IF COL_LENGTH('premium.PremiumProvinces', 'AreaType') IS NULL
               ALTER TABLE premium.PremiumProvinces ADD AreaType nvarchar(16) NOT NULL CONSTRAINT DF_PremiumProvinces_AreaType_Runtime DEFAULT 'PROVINCE';
             IF COL_LENGTH('premium.PremiumProvinces', 'ParentProvinceId') IS NULL

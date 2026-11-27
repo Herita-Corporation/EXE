@@ -35,7 +35,7 @@ from app.core.logging import get_logger
 from app.database.models.itinerary import GeneratedItinerary
 from app.database.repositories.cache_repository import CacheRepository
 from app.database.repositories.itinerary_repository import ItineraryRepository
-from app.data.partner_catalog import partners_for_cities
+from app.data.partner_catalog import partners_for_cities, apply_partner_stops
 from app.integrations.openai_client import OpenAIClient
 from app.integrations.osm_client import OSMClient
 from app.planners.itinerary_builder import ItineraryBuilder, compute_total_cost
@@ -489,11 +489,14 @@ class ItineraryOrchestrator:
                     candidate,
                     breakdown.accommodation / max(request.trip_duration_days, 1),
                 )
+                apply_partner_stops(candidate, request.cities, request.travelers, planning_budget * ratio, breakdown.accommodation / max(request.trip_duration_days, 1))
                 validate_itinerary_quality(
                     candidate,
                     partial_first_day=earliest_start_time is not None,
                 )
                 candidate_cost = compute_total_cost(candidate)
+                if candidate_cost > planning_budget * ratio * 1.30:
+                    raise InvalidItineraryError("Total exceeds the available budget. Choose affordable real stops; do not discount the published partner rate.")
                 minimum_cost = chunk_budget_profile["target_total_cost_min"]
                 if (
                     chunk_budget_profile["enforce_minimum"]

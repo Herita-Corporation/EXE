@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { acceptSpecialMissions, getPremiumMissionAreas, getPremiumMissionEligibility, getSpecialMissions } from "@/api/endpoints/premium";
 import { ApiError } from "@/api/http";
 import { BackHeader } from "@/components/BackHeader";
@@ -32,6 +32,7 @@ function SpecialMissionsContent() {
   const [error, setError] = useState<string | null>(null);
   const [loadVersion, setLoadVersion] = useState(0);
   const busy = useRef(false);
+  const {destination} = useLocalSearchParams<{destination?: string}>();
 
   useFocusEffect(useCallback(() => {
     let cancelled = false;
@@ -40,12 +41,18 @@ function SpecialMissionsContent() {
       ? Promise.all([getSpecialMissions(area.id), getPremiumMissionEligibility(area.id)]).then(([list, nextEligibility]) => {
         if (!cancelled) { setMissions(list); setEligibility(nextEligibility); }
       })
-      : getPremiumMissionAreas().then((list) => { if (!cancelled) setAreas(list); });
+      : getPremiumMissionAreas().then((list) => { if (!cancelled) {
+          setAreas(list);
+          const norm = (s:string) => " " + s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/[^a-z0-9]+/g," ").trim() + " ";
+          const dest = norm(destination ?? "");
+          const match = list.find(a => dest.includes(norm(a.name))) ?? list.find(a => a.areaType === "PROVINCE" && a.aliases.some(s => dest.includes(norm(s))));
+          if (match) setArea(match);
+        } });
     load.catch((err) => {
       if (!cancelled) { setError(err instanceof ApiError ? err.message : t("premium.loadFailed")); setMissions([]); }
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [area, loadVersion, t]));
+  }, [area, destination, loadVersion, t]));
 
   function createItinerary() {
     if (!area) return;
@@ -87,7 +94,7 @@ function SpecialMissionsContent() {
         {area && <>
           <Card>
             <Text style={styles.count}>{acceptedCount}/10 nhiệm vụ đã nhận</Text>
-            <Text style={styles.guide}>{eligibility?.eligible ? "Hành trình của bạn đang diễn ra tại khu vực này. Hoàn thành nhiệm vụ để nhận voucher demo của đối tác, không nhận điểm." : eligibility?.message ?? "Đang kiểm tra hành trình đang diễn ra..."}</Text>
+            <Text style={styles.guide}>{eligibility?.eligible ? "Hành trình của bạn đang diễn ra tại khu vực này. Hoàn thành để nhận thưởng trực tiếp; thử thách có GPS còn có điểm thưởng theo khung giờ." : eligibility?.message ?? "Đang kiểm tra hành trình đang diễn ra..."}</Text>
             {eligibility?.eligible ? <>
               <Button title={t("premium.selectAll")} icon={selected ? "checkbox-outline" : "square-outline"} variant="secondary" onPress={() => setSelected((value) => !value)} disabled={saving} />
               {selected && <Button title={t("premium.acceptAll")} variant="amber" onPress={acceptAll} loading={saving} icon="sparkles-outline" />}

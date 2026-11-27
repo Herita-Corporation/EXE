@@ -17,6 +17,7 @@ from app.core.exceptions import (
     ItineraryNotFoundError,
     NoCandidatesFoundError,
 )
+from app.data.partner_catalog import partner_point
 from app.core.constants import MIN_HOTEL_PRICE_VND
 from app.core.security import get_user_id_from_claims, require_auth
 from app.database.repositories.itinerary_repository import ItineraryRepository
@@ -169,12 +170,8 @@ async def resolve_activity_coordinates(
     # A named district/ward is a safety constraint.  A broad city label is
     # not: requiring an exact spelling for it would discard otherwise valid
     # geocoder results (e.g. "TP.HCM" vs "Hồ Chí Minh").
-    location_key = location.casefold()
-    expected_locality = (
-        location
-        if any(token in location_key for token in ("quận", "quan", "phường", "phuong", "district", "ward"))
-        else None
-    )
+    expected_locality = next((part.strip() for part in location.split(",")
+                              if part.strip().lower().startswith(("quận ", "quan ", "phường ", "phuong ", "district ", "ward "))), None)
 
     raw_queries = [
         ", ".join(part for part in (name, location, day_city, "Việt Nam") if part),
@@ -183,9 +180,9 @@ async def resolve_activity_coordinates(
     ]
     queries = list(dict.fromkeys(query for query in raw_queries if query))[:3]
 
-    coords = None
+    coords = partner_point(name, day_city)
     geocoder = OSMClient()
-    for query in queries:
+    for query in ([] if coords else queries):
         coords = await geocoder.get_place_coordinates(query, expected_locality=expected_locality)
         if coords:
             break
@@ -335,7 +332,7 @@ async def replace_activity(
     # _geocode_fixed_activities for why appending GPT's invented street
     # address hurts Nominatim's hit rate.
     city = itinerary_data["days"][day_idx].get("city", "")
-    coords = await OSMClient().get_place_coordinates(f"{payload.name}, {city}") if payload.name else None
+    coords = (partner_point(payload.name, city) or await OSMClient().get_place_coordinates(f"{payload.name}, {city}")) if payload.name else None
     act["coordinates"] = {"lat": coords[0], "lng": coords[1]} if coords else None
 
     itinerary_data["days"][day_idx]["activities"][act_idx] = act

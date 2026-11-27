@@ -64,7 +64,7 @@ export default function OnboardingScreen() {
           <View key={slide.titleKey} style={{ width, height }}>
             <Image
               source={slide.image}
-              style={StyleSheet.absoluteFill}
+              style={{ width, height: Math.round(height * 0.78) }}
               contentFit="cover"
             />
             <LinearGradient
@@ -112,7 +112,7 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000" },
+  root: { flex: 1, backgroundColor: "#081b33" },
   topRow: {
     position: "absolute",
     left: spacing(2.5),
